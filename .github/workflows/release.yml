@@ -15,6 +15,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      # Nötig, um das GitHub-Release mit den Artefakten anzulegen.
+      contents: write
     defaults:
       run:
         working-directory: android
