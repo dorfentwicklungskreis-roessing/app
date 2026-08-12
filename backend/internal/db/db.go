@@ -4,6 +4,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
@@ -65,7 +66,8 @@ CREATE TABLE IF NOT EXISTS completions (
   user_name TEXT NOT NULL,
   liters    REAL,
   note      TEXT NOT NULL DEFAULT '',
-  done_at   TEXT NOT NULL
+  done_at   TEXT NOT NULL,
+  forced    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_completions_task_time ON completions(task_id, done_at DESC);
 CREATE TABLE IF NOT EXISTS settings (
@@ -73,7 +75,19 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	// Nachträglich ergänzte Spalten: bestehende Datenbanken kennen sie noch
+	// nicht, ein zweiter Aufruf meldet „duplicate column name".
+	for _, stmt := range []string{
+		`ALTER TABLE completions ADD COLUMN forced INTEGER NOT NULL DEFAULT 0`,
+	} {
+		if _, err := d.sql.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
+	}
+	return nil
 }
 
 const timeFormat = time.RFC3339
@@ -242,8 +256,8 @@ func scanTask(row scannable) (*model.CareTask, error) {
 // --- Completions ------------------------------------------------------------
 
 func (d *DB) InsertCompletion(c *model.Completion) error {
-	res, err := d.sql.Exec(`INSERT INTO completions(task_id,user_sub,user_name,liters,note,done_at) VALUES(?,?,?,?,?,?)`,
-		c.TaskID, c.UserSub, c.UserName, c.Liters, c.Note, c.DoneAt.UTC().Format(timeFormat))
+	res, err := d.sql.Exec(`INSERT INTO completions(task_id,user_sub,user_name,liters,note,done_at,forced) VALUES(?,?,?,?,?,?,?)`,
+		c.TaskID, c.UserSub, c.UserName, c.Liters, c.Note, c.DoneAt.UTC().Format(timeFormat), boolToInt(c.Forced))
 	if err != nil {
 		return err
 	}
@@ -253,7 +267,7 @@ func (d *DB) InsertCompletion(c *model.Completion) error {
 
 // LastCompletions liefert je Aufgabe die letzte Erledigung.
 func (d *DB) LastCompletions() (map[int64]model.Completion, error) {
-	rows, err := d.sql.Query(`SELECT c.id,c.task_id,c.user_sub,c.user_name,c.liters,c.note,c.done_at
+	rows, err := d.sql.Query(`SELECT c.id,c.task_id,c.user_sub,c.user_name,c.liters,c.note,c.done_at,c.forced
 		FROM completions c
 		JOIN (SELECT task_id, MAX(done_at) AS m FROM completions GROUP BY task_id) latest
 		  ON latest.task_id = c.task_id AND latest.m = c.done_at
@@ -277,7 +291,7 @@ func (d *DB) ListCompletions(taskID int64, limit int) ([]model.Completion, error
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	rows, err := d.sql.Query(`SELECT id,task_id,user_sub,user_name,liters,note,done_at
+	rows, err := d.sql.Query(`SELECT id,task_id,user_sub,user_name,liters,note,done_at,forced
 		FROM completions WHERE task_id=? ORDER BY done_at DESC LIMIT ?`, taskID, limit)
 	if err != nil {
 		return nil, err
@@ -297,12 +311,23 @@ func (d *DB) ListCompletions(taskID int64, limit int) ([]model.Completion, error
 func scanCompletion(row scannable) (*model.Completion, error) {
 	var c model.Completion
 	var done string
-	err := row.Scan(&c.ID, &c.TaskID, &c.UserSub, &c.UserName, &c.Liters, &c.Note, &done)
+	var forced int
+	err := row.Scan(&c.ID, &c.TaskID, &c.UserSub, &c.UserName, &c.Liters, &c.Note, &done, &forced)
 	if err != nil {
 		return nil, err
 	}
 	c.DoneAt, _ = time.Parse(timeFormat, done)
+	c.Forced = forced != 0
 	return &c, nil
+}
+
+// LastCompletion liefert die neueste Erledigung einer Aufgabe (oder nil).
+func (d *DB) LastCompletion(taskID int64) (*model.Completion, error) {
+	cs, err := d.ListCompletions(taskID, 1)
+	if err != nil || len(cs) == 0 {
+		return nil, err
+	}
+	return &cs[0], nil
 }
 
 func requireRow(res sql.Result) error {

@@ -291,7 +291,14 @@ func TestLeaderboardAndWithdrawalTools(t *testing.T) {
 		map[string]any{"taskId": task.ID, "name": "Erna", "liters": 10}); isErr {
 		t.Fatalf("erledigung_melden: %s", text)
 	}
-	text, isErr = callTool(t, ts, "erledigung_melden", map[string]any{"taskId": task.ID, "name": "Kuno"})
+	// Zweite Meldung an derselben Aufgabe: der Spielschutz sperrt sie …
+	if text, isErr = callTool(t, ts, "erledigung_melden",
+		map[string]any{"taskId": task.ID, "name": "Kuno"}); !isErr {
+		t.Fatalf("Spielschutz greift nicht: %s", text)
+	}
+	// … Admins dürfen sie für telefonische Nachträge trotzdem eintragen.
+	text, isErr = callTool(t, ts, "erledigung_melden",
+		map[string]any{"taskId": task.ID, "name": "Kuno", "force": true})
 	if isErr {
 		t.Fatalf("erledigung_melden: %s", text)
 	}

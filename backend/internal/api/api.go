@@ -99,6 +99,7 @@ func AssemblePlaces(d *db.DB, now time.Time) ([]model.PlaceWithStatus, float64, 
 		status, dueAt, redAt := model.ComputeStatus(t, lc, now, f)
 		byPlace[t.PlaceID] = append(byPlace[t.PlaceID], model.TaskWithStatus{
 			CareTask: t, Status: status, LastCompletion: lc, DueAt: dueAt, RedAt: redAt,
+			LockedUntil: LockedUntil(t, lc, now, f),
 		})
 	}
 
@@ -396,10 +397,8 @@ func (s *Server) handleCreateCompletion(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusNotFound, "Aufgabe nicht gefunden")
 		return
 	}
-	var in struct {
-		Liters *float64 `json:"liters"`
-		Note   string   `json:"note"`
-	}
+	var in CompletionInput
+	_ = task
 	if r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, "ungültiges JSON")
@@ -407,9 +406,17 @@ func (s *Server) handleCreateCompletion(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	u, _ := auth.FromContext(r.Context())
-	c := model.Completion{TaskID: task.ID, UserSub: u.Sub, UserName: u.Name,
-		Liters: in.Liters, Note: in.Note, DoneAt: s.now()}
-	if err := s.DB.InsertCompletion(&c); err != nil {
+	c, err := CreateCompletion(s.DB, s.now(), task.ID, in, u)
+	if err != nil {
+		var ce *CompletionError
+		if errors.As(err, &ce) {
+			antwort := map[string]any{"error": ce.Message}
+			if ce.RetryAfter != nil {
+				antwort["retryAfter"] = ce.RetryAfter.UTC().Format(time.RFC3339)
+			}
+			writeJSON(w, ce.Status, antwort)
+			return
+		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}

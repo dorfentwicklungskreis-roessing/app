@@ -279,7 +279,7 @@ func localOffsetSQL(col string, loc *time.Location, from, to, now time.Time) str
 
 // GetCompletion liefert eine einzelne Erledigungs-Meldung.
 func (d *DB) GetCompletion(id int64) (*model.Completion, error) {
-	row := d.sql.QueryRow(`SELECT id,task_id,user_sub,user_name,liters,note,done_at
+	row := d.sql.QueryRow(`SELECT id,task_id,user_sub,user_name,liters,note,done_at,forced
 		FROM completions WHERE id=?`, id)
 	return scanCompletion(row)
 }

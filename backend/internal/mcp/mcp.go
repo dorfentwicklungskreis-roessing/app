@@ -297,6 +297,8 @@ func (s *Server) registerTools() {
 				"name":   str("Wer hat's gemacht? (Standard: der eingeloggte Admin)"),
 				"liters": num("Tatsächlich gegossene Liter (optional)"),
 				"note":   str("Optionale Notiz"),
+				"force":  boolean("Spielschutz übergehen (Sperrfrist nach der letzten Meldung)"),
+				"doneAt": str("Zeitpunkt der Erledigung (RFC3339), höchstens 7 Tage zurück"),
 			}),
 			Handler: s.toolCreateCompletion,
 		},
@@ -480,27 +482,19 @@ func (s *Server) toolDeleteTask(args json.RawMessage, u auth.User) (any, error) 
 
 func (s *Server) toolCreateCompletion(args json.RawMessage, u auth.User) (any, error) {
 	var in struct {
-		TaskID int64    `json:"taskId"`
-		Name   string   `json:"name"`
-		Liters *float64 `json:"liters"`
-		Note   string   `json:"note"`
+		TaskID int64 `json:"taskId"`
+		api.CompletionInput
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
 		return nil, err
 	}
-	task, err := s.DB.GetTask(in.TaskID)
-	if err != nil {
-		return nil, fmt.Errorf("Aufgabe %d nicht gefunden", in.TaskID)
-	}
-	if in.Name == "" {
-		in.Name = u.Name
-	}
-	if in.Name == "" {
+	// Machine-User-Tokens haben keinen Namen — dann steht wenigstens dabei,
+	// über welchen Weg die Meldung kam.
+	if in.Name == "" && u.Name == "" {
 		in.Name = "Admin via Claude"
 	}
-	c := model.Completion{TaskID: task.ID, UserSub: u.Sub, UserName: in.Name,
-		Liters: in.Liters, Note: in.Note, DoneAt: s.now()}
-	if err := s.DB.InsertCompletion(&c); err != nil {
+	c, err := api.CreateCompletion(s.DB, s.now(), in.TaskID, in.CompletionInput, u)
+	if err != nil {
 		return nil, err
 	}
 	return c, nil

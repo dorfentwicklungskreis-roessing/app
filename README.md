@@ -46,6 +46,16 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
   Rückfrage (Ort und Menge), damit ein Fehlklick nichts einträgt. In der
   Verwaltung liegt beides unter `/admin/dorfpflege/rangliste` bzw. als
   eigene Bestätigungsseite in der Historie eines Ortes.
+- **Spielschutz**: Nach einer Erledigung bleibt dieselbe Aufgabe gesperrt —
+  50 % des Soll-Intervalls (mit Hitzefaktor skaliert), mindestens 12 Stunden,
+  höchstens das volle Intervall. Ein Verstoß ergibt **HTTP 409** mit
+  `retryAfter`; `GET /api/v1/places` liefert je Aufgabe `lockedUntil`, damit
+  die App den Knopf gar nicht erst anbietet. Admins dürfen mit `force: true`
+  übergehen (wird als `forced` vermerkt) und mit `doneAt` bis zu 7 Tage
+  zurückdatieren; Zeitpunkte in der Zukunft werden abgelehnt. Die Sperre gilt
+  je Aufgabe, nicht je Person — sonst könnten mehrere Leute denselben Kasten
+  nacheinander „gießen". In der Rangliste zählt, was in der Datenbank steht;
+  der Spielschutz sitzt bewusst beim Anlegen.
 
 ## Entwicklung
 

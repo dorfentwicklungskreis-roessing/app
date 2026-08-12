@@ -100,6 +100,19 @@ func leaderboardAt(t *testing.T, ts *httptest.Server, srv *Server, token, query 
 	return decode[lbResponse](t, resp)
 }
 
+// neueAufgabe legt eine weitere Aufgabe am Ort an. Der Spielschutz sperrt je
+// Aufgabe — für mehrere Meldungen kurz hintereinander braucht es deshalb
+// mehrere Aufgaben, so wie im Dorf auch mehrere Kästen stehen.
+func neueAufgabe(t *testing.T, ts *httptest.Server, placeID int64, art string) int64 {
+	t.Helper()
+	resp := doReq(t, "POST", ts.URL+fmt.Sprintf("/api/v1/places/%d/tasks", placeID), adminToken,
+		map[string]any{"kind": art, "intervalDays": 7, "redAfterDays": 14})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("Aufgabe (%s) anlegen: Status %d", art, resp.StatusCode)
+	}
+	return int64(decode[map[string]any](t, resp)["id"].(float64))
+}
+
 // createPlaceAt legt Ort und Gießaufgabe zu einem bestimmten Zeitpunkt an.
 func createPlaceAt(t *testing.T, ts *httptest.Server, srv *Server, at time.Time) (placeID, taskID int64) {
 	t.Helper()
@@ -112,27 +125,25 @@ func createPlaceAt(t *testing.T, ts *httptest.Server, srv *Server, at time.Time)
 func TestLeaderboardSortingAndTie(t *testing.T) {
 	loc := berlinLoc(t)
 	ts, srv := newTestServer(t)
-	placeID, giessen := createPlaceWithTask(t, ts)
-
-	resp := doReq(t, "POST", ts.URL+fmt.Sprintf("/api/v1/places/%d/tasks", placeID), adminToken,
-		map[string]any{"kind": "jaeten", "intervalDays": 21, "redAfterDays": 35})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("Jätaufgabe: Status %d", resp.StatusCode)
-	}
-	jaeten := int64(decode[map[string]any](t, resp)["id"].(float64))
+	placeID, giessen1 := createPlaceWithTask(t, ts)
+	giessen2 := neueAufgabe(t, ts, placeID, "giessen")
+	jaeten1 := neueAufgabe(t, ts, placeID, "jaeten")
+	jaeten2 := neueAufgabe(t, ts, placeID, "jaeten")
+	jaeten3 := neueAufgabe(t, ts, placeID, "jaeten")
 
 	day := func(d int) time.Time { return time.Date(2026, time.August, d, 12, 0, 0, 0, loc) }
 
 	// Erna: 3 Erledigungen, davon 2× Gießen mit je 10 l.
-	reportAt(t, ts, srv, giessen, ernaToken, day(3), 10)
-	reportAt(t, ts, srv, giessen, ernaToken, day(4), 10)
-	reportAt(t, ts, srv, jaeten, ernaToken, day(5), 0)
+	reportAt(t, ts, srv, giessen1, ernaToken, day(3), 10)
+	reportAt(t, ts, srv, giessen2, ernaToken, day(3), 10)
+	reportAt(t, ts, srv, jaeten1, ernaToken, day(5), 0)
 	// Karl: ebenfalls 3 Erledigungen, aber nur 5 l → Gleichstand, weniger Liter.
-	reportAt(t, ts, srv, giessen, karlToken, day(6), 5)
-	reportAt(t, ts, srv, giessen, karlToken, day(7), 0)
-	reportAt(t, ts, srv, giessen, karlToken, day(8), 0)
+	// Fünf Tage später, damit die Sperrfrist der Gießaufgaben abgelaufen ist.
+	reportAt(t, ts, srv, giessen1, karlToken, day(8), 5)
+	reportAt(t, ts, srv, giessen2, karlToken, day(8), 0)
+	reportAt(t, ts, srv, jaeten2, karlToken, day(8), 0)
 	// Berta: eine Erledigung.
-	reportAt(t, ts, srv, jaeten, bertaToken, day(9), 0)
+	reportAt(t, ts, srv, jaeten3, bertaToken, day(9), 0)
 
 	lb := leaderboardAt(t, ts, srv, ernaToken, "", day(12))
 	if lb.Period != "saison" {
@@ -166,8 +177,8 @@ func TestLeaderboardSortingAndTie(t *testing.T) {
 	if lb.Totals.Completions != 7 || lb.Totals.Liters != 25 || lb.Totals.Participants != 3 {
 		t.Errorf("Gesamtsummen = %+v, erwartet 7 Erledigungen, 25 l, 3 Beteiligte", lb.Totals)
 	}
-	if lb.Totals.ByKind["giessen"] != 5 || lb.Totals.ByKind["jaeten"] != 2 {
-		t.Errorf("Gesamt byKind = %v, erwartet giessen=5, jaeten=2", lb.Totals.ByKind)
+	if lb.Totals.ByKind["giessen"] != 4 || lb.Totals.ByKind["jaeten"] != 3 {
+		t.Errorf("Gesamt byKind = %v, erwartet giessen=4, jaeten=3", lb.Totals.ByKind)
 	}
 	if lb.Me == nil || lb.Me.UserName != "Erna" || lb.Me.Rank != 1 {
 		t.Errorf("me = %+v, erwartet Erna auf Rang 1", lb.Me)
@@ -177,14 +188,19 @@ func TestLeaderboardSortingAndTie(t *testing.T) {
 func TestLeaderboardPeriodBoundaries(t *testing.T) {
 	loc := berlinLoc(t)
 	ts, srv := newTestServer(t)
-	_, taskID := createPlaceAt(t, ts, srv, time.Date(2026, time.January, 1, 12, 0, 0, 0, loc))
+	placeID, task1 := createPlaceAt(t, ts, srv, time.Date(2026, time.January, 1, 12, 0, 0, 0, loc))
+	// Je Meldung eine eigene Aufgabe: die Zeitpunkte liegen bewusst dicht
+	// beieinander, der Spielschutz sperrt aber je Aufgabe.
+	task2 := neueAufgabe(t, ts, placeID, "giessen")
+	task3 := neueAufgabe(t, ts, placeID, "giessen")
+	task4 := neueAufgabe(t, ts, placeID, "giessen")
 
 	at := func(m time.Month, d, h, min int) time.Time { return time.Date(2026, m, d, h, min, 0, 0, loc) }
 	// Vier Meldungen rund um die Saisongrenzen.
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.February, 28, 12, 0), 0) // vor der Saison
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.March, 1, 0, 30), 0)     // Saisonbeginn
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.October, 31, 23, 0), 0)  // Saisonende
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.November, 1, 0, 30), 0)  // nach der Saison
+	reportAt(t, ts, srv, task1, ernaToken, at(time.February, 28, 12, 0), 0) // vor der Saison
+	reportAt(t, ts, srv, task2, ernaToken, at(time.March, 1, 0, 30), 0)     // Saisonbeginn
+	reportAt(t, ts, srv, task3, ernaToken, at(time.October, 31, 23, 0), 0)  // Saisonende
+	reportAt(t, ts, srv, task4, ernaToken, at(time.November, 1, 0, 30), 0)  // nach der Saison
 
 	stand := at(time.December, 15, 12, 0)
 	for query, wantCount := range map[string]int{
@@ -228,14 +244,21 @@ func TestLeaderboardPeriodBoundaries(t *testing.T) {
 func TestLeaderboardMeOutsideTopList(t *testing.T) {
 	loc := berlinLoc(t)
 	ts, srv := newTestServer(t)
-	_, taskID := createPlaceWithTask(t, ts)
+	placeID, erste := createPlaceWithTask(t, ts)
 
 	day := func(d int) time.Time { return time.Date(2026, time.August, d, 12, 0, 0, 0, loc) }
-	// Fünf Melder mit absteigender Anzahl: 5, 4, 3, 2, 1.
+	// Fünf Melder mit absteigender Anzahl: 5, 4, 3, 2, 1 — jede Meldung an
+	// einer eigenen Aufgabe, weil dieselbe Aufgabe gesperrt bliebe.
 	tokens := []string{"a:Anna:", "b:Bernd:", "c:Cora:", "d:Dieter:", "e:Emma:"}
+	aufgaben := []int64{erste}
+	for len(aufgaben) < 15 {
+		aufgaben = append(aufgaben, neueAufgabe(t, ts, placeID, "giessen"))
+	}
+	naechste := 0
 	for i, token := range tokens {
 		for n := 0; n < len(tokens)-i; n++ {
-			reportAt(t, ts, srv, taskID, token, day(1+i).Add(time.Duration(n)*time.Hour), 0)
+			reportAt(t, ts, srv, aufgaben[naechste], token, day(1+i).Add(time.Duration(n)*time.Hour), 0)
+			naechste++
 		}
 	}
 
@@ -264,7 +287,9 @@ func TestLeaderboardBadges(t *testing.T) {
 	loc := berlinLoc(t)
 	ts, srv := newTestServer(t)
 	// Aufgabe seit dem 1. März — die erste Erledigung im Juli rettet sie.
-	_, taskID := createPlaceAt(t, ts, srv, time.Date(2026, time.March, 1, 12, 0, 0, 0, loc))
+	placeID, taskID := createPlaceAt(t, ts, srv, time.Date(2026, time.March, 1, 12, 0, 0, 0, loc))
+	kasten2 := neueAufgabe(t, ts, placeID, "giessen")
+	kasten3 := neueAufgabe(t, ts, placeID, "giessen")
 
 	at := func(m time.Month, d, h int) time.Time { return time.Date(2026, m, d, h, 0, 0, 0, loc) }
 	// Erna gießt vier Montage in Folge um 6 Uhr morgens …
@@ -273,9 +298,10 @@ func TestLeaderboardBadges(t *testing.T) {
 	}
 	// … Karl einmal mittags …
 	reportAt(t, ts, srv, taskID, karlToken, at(time.August, 5, 12), 5)
-	// … und Erna nochmal zweimal früh im August (Gießkanne des Monats).
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.August, 6, 6), 10)
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.August, 7, 6), 10)
+	// … und Erna nochmal zweimal früh im August an anderen Kästen
+	// (Gießkanne des Monats).
+	reportAt(t, ts, srv, kasten2, ernaToken, at(time.August, 6, 6), 10)
+	reportAt(t, ts, srv, kasten3, ernaToken, at(time.August, 7, 6), 10)
 
 	lb := leaderboardAt(t, ts, srv, ernaToken, "", at(time.August, 12, 12))
 	byName := map[string]lbEntry{}
@@ -324,7 +350,7 @@ func TestLeaderboardIgnoresWithdrawnCompletion(t *testing.T) {
 	day := func(d int) time.Time { return time.Date(2026, time.August, d, 12, 0, 0, 0, loc) }
 
 	reportAt(t, ts, srv, taskID, ernaToken, day(3), 10)
-	id := reportAt(t, ts, srv, taskID, ernaToken, day(4), 10)
+	id := reportAt(t, ts, srv, taskID, ernaToken, day(8), 10)
 
 	if lb := leaderboardAt(t, ts, srv, ernaToken, "", day(12)); lb.Me.Completions != 2 || lb.Me.Liters != 20 {
 		t.Fatalf("vor der Rücknahme: %+v", lb.Me)

@@ -102,6 +102,9 @@ type Completion struct {
 	Liters   *float64  `json:"liters,omitempty"`
 	Note     string    `json:"note,omitempty"`
 	DoneAt   time.Time `json:"doneAt"`
+	// Forced: von einem Admin trotz laufender Sperrfrist eingetragen
+	// (z.B. telefonisch gemeldeter Nachtrag).
+	Forced bool `json:"forced,omitempty"`
 }
 
 // TaskWithStatus ist die API-Sicht auf eine Aufgabe inklusive Zustand.
@@ -113,6 +116,9 @@ type TaskWithStatus struct {
 	DueAt time.Time `json:"dueAt"`
 	// RedAt: Zeitpunkt, ab dem die Aufgabe rot wird.
 	RedAt time.Time `json:"redAt"`
+	// LockedUntil: bis dahin greift der Spielschutz (siehe cooldown.go).
+	// Fehlt, wenn gerade gemeldet werden darf.
+	LockedUntil *time.Time `json:"lockedUntil,omitempty"`
 }
 
 // PlaceWithStatus ist die API-Sicht auf einen Ort inklusive Aufgaben.
