@@ -1,0 +1,4 @@
+The map now opens with all care spots in view instead of a zoomed-in
+detail. If your location is nearby, it is included in the view without
+pushing the spots off screen. The "My location" button still centres
+the map on you.

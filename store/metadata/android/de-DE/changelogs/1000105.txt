@@ -1,0 +1,4 @@
+Die Karte startet jetzt so, dass alle Pflege-Orte auf einen Blick zu
+sehen sind — statt eines zu nah herangezoomten Ausschnitts. Ist der
+eigene Standort in der Nähe, kommt er mit ins Bild, ohne die Orte zu
+verdrängen. Der Knopf "Mein Standort" zentriert wie gewohnt auf dich.
