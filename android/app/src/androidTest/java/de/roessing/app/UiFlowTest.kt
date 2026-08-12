@@ -43,10 +43,21 @@ class UiFlowTest {
     @Test
     fun loginScreen_zeigtAnmeldeButton() {
         compose.setContent {
-            DorfAppTheme { LoginScreen(showError = false, onLogin = {}, onDevLogin = { }) }
+            DorfAppTheme { LoginScreen(errorCode = null, onLogin = {}, onDevLogin = { }) }
         }
         compose.onNodeWithTag("login-button").assertIsDisplayed()
         compose.onNodeWithText("Mit Rössing-ID anmelden").assertIsDisplayed()
+        compose.onNodeWithTag("login-error").assertDoesNotExist()
+    }
+
+    @Test
+    fun loginScreen_zeigtFehlercodeAn() {
+        compose.setContent {
+            DorfAppTheme { LoginScreen(errorCode = "invalid_grant", onLogin = {}, onDevLogin = { }) }
+        }
+        compose.onNodeWithTag("login-error").assertIsDisplayed()
+        compose.onNodeWithText("Anmeldung fehlgeschlagen (invalid_grant). Bitte erneut versuchen.")
+            .assertIsDisplayed()
     }
 
     @Test

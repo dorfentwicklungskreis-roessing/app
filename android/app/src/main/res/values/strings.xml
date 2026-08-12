@@ -4,7 +4,7 @@
     <string name="login_subtitle">Die App fürs Dorf: Blumenkästen gießen, Dorfleben im Blick.</string>
     <string name="login_button">Mit Rössing-ID anmelden</string>
     <string name="login_dev_button">Entwickler-Login (nur Test)</string>
-    <string name="login_error">Anmeldung fehlgeschlagen. Bitte erneut versuchen.</string>
+    <string name="login_error">Anmeldung fehlgeschlagen (%1$s). Bitte erneut versuchen.</string>
     <string name="map_title">Blumenkästen</string>
     <string name="list_title">Liste</string>
     <string name="water_now">Ich habe gegossen</string>

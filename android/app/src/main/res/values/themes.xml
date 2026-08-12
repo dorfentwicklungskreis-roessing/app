@@ -4,4 +4,23 @@
         <item name="android:windowBackground">@android:color/white</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
+
+    <!--
+      Theme für AppAuths RedirectUriReceiverActivity.
+
+      Diese Activity erbt von AppCompatActivity, bringt in AppAuths Library-Manifest
+      aber KEIN eigenes android:theme mit und würde deshalb das Application-Theme
+      (Theme.DorfApp, ein Nicht-AppCompat-Theme) erben. AppCompat wirft in dem Fall
+      beim onCreate eine IllegalStateException („You need to use a Theme.AppCompat
+      theme"), die App stürzt beim Rücksprung aus dem Browser ab und der Login
+      schlägt fehl. Deshalb hier explizit ein transparentes AppCompat-Theme.
+    -->
+    <style name="Theme.DorfApp.AuthRedirect" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

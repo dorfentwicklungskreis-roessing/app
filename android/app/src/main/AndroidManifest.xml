@@ -22,5 +22,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          AppAuth bringt die RedirectUriReceiverActivity (inkl. Intent-Filter für
+          ${appAuthRedirectScheme}) selbst mit, aber ohne eigenes Theme. Da sie eine
+          AppCompatActivity ist, muss ihr hier ein AppCompat-Theme zugewiesen werden —
+          sonst crasht die App beim Rücksprung aus dem Browser. Intent-Filter und
+          android:exported kommen per Manifest-Merge aus der Library.
+        -->
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:theme="@style/Theme.DorfApp.AuthRedirect" />
     </application>
 </manifest>

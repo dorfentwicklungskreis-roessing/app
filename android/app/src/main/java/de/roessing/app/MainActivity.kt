@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import de.roessing.app.auth.LoginResult
 import de.roessing.app.auth.SessionState
 import de.roessing.app.ui.HomeScreen
 import de.roessing.app.ui.LoginScreen
@@ -44,13 +45,17 @@ private fun Root() {
     val container = context.appContainer
     val session by container.authManager.session.collectAsState()
     val scope = rememberCoroutineScope()
-    var loginError by remember { mutableStateOf(false) }
+    // null = kein Fehler. Ein Abbruch (Zurück-Taste) ist bewusst kein Fehler.
+    var loginError by remember { mutableStateOf<String?>(null) }
 
     val authLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
         scope.launch {
-            loginError = !container.authManager.handleAuthResult(result.data)
+            loginError = when (val r = container.authManager.handleAuthResult(result.data)) {
+                is LoginResult.Success, is LoginResult.Cancelled -> null
+                is LoginResult.Failed -> r.code
+            }
         }
     }
 
@@ -60,12 +65,12 @@ private fun Root() {
         }
 
         is SessionState.LoggedOut -> LoginScreen(
-            showError = loginError,
+            errorCode = loginError,
             onLogin = {
-                loginError = false
+                loginError = null
                 scope.launch {
                     runCatching { authLauncher.launch(container.authManager.buildLoginIntent()) }
-                        .onFailure { loginError = true }
+                        .onFailure { loginError = it::class.java.simpleName }
                 }
             },
             onDevLogin = { asAdmin ->

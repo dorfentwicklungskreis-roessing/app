@@ -25,7 +25,8 @@ import de.roessing.app.auth.AuthManager
 /** Startbildschirm: Anmeldung mit der Rössing-ID (OAuth im Browser). */
 @Composable
 fun LoginScreen(
-    showError: Boolean,
+    /** Technisches Fehlerkürzel oder null, wenn kein Fehler vorliegt. */
+    errorCode: String? = null,
     onLogin: () -> Unit,
     onDevLogin: (asAdmin: Boolean) -> Unit,
 ) {
@@ -60,12 +61,13 @@ fun LoginScreen(
             ) {
                 Text(stringResource(R.string.login_button))
             }
-            if (showError) {
+            if (errorCode != null) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    stringResource(R.string.login_error),
+                    stringResource(R.string.login_error, errorCode),
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("login-error"),
                 )
             }
             if (AuthManager.isDevAuthAllowed()) {

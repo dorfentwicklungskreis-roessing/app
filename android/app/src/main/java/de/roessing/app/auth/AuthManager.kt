@@ -3,6 +3,7 @@ package de.roessing.app.auth
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -31,6 +32,21 @@ sealed interface SessionState {
     data object Loading : SessionState
     data object LoggedOut : SessionState
     data class LoggedIn(val devMode: Boolean = false) : SessionState
+}
+
+/**
+ * Ergebnis des Browser-Logins.
+ *
+ * [Cancelled] ist bewusst KEIN Fehler: Bricht die Nutzerin den Login per
+ * Zurück-Taste oder Schließen-Button ab, landet sie kommentarlos wieder auf dem
+ * Login-Screen — ohne rote Fehlermeldung.
+ */
+sealed interface LoginResult {
+    data object Success : LoginResult
+    data object Cancelled : LoginResult
+
+    /** Echter Fehler; [code] ist ein technisches Kürzel für die Anzeige/Diagnose. */
+    data class Failed(val code: String) : LoginResult
 }
 
 /**
@@ -81,7 +97,7 @@ class AuthManager(private val context: Context) {
         _session.value = SessionState.LoggedOut
     }
 
-    /** Baut den Browser-Intent für den OIDC-Login (mit Consent-Screen). */
+    /** Baut den Browser-Intent für den OIDC-Login. */
     suspend fun buildLoginIntent(): Intent = suspendCancellableCoroutine { cont ->
         AuthorizationServiceConfiguration.fetchFromIssuer(Uri.parse(BuildConfig.OIDC_ISSUER)) { config, ex ->
             if (config == null) {
@@ -95,32 +111,66 @@ class AuthManager(private val context: Context) {
                 Uri.parse(BuildConfig.OIDC_REDIRECT_URI),
             )
                 .setScopes("openid", "profile", "email", "offline_access")
-                // prompt=consent: bewusster Zustimmungs-Screen bei jedem Login.
-                .setPrompt("consent")
+                // Bewusst KEIN prompt-Parameter: Zitadel kennt nur none/login/
+                // select_account/create. Ein unbekannter Wert wie "consent" ist
+                // laut Spec zwar zu ignorieren, ist aber unnötiges Risiko.
                 .build()
             cont.resume(authService.getAuthorizationRequestIntent(request))
         }
     }
 
-    /** Verarbeitet das Ergebnis des Browser-Logins (Code → Token-Tausch). */
-    suspend fun handleAuthResult(data: Intent?): Boolean {
-        data ?: return false
-        val resp = AuthorizationResponse.fromIntent(data)
-        val ex = AuthorizationException.fromIntent(data)
-        val state = AuthState(resp, ex)
-        if (resp == null) return false
-        val success = suspendCancellableCoroutine { cont ->
+    /**
+     * Verarbeitet das Ergebnis des Browser-Logins (Code → Token-Tausch).
+     *
+     * Bewusst komplett defensiv: Auf dem Rückweg aus dem Browser darf NIE eine
+     * unbehandelte Exception fliegen (sonst stirbt der Prozess und die App wirkt
+     * „wird wiederholt beendet"). Insbesondere darf [AuthState] erst gebaut werden,
+     * wenn feststeht, dass genau eines von Response/Exception vorliegt — der
+     * Konstruktor wirft sonst eine IllegalArgumentException.
+     */
+    suspend fun handleAuthResult(data: Intent?): LoginResult = try {
+        handleAuthResultInternal(data)
+    } catch (t: Throwable) {
+        Log.e(TAG, "Unerwarteter Fehler beim Verarbeiten des Login-Ergebnisses", t)
+        LoginResult.Failed(t::class.java.simpleName)
+    }
+
+    private suspend fun handleAuthResultInternal(data: Intent?): LoginResult {
+        // Leerer Result-Intent = Abbruch (z.B. Zurück-Taste im Custom Tab).
+        data ?: return LoginResult.Cancelled
+
+        val resp = runCatching { AuthorizationResponse.fromIntent(data) }
+            .onFailure { Log.w(TAG, "AuthorizationResponse nicht lesbar", it) }
+            .getOrNull()
+        val ex = runCatching { AuthorizationException.fromIntent(data) }
+            .onFailure { Log.w(TAG, "AuthorizationException nicht lesbar", it) }
+            .getOrNull()
+
+        if (resp == null) {
+            val result = classifyFailure(ex?.type, ex?.code, ex?.error)
+            Log.w(TAG, "Login ohne Autorisierungs-Code beendet: $result (${ex?.errorDescription})")
+            return result
+        }
+
+        // Erst hier ist garantiert: resp != null → AuthState-Konstruktor ist zulässig.
+        val state = AuthState(resp, null)
+        val tokenError = suspendCancellableCoroutine { cont ->
             authService.performTokenRequest(resp.createTokenExchangeRequest()) { tokenResp, tokenEx ->
-                state.update(tokenResp, tokenEx)
-                cont.resume(tokenResp != null)
+                runCatching { state.update(tokenResp, tokenEx) }
+                    .onFailure { Log.w(TAG, "AuthState-Update fehlgeschlagen", it) }
+                cont.resume(if (tokenResp != null) null else tokenEx)
             }
         }
-        if (success) {
-            authState = state
-            persist()
-            _session.value = SessionState.LoggedIn()
+        if (tokenError != null || !state.isAuthorized) {
+            val result = classifyFailure(tokenError?.type, tokenError?.code, tokenError?.error)
+            Log.e(TAG, "Token-Tausch fehlgeschlagen: $result (${tokenError?.errorDescription})")
+            return result
         }
-        return success
+
+        authState = state
+        persist()
+        _session.value = SessionState.LoggedIn()
+        return LoginResult.Success
     }
 
     /** Entwickler-Login ohne Zitadel (nur Debug + DEV_AUTH). */
@@ -163,6 +213,31 @@ class AuthManager(private val context: Context) {
     }
 
     companion object {
+        private const val TAG = "AuthManager"
+
         fun isDevAuthAllowed(): Boolean = BuildConfig.DEBUG && BuildConfig.DEV_AUTH
+
+        /**
+         * Übersetzt eine AppAuth-Fehlerkennung in ein [LoginResult].
+         *
+         * Bewusst als reine Funktion ohne Android-Abhängigkeiten, damit sie im
+         * JVM-Unit-Test abgedeckt werden kann.
+         *
+         * @param type AppAuth-Fehlertyp (AuthorizationException.TYPE_*), oder null.
+         * @param code AppAuth-Fehlercode innerhalb des Typs, oder null.
+         * @param error OAuth-Fehlerkürzel aus der Antwort (z.B. „invalid_grant"), oder null.
+         */
+        fun classifyFailure(type: Int?, code: Int?, error: String?): LoginResult {
+            // TYPE_GENERAL_ERROR (0) / CODE 1 = USER_CANCELED_AUTH_FLOW.
+            if (type == AuthorizationException.TYPE_GENERAL_ERROR &&
+                (code == AuthorizationException.GeneralErrors.USER_CANCELED_AUTH_FLOW.code ||
+                    code == AuthorizationException.GeneralErrors.PROGRAM_CANCELED_AUTH_FLOW.code)
+            ) {
+                return LoginResult.Cancelled
+            }
+            // Weder Response noch Fehler: leerer Rückweg → wie Abbruch behandeln.
+            if (type == null && code == null && error == null) return LoginResult.Cancelled
+            return LoginResult.Failed(error ?: "${type ?: "?"}.${code ?: "?"}")
+        }
     }
 }
