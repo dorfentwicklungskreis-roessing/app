@@ -13,7 +13,7 @@ set -euo pipefail
 
 # 0) Emulator-Standort auf Rössing setzen — davon lebt der Standort-Test.
 #    (Ohne Fix liefert der Emulator gar keine Position, der Test überspringt dann.)
-adb emu geo fix 9.8700 52.2110 || true
+adb emu geo fix 9.8162 52.1843 || true
 
 # 1) Instrumented- und E2E-Tests gegen das lokale Backend (Dev-Login).
 ./gradlew connectedDebugAndroidTest \
