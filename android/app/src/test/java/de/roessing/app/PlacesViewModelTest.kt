@@ -1,7 +1,11 @@
 package de.roessing.app
 
 import de.roessing.app.data.CompletionDto
+import de.roessing.app.data.CompletionLockedException
+import de.roessing.app.data.LatLon
 import de.roessing.app.data.MeDto
+import de.roessing.app.data.PlaceSort
+import de.roessing.app.data.ROESSING
 import de.roessing.app.data.PlaceDto
 import de.roessing.app.data.PlacesRepository
 import de.roessing.app.data.PlacesResponse
@@ -27,6 +31,8 @@ import org.junit.Test
 private class FakeRepo : PlacesRepository {
     var failPlaces = false
     var failComplete = false
+    /** Wenn gesetzt, antwortet das Backend mit der Sperrfrist (HTTP 409). */
+    var gesperrtBis: String? = null
     val completions = mutableListOf<Long>()
 
     private fun task(id: Long, status: String) = TaskDto(
@@ -36,9 +42,11 @@ private class FakeRepo : PlacesRepository {
 
     var response = PlacesResponse(
         places = listOf(
-            PlaceDto(id = 1, name = "Kasten Grün", lat = 52.0, lon = 9.0, status = "green", tasks = listOf(task(11, "green"))),
-            PlaceDto(id = 2, name = "Kasten Rot", lat = 52.0, lon = 9.0, status = "red", tasks = listOf(task(22, "red"))),
-            PlaceDto(id = 3, name = "Kasten Gelb", lat = 52.0, lon = 9.0, status = "yellow", tasks = listOf(task(33, "yellow"))),
+            // Koordinaten so gewählt, dass die Entfernung eine andere
+            // Reihenfolge ergibt als die Dringlichkeit.
+            PlaceDto(id = 1, name = "Kasten Grün", lat = 52.2120, lon = 9.8700, status = "green", tasks = listOf(task(11, "green"))),
+            PlaceDto(id = 2, name = "Kasten Rot", lat = 52.3000, lon = 9.8700, status = "red", tasks = listOf(task(22, "red"))),
+            PlaceDto(id = 3, name = "Kasten Gelb", lat = 52.2110, lon = 9.8700, status = "yellow", tasks = listOf(task(33, "yellow"))),
         ),
         wateringFactor = 1.0,
     )
@@ -51,6 +59,7 @@ private class FakeRepo : PlacesRepository {
     }
 
     override suspend fun complete(taskId: Long, liters: Double?, note: String): CompletionDto {
+        gesperrtBis?.let { throw CompletionLockedException(it) }
         if (failComplete) throw RuntimeException("offline")
         completions += taskId
         return CompletionDto(id = 99, taskId = taskId, userName = "Erna")
@@ -128,5 +137,61 @@ class PlacesViewModelTest {
 
         assertEquals(UiEvent.CompletionFailed, event)
         assertTrue(repo.completions.isEmpty())
+    }
+
+    @Test
+    fun `gesperrte Aufgabe meldet die Sperrfrist statt eines Netzfehlers`() = runTest(dispatcher) {
+        val repo = FakeRepo().apply { gesperrtBis = "2026-08-15T09:00:00Z" }
+        val vm = PlacesViewModel(repo)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        var event: UiEvent? = null
+        val job = launch { event = vm.events.first() }
+        vm.complete(22, liters = null)
+        dispatcher.scheduler.advanceUntilIdle()
+        job.cancel()
+
+        assertEquals(UiEvent.CompletionLocked("2026-08-15T09:00:00Z"), event)
+        assertTrue(repo.completions.isEmpty())
+    }
+
+    @Test
+    fun `Liste laesst sich nach Entfernung sortieren`() = runTest(dispatcher) {
+        val vm = PlacesViewModel(FakeRepo())
+        dispatcher.scheduler.advanceUntilIdle()
+        // Ohne Standort bleibt es bei der Dringlichkeit.
+        vm.setSort(PlaceSort.DISTANCE)
+        assertEquals(
+            listOf("Kasten Rot", "Kasten Gelb", "Kasten Grün"),
+            vm.state.value.places.map { it.name },
+        )
+
+        vm.setUserLocation(ROESSING)
+        assertEquals(PlaceSort.DISTANCE, vm.state.value.sort)
+        assertEquals(
+            listOf("Kasten Gelb", "Kasten Grün", "Kasten Rot"),
+            vm.state.value.places.map { it.name },
+        )
+
+        // Zurück auf Dringlichkeit — der Standort bleibt bekannt.
+        vm.setSort(PlaceSort.URGENCY)
+        assertEquals(
+            listOf("Kasten Rot", "Kasten Gelb", "Kasten Grün"),
+            vm.state.value.places.map { it.name },
+        )
+        assertEquals(ROESSING, vm.state.value.userLocation)
+    }
+
+    @Test
+    fun `Standort ueberlebt einen Refresh`() = runTest(dispatcher) {
+        val vm = PlacesViewModel(FakeRepo())
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.setUserLocation(LatLon(52.2115, 9.8700))
+        vm.setSort(PlaceSort.DISTANCE)
+
+        vm.refresh()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(PlaceSort.DISTANCE, vm.state.value.sort)
+        assertEquals("Kasten Grün", vm.state.value.places.first().name)
     }
 }

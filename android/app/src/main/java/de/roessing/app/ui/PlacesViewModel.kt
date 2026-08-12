@@ -3,8 +3,10 @@ package de.roessing.app.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.roessing.app.data.CompletionDto
+import de.roessing.app.data.LatLon
 import de.roessing.app.data.MeDto
 import de.roessing.app.data.PlaceDto
+import de.roessing.app.data.PlaceSort
 import de.roessing.app.data.PlacesRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,12 +24,21 @@ data class PlacesUiState(
     val offline: Boolean = false,
     /** Task-IDs, für die gerade eine Meldung läuft (Buttons deaktivieren). */
     val pendingTasks: Set<Long> = emptySet(),
+    /**
+     * Zuletzt bekannter eigener Standort. Bleibt auf dem Gerät und wird
+     * nie ans Backend geschickt — er dient nur Karte und Entfernungen.
+     */
+    val userLocation: LatLon? = null,
+    val sort: PlaceSort = PlaceSort.URGENCY,
 )
 
 /** Einmalige UI-Ereignisse (Snackbars). */
 sealed interface UiEvent {
     data object CompletionSaved : UiEvent
     data object CompletionFailed : UiEvent
+
+    /** Der Spielschutz hat die Meldung abgelehnt (HTTP 409). */
+    data class CompletionLocked(val until: String?) : UiEvent
 }
 
 class PlacesViewModel(private val repo: PlacesRepository) : ViewModel() {
@@ -82,6 +93,14 @@ class PlacesViewModel(private val repo: PlacesRepository) : ViewModel() {
                 .onFailure { _events.emit(UiEvent.CompletionFailed) }
             _state.update { it.copy(pendingTasks = it.pendingTasks - taskId) }
         }
+    }
+
+    /** Sortierung der Liste umschalten (Dringlichkeit oder Entfernung). */
+    fun setSort(sort: PlaceSort) {
+    }
+
+    /** Neuen Standort übernehmen (oder null, wenn keiner bekannt ist). */
+    fun setUserLocation(location: LatLon?) {
     }
 
     fun loadHistory(taskId: Long) {

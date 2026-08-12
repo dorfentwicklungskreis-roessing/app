@@ -59,6 +59,7 @@ fun HomeScreen(
             when (event) {
                 UiEvent.CompletionSaved -> snackbar.showSnackbar(savedMsg)
                 UiEvent.CompletionFailed -> snackbar.showSnackbar(failMsg)
+                is UiEvent.CompletionLocked -> snackbar.showSnackbar(failMsg)
             }
         }
     }

@@ -1,6 +1,13 @@
 package de.roessing.app.data
 
 /**
+ * Das Backend hat die Meldung wegen der Sperrfrist abgelehnt (HTTP 409).
+ * retryAfter ist der Zeitpunkt (RFC3339), ab dem wieder gemeldet werden darf.
+ */
+class CompletionLockedException(val retryAfter: String?) :
+    RuntimeException("Aufgabe ist noch gesperrt")
+
+/**
  * Dünne Repository-Schicht über der API. Cache des letzten Standes hält das
  * ViewModel, damit bei Netzfehlern weiter alte Daten sichtbar bleiben.
  */

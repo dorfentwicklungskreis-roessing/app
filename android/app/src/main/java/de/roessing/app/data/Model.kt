@@ -33,6 +33,11 @@ data class TaskDto(
     val lastCompletion: CompletionDto? = null,
     val dueAt: String = "",
     val redAt: String = "",
+    /**
+     * Spielschutz: bis dahin (RFC3339) darf nicht erneut gemeldet werden.
+     * Fehlt, wenn die Aufgabe frei ist.
+     */
+    val lockedUntil: String? = null,
 ) {
     val careStatus: CareStatus get() = parseStatus(status)
 
