@@ -185,11 +185,14 @@ class UiFlowTest {
         compose.onNodeWithTag("podium-1").assertIsDisplayed()
         compose.onNodeWithTag("podium-3").assertIsDisplayed()
         compose.onNodeWithText("Erna").assertIsDisplayed()
-        compose.onNodeWithText("Gießkanne des Monats").assertIsDisplayed()
+        // Alles unterhalb des Podests liegt je nach Bildschirmhöhe unter dem
+        // Rand — deshalb erst hinscrollen, dann prüfen.
+        compose.onNodeWithText("Gießkanne des Monats").performScrollTo().assertIsDisplayed()
 
         // Der eigene Platz ist hervorgehoben — auch außerhalb des Podests.
         compose.onNodeWithTag("leaderboard-row-udo").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("leaderboard-me").assertIsDisplayed()
+        compose.onNodeWithText("Du").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("leaderboard-me").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Dein Platz: 4").assertIsDisplayed()
     }
 
