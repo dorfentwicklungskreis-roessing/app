@@ -1,0 +1,3 @@
+Kleinere Korrekturen und Aufräumarbeiten hinter den Kulissen.
+Die Versionsnummer wurde begradigt, damit Aktualisierungen ohne
+Deinstallation funktionieren.

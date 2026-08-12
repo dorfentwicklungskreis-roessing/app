@@ -21,8 +21,13 @@ android {
         // Änderungshinweis unter store/metadata/android/*/changelogs/<code>.txt,
         // den store/check_metadata.py vor jedem Release einfordert. Eine aus der
         // CI-Laufnummer abgeleitete Nummer ließe sich damit nicht belegen.
-        versionCode = 2
-        versionName = "0.1.2"
+        // Muss über 1000103 liegen: Die verteilte 0.1.3 trug diese Nummer
+        // (aus einer inzwischen entfernten Automatik). Android installiert
+        // keinen Build mit kleinerer Nummer über einen größeren — sonst
+        // müssten alle Tester die App erst deinstallieren. Ab hier wieder in
+        // Einerschritten weiterzählen.
+        versionCode = 1000104
+        versionName = "0.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

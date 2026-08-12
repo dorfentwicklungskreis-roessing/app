@@ -1,0 +1,3 @@
+Minor fixes and internal cleanups.
+Version numbering straightened out so updates install without
+uninstalling first.
