@@ -124,6 +124,18 @@ Rollen-Gating — und ein kompletter Durchlauf **mit abgeschaltetem JavaScript**
 | `SESSION_KEY` | Schlüssel für die signierten Session-Cookies; leer = zufällig beim Start (Sessions überleben dann keinen Neustart) |
 | `MCP_CLIENT_ID` | PKCE-Client für die MCP-Anbindung |
 | `SEED` | `1` → Beispieldaten anlegen, falls die DB leer ist |
+### Dev-Container
+
+`.devcontainer/` beschreibt eine fertige Umgebung (JDK 21, Android-SDK 35,
+Go 1.23, Node, Claude-CLI) für VS Code, Codespaces oder die `devcontainer`-CLI:
+
+```sh
+devcontainer up --workspace-folder .
+```
+
+Der Emulator ist mit drin; das System-Image lädt man einmalig nach und der
+Container braucht `/dev/kvm`. Die genauen Befehle stehen als Kommentar in
+`.devcontainer/devcontainer.json`.
 
 ## MCP für Admins
 
