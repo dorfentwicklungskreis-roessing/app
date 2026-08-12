@@ -595,8 +595,9 @@ func (a *App) rangliste(w http.ResponseWriter, r *http.Request, s session) {
 		a.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
-	// Der eigene Rang wird für die angemeldete Person mitgeliefert.
-	liste, err := api.AssembleLeaderboard(a.db, a.now(), zeitraum, 0,
+	// Der eigene Rang wird für die angemeldete Person mitgeliefert. Die Seite
+	// zeigt bewusst alle Beteiligten (Dorfgröße), nicht nur die vorderen Plätze.
+	liste, err := api.AssembleLeaderboard(a.db, a.now(), zeitraum, api.MaxLeaderboardLimit,
 		auth.User{Sub: s.Sub, Name: anzeigeName(s)})
 	if err != nil {
 		a.fail(w, r, http.StatusInternalServerError, err)
