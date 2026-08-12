@@ -19,7 +19,7 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
   - App-Login: OIDC Authorization Code + PKCE im System-Browser (AppAuth), mit Consent-Screen.
   - Projekt `dorf-app` mit Rollen `admin` und `member`. Jeder eingeloggte
     Dorfbewohner darf Erledigungen melden; nur `admin` darf verwalten.
-- **Backend** (`api.xn--rssing-wxa.de`):
+- **Backend** (`app.xn--rssing-wxa.de`):
   - `GET/POST/PUT/DELETE /api/v1/…` — REST-API (JWT-geprüft via JWKS)
   - `/mcp` — MCP-Server (Streamable HTTP) für Admin aus Claude heraus.
     Auth: OAuth gegen die Rössing-ID (RFC 9728 Protected Resource),
@@ -55,7 +55,7 @@ und funktioniert nur gegen ein Backend mit `AUTH_MODE=insecure-dev`.
 In claude.ai einbinden (Einstellungen → Connectors → Custom Connector):
 
 ```
-URL:             https://api.xn--rssing-wxa.de/mcp
+URL:             https://app.xn--rssing-wxa.de/mcp
 OAuth-Client-ID: 385946294599876803   (kein Secret, PKCE)
 ```
 

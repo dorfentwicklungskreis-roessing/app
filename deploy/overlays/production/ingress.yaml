@@ -9,10 +9,10 @@ spec:
   ingressClassName: traefik
   tls:
     - hosts:
-        - api.xn--rssing-wxa.de
-      secretName: dorf-app-api-tls
+        - app.xn--rssing-wxa.de
+      secretName: dorf-app-tls
   rules:
-    - host: api.xn--rssing-wxa.de
+    - host: app.xn--rssing-wxa.de
       http:
         paths:
           - path: /

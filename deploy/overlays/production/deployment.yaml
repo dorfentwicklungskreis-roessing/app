@@ -22,6 +22,9 @@ spec:
         - name: backend
           # Image-Referenz wird von kustomize (images:) verwaltet — bare ref.
           image: ghcr.io/dorfentwicklungskreis-roessing/app-backend
+          # Explizit statt Image-Entrypoint — erlaubt auch manuell importierte
+          # Images ohne Entrypoint-Config (Notfall-Deploy per ctr import).
+          command: ["/server"]
           ports:
             - containerPort: 8080
               name: http
@@ -36,7 +39,7 @@ spec:
             - name: SEED
               value: "1"
             - name: PUBLIC_URL
-              value: https://api.xn--rssing-wxa.de
+              value: https://app.xn--rssing-wxa.de
           volumeMounts:
             - name: data
               mountPath: /data

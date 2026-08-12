@@ -22,7 +22,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "API_BASE_URL", "\"${prop("apiBaseUrl", "https://api.xn--rssing-wxa.de")}\"")
+        buildConfigField("String", "API_BASE_URL", "\"${prop("apiBaseUrl", "https://app.xn--rssing-wxa.de")}\"")
         buildConfigField("String", "OIDC_ISSUER", "\"${prop("oidcIssuer", "https://id.xn--rssing-wxa.de")}\"")
         buildConfigField("String", "OIDC_CLIENT_ID", "\"${prop("oidcClientId", "385941807986376899")}\"")
         buildConfigField("String", "OIDC_REDIRECT_URI", "\"de.roessing.app:/oauth2redirect\"")
