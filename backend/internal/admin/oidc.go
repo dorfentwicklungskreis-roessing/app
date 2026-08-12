@@ -23,6 +23,7 @@ const oidcScopes = "openid profile email urn:zitadel:iam:org:projects:roles"
 type discovery struct {
 	AuthorizationEndpoint string `json:"authorization_endpoint"`
 	TokenEndpoint         string `json:"token_endpoint"`
+	UserinfoEndpoint      string `json:"userinfo_endpoint"`
 	EndSessionEndpoint    string `json:"end_session_endpoint"`
 }
 
@@ -150,6 +151,18 @@ func (a *App) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Zitadel legt die Profil-Claims nicht ins Access-Token (das trägt nur
+	// Subject und Rollen). Den Anzeigenamen holen wir deshalb vom
+	// userinfo-Endpoint; klappt das nicht, bleibt es beim Subject.
+	if name, email := a.userinfo(r.Context(), tok.AccessToken); name != "" || email != "" {
+		if user.Name == "" {
+			user.Name = name
+		}
+		if user.Email == "" {
+			user.Email = email
+		}
+	}
+
 	s := session{
 		Sub: user.Sub, Name: user.Name, Email: user.Email, Admin: true,
 		IDToken: tok.IDToken,
@@ -211,6 +224,44 @@ func (a *App) exchange(ctx context.Context, code, verifier string) (*tokenRespon
 		return nil, fmt.Errorf("Antwort ohne access_token")
 	}
 	return &tok, nil
+}
+
+// userinfo liest Anzeigenamen und E-Mail vom userinfo-Endpoint. Fehler sind
+// nicht kritisch: ohne Namen zeigt die Oberfläche das Subject.
+func (a *App) userinfo(ctx context.Context, accessToken string) (name, email string) {
+	cfg, err := a.discovery.get(ctx)
+	if err != nil || cfg.UserinfoEndpoint == "" {
+		return "", ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.UserinfoEndpoint, nil)
+	if err != nil {
+		return "", ""
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", ""
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		slog.Warn("admin: userinfo nicht abrufbar", "status", res.StatusCode)
+		return "", ""
+	}
+	var info struct {
+		Name              string `json:"name"`
+		PreferredUsername string `json:"preferred_username"`
+		Email             string `json:"email"`
+	}
+	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&info); err != nil {
+		return "", ""
+	}
+	name = info.Name
+	if name == "" {
+		name = info.PreferredUsername
+	}
+	return name, info.Email
 }
 
 // handleLogout löscht die Session und beendet – wenn möglich – auch die

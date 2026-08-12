@@ -134,7 +134,7 @@ func cacheAssets(next http.Handler) http.Handler {
 // Meldung) plus die seitenspezifischen Daten unter .Data.
 type view struct {
 	Title string
-	// Nav markiert den aktiven Navigationspunkt ("uebersicht", "dorfpflege", …).
+	// Nav markiert den aktiven Navigationspunkt ("verwaltung", "dorfpflege", …).
 	Nav   string
 	User  *session
 	Flash *flash

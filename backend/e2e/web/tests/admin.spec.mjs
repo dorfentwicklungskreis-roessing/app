@@ -166,7 +166,9 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
 
   await test.step('Abmelden beendet die Sitzung', async () => {
     await page.locator('#abmelden').click();
-    await page.waitForURL(/\/admin\/?$|\/ui\//, { timeout: 45_000 });
+    // Wohin die Rössing-ID nach dem Logout schickt, ist ihre Sache — wichtig
+    // ist nur, dass unsere Sitzung weg ist.
+    await page.waitForLoadState('domcontentloaded');
     await page.goto('/admin/dorfpflege/');
     await expect(page).toHaveURL(`${BASE_URL}/admin/`);
     await expect(page.locator('#anmelden')).toBeVisible();
