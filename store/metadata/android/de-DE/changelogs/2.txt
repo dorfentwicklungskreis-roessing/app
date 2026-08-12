@@ -1,7 +1,9 @@
 Erste Fassung im Play Store.
 
 - Karte der Blumenkästen und Beete mit Ampel-Status
+- Eigener Standort und Entfernungen auf Wunsch (bleibt auf dem Gerät)
 - Gieß- und Jätpläne mit Intervallen und Hitzefaktor
 - Erledigungen melden (mit Rückfrage) und zurücknehmen
+- Sperre gegen Mehrfachmeldungen derselben Aufgabe
 - Rangliste für Woche, Monat, Saison, Jahr und gesamt
 - Anmeldung mit der Rössing-ID

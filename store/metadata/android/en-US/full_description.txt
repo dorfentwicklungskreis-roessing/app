@@ -5,12 +5,13 @@ You can only use this app with a Rössing-ID, the village account operated at id
 
 WHAT THE APP DOES
 - Map of all flower boxes, beds and other places the village looks after, each with a traffic-light status (green = fine, yellow = due, red = overdue)
+- Optional: with location permission granted, the map shows your own position and the distance to each place, and the list can be sorted by proximity. The position never leaves the device.
 - Watering and weeding schedules with intervals; a heat factor can make watering tasks fall due sooner
-- Report a completed task in two taps, with a confirmation step; reports can be withdrawn again
+- Report a completed task in two taps, with a confirmation step; reports can be withdrawn again. A task that was just done stays locked for a while, so the same box cannot be "watered" three times in a row
 - Leaderboard per week, month, watering season, year or all time, plus the village totals
 
 WHAT IT DOES NOT DO
-No access to device location. No ads, no tracking, no analytics SDKs. No in-app purchases.
+No ads, no tracking, no analytics SDKs. No in-app purchases. No background location and no transmission of your position.
 
 DATA
 Name and e-mail address come from the Rössing-ID at sign-in. The village server stores only the task reports: user id, display name, timestamp, litres and an optional note. Reports are visible to all signed-in villagers. All traffic uses HTTPS. Map tiles come from OpenFreeMap (OpenStreetMap data), which therefore sees the device IP address.

@@ -36,9 +36,14 @@ gegebenenfalls die Litermenge und eine optionale Notiz. Diese Meldungen sind fü
 alle angemeldeten Dorfbewohner sichtbar — in der Historie eines Ortes und in der
 Rangliste. Genau das ist der Zweck der App.
 
-**Kein Gerätestandort.** Die App fordert keine Standortberechtigung an und greift
-nicht auf den Standort des Geräts zu. Die Karte zeigt feste Koordinaten der
-Blumenkästen und Beete, nicht die eigene Position.
+**Gerätestandort — nur auf dem Gerät.** Wer die Standortfreigabe erteilt, sieht
+die eigene Position auf der Karte, die Entfernung zu jedem Pflege-Ort und kann
+die Liste nach Nähe sortieren. Die App fragt dafür einen einzelnen Standort ab
+(zuletzt bekannte Position, sonst ein einmaliger Fix mit Zeitlimit) — kein
+Dauer-Tracking, kein Hintergrundstandort. **Die Position wird nicht gespeichert
+und nicht übertragen**, weder an den Dorfserver noch an Dritte; die API der App
+kennt kein Feld dafür. Ohne Freigabe funktioniert die App vollständig, nur ohne
+Entfernungsangaben.
 
 **Kein Tracking.** Keine Werbung, keine Analyse- oder Absturz-SDKs, keine
 Werbe-ID, kein Profiling.

@@ -83,7 +83,7 @@ keine Weitergabe. Nichts wird verkauft, es gibt keine Werbepartner.
 
 | Datentyp | Status | Begründung |
 |---|---|---|
-| Standort (genau/ungefähr) | **nein** | Das Manifest enthält keine der `ACCESS_*_LOCATION`-Berechtigungen. `MapScreen.kt` zeigt nur die festen Koordinaten der Pflege-Orte, es gibt keine `LocationComponent`, keine Ortungsabfrage und keine Übertragung einer Position ans Backend. |
+| Standort (genau/ungefähr) | **nein — aber erklärungsbedürftig, siehe unten** | Die App fragt `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION` ab, benutzt die Position aber ausschließlich auf dem Gerät. |
 | Finanzdaten | nein | keine Zahlungen, keine In-App-Käufe |
 | Gesundheits-/Fitnessdaten | nein | — |
 | Kontakte, Kalender, SMS, Anrufliste | nein | keine entsprechenden Berechtigungen |
@@ -91,6 +91,36 @@ keine Weitergabe. Nichts wird verkauft, es gibt keine Werbepartner.
 | Absturzberichte, Diagnosen, Leistungsdaten | nein | kein Crashlytics, kein Analytics-SDK; das Firebase-SDK ist **nicht** eingebunden — Firebase wird nur außerhalb der App zur Verteilung von Testversionen benutzt |
 | Werbe-ID / Geräte-IDs | nein | keine `play-services-ads-identifier`-Abhängigkeit |
 | Kaufhistorie, Suchverlauf, installierte Apps | nein | — |
+
+### Sonderfall Standort — warum „nicht erhoben" trotzdem stimmt
+
+Die App hat seit `de.roessing.app` Stand August 2026 eine Standortfunktion:
+Kartenausschnitt auf die eigene Position, Entfernung zu jedem Ort, Sortierung
+der Liste nach Nähe.
+
+Play definiert „erhoben" als **Übertragung vom Gerät weg**. Das passiert hier
+nicht:
+
+- `android/app/src/main/java/de/roessing/app/data/DeviceLocation.kt` holt die
+  Position über den `LocationManager` der Plattform — zuerst die zuletzt
+  bekannte, sonst **ein einzelner Fix** mit 8 s Zeitlimit. Kein Dauer-Tracking.
+- Die Position landet in `PlacesViewModel.userLocation` und wird dort nur für
+  Sortierung und Entfernungsanzeige benutzt.
+- `DorfApi` (`data/Api.kt`) hat **keinen Endpunkt mit Koordinaten**;
+  `CompletionInput` besteht aus `liters` und `note`. Es gibt keinen Pfad, auf
+  dem die Position das Gerät verlässt.
+- Kein Hintergrundstandort: `ACCESS_BACKGROUND_LOCATION` steht nicht im
+  Manifest, es gibt keinen Vordergrunddienst.
+
+Daraus folgt für die Play Console:
+
+- **Datensicherheit:** Standort **nicht** als erhobenen Datentyp eintragen.
+- **Keine Erklärung für sensible Berechtigungen nötig.** Ein Formular verlangt
+  Google nur für **Hintergrund**standort — den nutzt die App nicht.
+- In der Store-Beschreibung ist der Zweck genannt („Position bleibt auf dem
+  Gerät"). Das sollte so bleiben: Google prüft die Angaben gegen das
+  beobachtete Verhalten der App, und eine erklärte, im Vordergrund abgefragte
+  Ortung ist unproblematisch — eine unerklärte fällt auf.
 
 **Randnotiz IP-Adresse:** Beim Laden der Kartenkacheln von
 `tiles.openfreemap.org` (MapLibre) und beim Aufruf des Dorfservers wird

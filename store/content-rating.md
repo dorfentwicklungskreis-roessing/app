@@ -27,7 +27,7 @@ tatsächlichen Funktionsumfang bezogen.
 | Nutzer können miteinander kommunizieren (Chat, Nachrichten, Kommentare) | **Nein** | Es gibt keinen Chat und keine Kommentarfunktion. Die App zeigt lediglich, **wer wann** eine Pflegeaufgabe erledigt hat — Name und Zeitpunkt, kein von Nutzern verfasster Text. Das Freitextfeld `note` im Backend ist in der App nicht bedienbar. |
 | Nutzer können Inhalte teilen (Fotos, Dateien, Position) | **Nein** | keine Upload-, Foto- oder Teilen-Funktion |
 | Werden persönliche Daten an Dritte weitergegeben? | **Nein** | Server und Nutzerkonten betreibt das Dorf selbst; keine Werbe- oder Analysepartner |
-| Nutzt die App den Gerätestandort und zeigt ihn anderen Nutzern? | **Nein** | Die App fordert keine Standortberechtigung an. Auf der Karte stehen nur die festen Koordinaten von Blumenkästen und Beeten, nicht die Position von Personen. |
+| Nutzt die App den Gerätestandort und zeigt ihn anderen Nutzern? | **Nein** | Die App fragt zwar den Standort ab (Kartenausschnitt, Entfernung zu den Pflege-Orten, Sortierung nach Nähe), die Position bleibt aber auf dem Gerät. Sie wird weder gespeichert noch an den Server noch an andere Nutzer übertragen — siehe `data-safety.md`. Auf der Karte sehen andere nur die festen Koordinaten von Blumenkästen und Beeten. |
 | Werbung | **Nein** | keine Werbung |
 | Käufe in der App | **Nein** | — |
 | Ist die App ausschließlich für einen abgegrenzten Nutzerkreis? | **Ja** (falls gefragt) | Nutzung nur mit einer Rössing-ID, die der Dorfentwicklungskreis vergibt |
@@ -41,4 +41,4 @@ USK 0, PEGI 3, ESRB „Everyone", IARC 3+.
 
 Der Fragebogen muss erneut beantwortet werden, sobald die App
 Nutzer-zu-Nutzer-Kommunikation (Notizen, Kommentare, Chat), Fotos oder eine
-Standortanzeige von Personen bekommt.
+für andere sichtbare Standortanzeige von Personen bekommt.
