@@ -37,6 +37,16 @@ class BackendE2eTest {
 
     private fun stats() = ApiStatsRepository(api())
 
+    /**
+     * Eine Gieß-Aufgabe, die noch nie erledigt wurde. Der Spielschutz des
+     * Backends sperrt eine Aufgabe nach jeder Meldung — die Tests dürfen sich
+     * deshalb nicht dieselbe teilen.
+     */
+    private suspend fun freieGiessAufgabe() =
+        repo().places().places.flatMap { it.tasks }
+            .firstOrNull { it.kind == "giessen" && it.lastCompletion == null && it.lockedUntil == null }
+            ?: error("Keine freie Gieß-Aufgabe im Seed")
+
     @Test
     fun kompletterGiessFlow() = runBlocking {
         val repo = repo()
@@ -44,8 +54,7 @@ class BackendE2eTest {
         // Seed-Daten sind da.
         val before = repo.places()
         assertTrue("Keine Orte im Backend", before.places.isNotEmpty())
-        val task = before.places.flatMap { it.tasks }.firstOrNull { it.kind == "giessen" }
-            ?: error("Keine Gieß-Aufgabe im Seed")
+        val task = freieGiessAufgabe()
 
         // Gießen melden.
         val completion = repo.complete(task.id, liters = 10.0)
@@ -70,8 +79,7 @@ class BackendE2eTest {
     fun ranglisteZaehltDieEigeneMeldung() = runBlocking {
         val repo = repo()
         val stats = stats()
-        val task = repo.places().places.flatMap { it.tasks }.firstOrNull { it.kind == "giessen" }
-            ?: error("Keine Gieß-Aufgabe im Seed")
+        val task = freieGiessAufgabe()
 
         // Zeitraum „gesamt", damit der Test unabhängig vom Kalender läuft.
         val vorher = stats.leaderboard("gesamt")
