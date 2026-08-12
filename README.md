@@ -36,6 +36,12 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
   Pflegeaufgaben (`giessen` mit Litern, `jaeten`, `sonstiges`), je mit
   Intervall (→ gelb) und Rot-Schwelle. Globaler **Hitzefaktor** (z.B. 0.5)
   beschleunigt nur Gieß-Aufgaben.
+- **Rangliste**: `GET /api/v1/stats/leaderboard?period=woche|monat|saison|jahr|gesamt`
+  (Standard `saison` = 1. März bis 31. Oktober, Grenzen in Ortszeit) zeigt je
+  Person Anzahl und Liter, die Gesamtsummen des Dorfes, den eigenen Rang und
+  schlichte Auszeichnungen (Gießkanne des Monats, Frühaufsteher, Retter,
+  Ausdauer). Eine irrtümliche Meldung nimmt
+  `DELETE /api/v1/completions/{id}` zurück — erlaubt dem Melder und Admins.
 
 ## Entwicklung
 
@@ -119,7 +125,8 @@ DCR mit der festen PKCE-Client-ID). Beim Verbinden loggt man sich mit der
 Rössing-ID ein; nur Nutzer mit der Projektrolle `admin` kommen durch.
 
 Tools: `orte_liste`, `ort_anlegen/aendern/loeschen`,
-`aufgabe_anlegen/aendern/loeschen`, `erledigung_melden`, `hitzefaktor_setzen`.
+`aufgabe_anlegen/aendern/loeschen`, `erledigung_melden`,
+`erledigung_zuruecknehmen`, `rangliste`, `hitzefaktor_setzen`.
 
 ## Deployment
 

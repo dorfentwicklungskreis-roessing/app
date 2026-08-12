@@ -371,6 +371,99 @@ func TestEndToEnd(t *testing.T) {
 			t.Fatalf("Melder-Sub fehlt (erwartet %s): %s", adminUser.UserID, text)
 		}
 	})
+
+	// --- Rangliste und Rücknahme ---
+	t.Run("Rangliste, eigener Rang und Rücknahme", func(t *testing.T) {
+		// Stand bisher: Mitglied 1 Erledigung (gegossen), Admin 1 (via MCP
+		// am Beet). Das Mitglied legt zwei nach, der Admin eine.
+		var memberCompletionID float64
+		for i := 0; i < 2; i++ {
+			resp, c := request(t, "POST", fmt.Sprintf("/api/v1/tasks/%.0f/completions", taskID), memberToken, map[string]any{})
+			if resp.StatusCode != 201 {
+				t.Fatalf("Erledigung %d: HTTP %d: %v", i, resp.StatusCode, c)
+			}
+			memberCompletionID = c["id"].(float64)
+		}
+		text, isErr := mcpToolText(t, adminToken, "erledigung_melden", map[string]any{"taskId": taskID})
+		if isErr {
+			t.Fatalf("erledigung_melden: %s", text)
+		}
+		var adminCompletion struct {
+			ID float64 `json:"id"`
+		}
+		_ = json.Unmarshal([]byte(text), &adminCompletion)
+
+		// Zeitraum „gesamt", damit der Test unabhängig vom Kalender läuft.
+		leaderboard := func(token string) map[string]any {
+			t.Helper()
+			resp, out := request(t, "GET", "/api/v1/stats/leaderboard?period=gesamt", token, nil)
+			if resp.StatusCode != 200 {
+				t.Fatalf("Rangliste: HTTP %d: %v", resp.StatusCode, out)
+			}
+			return out
+		}
+		// Anzahl der Erledigungen einer Kennung in der Rangliste.
+		countOf := func(lb map[string]any, sub string) float64 {
+			t.Helper()
+			for _, e := range lb["entries"].([]any) {
+				entry := e.(map[string]any)
+				if entry["userSub"] == sub {
+					return entry["completions"].(float64)
+				}
+			}
+			t.Fatalf("Kennung %s fehlt in der Rangliste: %v", sub, lb["entries"])
+			return 0
+		}
+
+		lb := leaderboard(memberToken)
+		if got := countOf(lb, memberUser.UserID); got != 3 {
+			t.Fatalf("Mitglied hat %v Erledigungen, erwartet 3", got)
+		}
+		first := lb["entries"].([]any)[0].(map[string]any)
+		if first["userSub"] != memberUser.UserID {
+			t.Fatalf("Erster Platz = %v, erwartet das Mitglied", first["userSub"])
+		}
+		if me := lb["me"].(map[string]any); me["rank"].(float64) != 1 {
+			t.Fatalf("eigener Rang des Mitglieds = %v, erwartet 1", me["rank"])
+		}
+		if totals := lb["totals"].(map[string]any); totals["completions"].(float64) != 5 {
+			t.Fatalf("Gesamtsumme = %v, erwartet 5", totals["completions"])
+		}
+
+		// Der Admin liegt hinten und bekommt trotzdem seinen Rang.
+		if me := leaderboard(adminToken)["me"].(map[string]any); me["rank"].(float64) != 2 {
+			t.Fatalf("eigener Rang des Admins = %v, erwartet 2", me["rank"])
+		}
+
+		// Fremde Meldung darf das Mitglied nicht zurücknehmen …
+		resp, _ := request(t, "DELETE", fmt.Sprintf("/api/v1/completions/%.0f", adminCompletion.ID), memberToken, nil)
+		if resp.StatusCode != 403 {
+			t.Fatalf("fremde Rücknahme: HTTP %d, erwartet 403", resp.StatusCode)
+		}
+		// … die eigene schon, und die Rangliste zählt danach eine weniger.
+		resp, _ = request(t, "DELETE", fmt.Sprintf("/api/v1/completions/%.0f", memberCompletionID), memberToken, nil)
+		if resp.StatusCode != 204 {
+			t.Fatalf("eigene Rücknahme: HTTP %d, erwartet 204", resp.StatusCode)
+		}
+		if got := countOf(leaderboard(memberToken), memberUser.UserID); got != 2 {
+			t.Fatalf("Mitglied nach der Rücknahme: %v Erledigungen, erwartet 2", got)
+		}
+
+		// Der Admin nimmt seine eigene Meldung über das MCP-Tool zurück.
+		if text, isErr := mcpToolText(t, adminToken, "erledigung_zuruecknehmen",
+			map[string]any{"id": adminCompletion.ID}); isErr {
+			t.Fatalf("erledigung_zuruecknehmen: %s", text)
+		}
+		if got := countOf(leaderboard(adminToken), adminUser.UserID); got != 1 {
+			t.Fatalf("Admin nach der Rücknahme: %v Erledigungen, erwartet 1", got)
+		}
+
+		// Und die Rangliste gibt es auch als MCP-Tool.
+		text, isErr = mcpToolText(t, adminToken, "rangliste", map[string]any{"period": "gesamt"})
+		if isErr || !strings.Contains(text, memberUser.UserID) {
+			t.Fatalf("rangliste: isErr=%v, text=%s", isErr, text)
+		}
+	})
 }
 
 func waitFor(t *testing.T, url string) {
