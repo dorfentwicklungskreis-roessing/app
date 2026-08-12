@@ -130,3 +130,46 @@ func TestOIDCVerifier(t *testing.T) {
 		}
 	})
 }
+
+// Wird eine Audience-Liste konfiguriert, muss sie auch geprüft werden.
+// Vorher wurde der Parameter stillschweigend verworfen (SkipClientIDCheck):
+// jedes Token derselben Rössing-ID — auch das einer ganz anderen Anwendung —
+// wurde akzeptiert.
+func TestOIDCVerifierPrueftAudience(t *testing.T) {
+	f := newFakeIssuer(t)
+	v, err := NewOIDCVerifier(context.Background(), f.srv.URL, []string{"dorf-app", "dorf-app-mcp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("passende Audience wird akzeptiert", func(t *testing.T) {
+		raw := f.token(t, map[string]any{"aud": "dorf-app-mcp"})
+		if _, err := v.Verify(context.Background(), raw); err != nil {
+			t.Fatalf("gültige Audience abgelehnt: %v", err)
+		}
+	})
+
+	t.Run("Audience-Liste mit einem Treffer genügt", func(t *testing.T) {
+		raw := f.token(t, map[string]any{"aud": []string{"fremde-app", "dorf-app"}})
+		if _, err := v.Verify(context.Background(), raw); err != nil {
+			t.Fatalf("gültige Audience in Liste abgelehnt: %v", err)
+		}
+	})
+
+	t.Run("fremde Audience wird abgelehnt", func(t *testing.T) {
+		raw := f.token(t, map[string]any{"aud": "ganz-andere-app"})
+		if _, err := v.Verify(context.Background(), raw); err == nil {
+			t.Fatal("Token einer fremden Anwendung wurde akzeptiert")
+		}
+	})
+
+	t.Run("ohne konfigurierte Audience wird nicht geprüft", func(t *testing.T) {
+		offen, err := NewOIDCVerifier(context.Background(), f.srv.URL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := offen.Verify(context.Background(), f.token(t, map[string]any{"aud": "beliebig"})); err != nil {
+			t.Fatalf("ohne Audience-Vorgabe darf nichts abgelehnt werden: %v", err)
+		}
+	})
+}

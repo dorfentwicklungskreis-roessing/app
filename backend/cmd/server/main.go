@@ -6,32 +6,64 @@
 //	DB_PATH       Standard "/data/dorfapp.sqlite"
 //	AUTH_ISSUER   z.B. https://id.xn--rssing-wxa.de — Pflicht in Produktion
 //	AUTH_MODE     "oidc" (Standard) oder "insecure-dev" (nur lokal/E2E!)
+//	AUTH_AUDIENCE optionale, kommaseparierte Liste erlaubter Audiences
 //	PUBLIC_URL    öffentliche Basis-URL (MCP-OAuth-Metadata und OIDC-Redirect
 //	              der Verwaltung: {PUBLIC_URL}/admin/)
 //	ADMIN_CLIENT_ID  OIDC-Client-ID der Verwaltung (leer = nur Startseite)
 //	SESSION_KEY   Schlüssel für die signierten Session-Cookies der Verwaltung.
 //	              Leer = zufällig beim Start (Sessions überleben keinen Neustart).
 //	SEED          "1" → Beispieldaten anlegen, falls DB leer ist
+//
+// Härtung (Voreinstellungen sind für den Betrieb gedacht, siehe SICHERHEIT.md):
+//
+//	RATE_LIMIT, RATE_LIMIT_BURST, RATE_LIMIT_PER_MINUTE
+//	MAX_BODY_BYTES   Obergrenze je Anfrage (Standard 1 MiB)
+//	BACKUP, BACKUP_DIR, BACKUP_KEEP, BACKUP_INTERVAL
+//	LOG_FORMAT       "json" (Standard) oder "text"
 package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/admin"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/backup"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/httpx"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mcp"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
+// Zeitschranken des HTTP-Servers. Ohne sie hält eine einzige langsame
+// Verbindung eine Goroutine (und einen Dateideskriptor) beliebig lange fest.
+const (
+	leseTimeout     = 15 * time.Second
+	leseKopfTimeout = 10 * time.Second
+	schreibTimeout  = 60 * time.Second
+	leerlaufTimeout = 120 * time.Second
+	// abschaltFrist: so lange dürfen laufende Anfragen noch zu Ende gehen.
+	abschaltFrist = 20 * time.Second
+	// maxBodyBytes begrenzt jede Anfrage (Formulare, JSON, MCP).
+	maxBodyBytes = 1 << 20
+)
+
 func main() {
+	logEinrichten()
+
 	addr := envOr("LISTEN_ADDR", ":8080")
 	dbPath := envOr("DB_PATH", "/data/dorfapp.sqlite")
+	publicURL := envOr("PUBLIC_URL", "https://app.xn--rssing-wxa.de")
 
 	database, err := db.Open(dbPath)
 	if err != nil {
@@ -51,12 +83,18 @@ func main() {
 	issuer := envOr("AUTH_ISSUER", "https://id.xn--rssing-wxa.de")
 	switch envOr("AUTH_MODE", "oidc") {
 	case "insecure-dev":
+		// Doppelter Boden: Dieser Modus darf niemals öffentlich laufen.
+		if strings.HasPrefix(publicURL, "https://") {
+			slog.Error("AUTH_MODE=insecure-dev ist mit einer öffentlichen https-URL nicht zulässig",
+				"public_url", publicURL)
+			os.Exit(1)
+		}
 		slog.Warn("AUTH_MODE=insecure-dev — KEINE echte Authentifizierung!")
 		verifier = auth.InsecureDevVerifier{}
 	default:
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		v, err := auth.NewOIDCVerifier(ctx, issuer, nil)
+		v, err := auth.NewOIDCVerifier(ctx, issuer, audiences())
 		if err != nil {
 			slog.Error("OIDC-Discovery fehlgeschlagen", "issuer", issuer, "err", err)
 			os.Exit(1)
@@ -69,7 +107,6 @@ func main() {
 		// MCP: OAuth gegen die Rössing-ID, admin-Rolle erforderlich.
 		// MCP_CLIENT_ID: PKCE-Client, den Dynamic Client Registration
 		// (claude.ai) zurückbekommt.
-		publicURL := envOr("PUBLIC_URL", "https://app.xn--rssing-wxa.de")
 		mcpClientID := envOr("MCP_CLIENT_ID", "385946294599876803")
 		mcp.New(database, verifier, issuer, publicURL, mcpClientID).Register(mux)
 		slog.Info("MCP-Server aktiv unter /mcp (OAuth + DCR)", "issuer", issuer)
@@ -88,11 +125,108 @@ func main() {
 		}
 	})
 
-	slog.Info("starte server", "addr", addr, "db", dbPath)
-	if err := http.ListenAndServe(addr, handler); err != nil {
+	// Reihenfolge von außen nach innen: Panics fangen, Kopfzeilen setzen,
+	// Größe begrenzen, Rate prüfen, Herkunft prüfen, dann erst arbeiten.
+	limiter := httpx.NewRateLimiter(httpx.RateLimitFromEnv())
+	handler = httpx.Chain(handler,
+		httpx.Recover,
+		httpx.SecurityHeaders(httpx.SecurityConfig{Anmeldedienst: issuer}),
+		httpx.LimitBody(envInt64("MAX_BODY_BYTES", maxBodyBytes)),
+		limiter.Middleware,
+		httpx.SameOrigin(httpx.SameOriginConfig{Origin: publicURL, Prefixes: []string{"/admin"}}),
+	)
+
+	// Hintergrund: tägliche Sicherung der SQLite-Datei ins PVC.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	backupFertig := backupStarten(ctx, database, dbPath)
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadTimeout:       leseTimeout,
+		ReadHeaderTimeout: leseKopfTimeout,
+		WriteTimeout:      schreibTimeout,
+		IdleTimeout:       leerlaufTimeout,
+		MaxHeaderBytes:    1 << 16,
+		ErrorLog:          slog.NewLogLogger(slog.Default().Handler(), slog.LevelWarn),
+	}
+
+	fehler := make(chan error, 1)
+	go func() {
+		slog.Info("starte server", "addr", addr, "db", dbPath)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fehler <- err
+		}
+	}()
+
+	select {
+	case err := <-fehler:
 		slog.Error("server beendet", "err", err)
 		os.Exit(1)
+	case <-ctx.Done():
+		slog.Info("Signal empfangen — fahre geordnet herunter")
 	}
+
+	// Erst keine neuen Anfragen mehr annehmen und laufende zu Ende bringen,
+	// dann die Datenbank schließen. Sonst bricht mitten im Schreiben ab.
+	stop()
+	abschalt, cancel := context.WithTimeout(context.Background(), abschaltFrist)
+	defer cancel()
+	if err := server.Shutdown(abschalt); err != nil {
+		slog.Warn("Herunterfahren nicht sauber beendet", "err", err)
+	}
+	if backupFertig != nil {
+		select {
+		case <-backupFertig:
+		case <-time.After(5 * time.Second):
+			slog.Warn("Backup-Zeitplan hat sich nicht rechtzeitig beendet")
+		}
+	}
+	slog.Info("Server gestoppt")
+}
+
+// logEinrichten stellt strukturierte Logs ein. In Containern ist JSON die
+// nützlichere Form; Tokens, Cookies und E-Mail-Adressen werden nirgends
+// protokolliert (siehe SICHERHEIT.md).
+func logEinrichten() {
+	if strings.EqualFold(os.Getenv("LOG_FORMAT"), "text") {
+		return
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+}
+
+// audiences liest AUTH_AUDIENCE (kommasepariert). Leer = keine Prüfung.
+func audiences() []string {
+	roh := strings.TrimSpace(os.Getenv("AUTH_AUDIENCE"))
+	if roh == "" {
+		return nil
+	}
+	var out []string
+	for _, teil := range strings.Split(roh, ",") {
+		if teil = strings.TrimSpace(teil); teil != "" {
+			out = append(out, teil)
+		}
+	}
+	return out
+}
+
+// backupStarten richtet den Sicherungs-Zeitplan ein. Ohne BACKUP_DIR liegt das
+// Ziel neben der Datenbank (im Produktionsbetrieb also /data/backups) — so
+// landet die Sicherung immer im selben PVC und nie im leeren Container-Dateisystem.
+func backupStarten(ctx context.Context, database *db.DB, dbPath string) <-chan struct{} {
+	cfg, an := backup.FromEnv()
+	if !an {
+		slog.Warn("Backup abgeschaltet (BACKUP=off)")
+		return nil
+	}
+	if os.Getenv("BACKUP_DIR") == "" {
+		if dir := filepath.Dir(dbPath); dir != "" && dir != "." {
+			cfg.Dir = filepath.Join(dir, "backups")
+		}
+	}
+	slog.Info("Backup-Zeitplan aktiv", "verzeichnis", cfg.Dir, "abstand", cfg.Interval.String(), "aufbewahrt", cfg.Keep)
+	return backup.Start(ctx, database, cfg)
 }
 
 // seed legt die beiden Kästen „Unter den Eichen" mit Gießplan an, falls die
@@ -131,4 +265,16 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func envInt64(key string, def int64) int64 {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n <= 0 {
+		return def
+	}
+	return n
 }

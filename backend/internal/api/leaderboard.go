@@ -105,7 +105,7 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	u, _ := auth.FromContext(r.Context())
 	lb, err := AssembleLeaderboard(s.DB, s.now(), period, limit, u)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, lb)

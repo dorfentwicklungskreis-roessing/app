@@ -36,9 +36,8 @@ type Server struct {
 	Now      func() time.Time
 	tools    []tool
 
-	discoveryOnce sync.Once
-	discovery     *upstreamDiscovery
-	discoveryErr  error
+	discoveryMu sync.Mutex
+	discovery   *upstreamDiscovery
 }
 
 type tool struct {

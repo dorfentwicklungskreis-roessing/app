@@ -221,10 +221,12 @@ type errUnbekannteSeite string
 
 func (e errUnbekannteSeite) Error() string { return "unbekannte Seite: " + string(e) }
 
-// fail meldet einen technischen Fehler als schlichte Textantwort.
-func (a *App) fail(w http.ResponseWriter, _ *http.Request, status int, err error) {
-	slog.Error("admin: Fehler", "status", status, "err", err)
-	http.Error(w, "Fehler: "+err.Error(), status)
+// fail meldet einen technischen Fehler als schlichte Textantwort. Die Ursache
+// bleibt im Log: Datenbank- und Template-Fehler verraten sonst Interna an
+// jeden, der eine Seite aufruft.
+func (a *App) fail(w http.ResponseWriter, r *http.Request, status int, err error) {
+	slog.Error("admin: Fehler", "status", status, "pfad", r.URL.Path, "err", err)
+	http.Error(w, "Es ist ein technischer Fehler aufgetreten. Bitte später erneut versuchen.", status)
 }
 
 // requireAdmin schützt alle Verwaltungsseiten. Ohne Session geht es zurück

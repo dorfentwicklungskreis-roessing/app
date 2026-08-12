@@ -12,6 +12,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -50,18 +51,25 @@ type Verifier interface {
 // OIDCVerifier prüft JWTs gegen die JWKS des Issuers.
 type OIDCVerifier struct {
 	verifier *oidc.IDTokenVerifier
+	// audiences sind die zugelassenen Empfänger. Leer = keine Prüfung.
+	audiences []string
 }
 
 // NewOIDCVerifier lädt die Discovery-Konfiguration des Issuers.
-// audiences darf leer sein; dann wird die Audience nicht geprüft.
+// audiences darf leer sein; dann wird die Audience nicht geprüft (so läuft es
+// bisher in Produktion). Ist die Liste gefüllt, muss das Token mindestens
+// einen der Einträge als Empfänger führen — sonst wäre jedes Token derselben
+// Rössing-ID hier gültig, auch das einer völlig anderen Anwendung.
 func NewOIDCVerifier(ctx context.Context, issuer string, audiences []string) (*OIDCVerifier, error) {
 	provider, err := oidc.NewProvider(ctx, issuer)
 	if err != nil {
 		return nil, err
 	}
+	// Die Audience prüfen wir selbst: go-oidc kennt nur eine einzige ClientID,
+	// Zitadel stellt aber je nach Token-Typ verschiedene Empfänger aus.
 	cfg := &oidc.Config{SkipClientIDCheck: true}
 	v := provider.Verifier(cfg)
-	return &OIDCVerifier{verifier: v}, nil
+	return &OIDCVerifier{verifier: v, audiences: audiences}, nil
 }
 
 type zitadelClaims struct {
@@ -93,10 +101,28 @@ func extractRoles(allClaims map[string]json.RawMessage) map[string]bool {
 	return roles
 }
 
+// audienceOK prüft, ob das Token an uns gerichtet ist.
+func (o *OIDCVerifier) audienceOK(tok *oidc.IDToken) bool {
+	if len(o.audiences) == 0 {
+		return true
+	}
+	for _, erlaubt := range o.audiences {
+		for _, ist := range tok.Audience {
+			if ist == erlaubt {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (o *OIDCVerifier) Verify(ctx context.Context, raw string) (User, error) {
 	tok, err := o.verifier.Verify(ctx, raw)
 	if err != nil {
 		return User{}, err
+	}
+	if !o.audienceOK(tok) {
+		return User{}, errors.New("Token ist nicht für diese Anwendung ausgestellt")
 	}
 	var claims zitadelClaims
 	if err := tok.Claims(&claims); err != nil {

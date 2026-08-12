@@ -139,6 +139,44 @@ Rollen-Gating — und ein kompletter Durchlauf **mit abgeschaltetem JavaScript**
 | `SESSION_KEY` | Schlüssel für die signierten Session-Cookies; leer = zufällig beim Start (Sessions überleben dann keinen Neustart) |
 | `MCP_CLIENT_ID` | PKCE-Client für die MCP-Anbindung |
 | `SEED` | `1` → Beispieldaten anlegen, falls die DB leer ist |
+| `AUTH_AUDIENCE` | optionale, kommaseparierte Liste erlaubter Token-Audiences (leer = keine Prüfung) |
+| `RATE_LIMIT` | `off` schaltet die Zugriffsbegrenzung ab |
+| `RATE_LIMIT_BURST` / `RATE_LIMIT_PER_MINUTE` | Eimergröße (60) und Nachfüllrate pro Minute (120) |
+| `MAX_BODY_BYTES` | Obergrenze je Anfrage, Standard 1 MiB |
+| `BACKUP` | `off` schaltet die Sicherung ab |
+| `BACKUP_DIR` | Zielverzeichnis, Standard `<Verzeichnis von DB_PATH>/backups` |
+| `BACKUP_KEEP` / `BACKUP_INTERVAL` | Anzahl Kopien (14) und Abstand (`24h`) |
+| `LOG_FORMAT` | `json` (Standard) oder `text` |
+
+### Sicherung der Datenbank
+
+Der Server sichert die SQLite-Datei selbst: einmal täglich per
+`VACUUM INTO` nach `/data/backups/dorfapp-<Zeitstempel>.sqlite`, 14 Kopien
+werden aufbewahrt, ältere gelöscht. Geprüft wird alle 15 Minuten, gesichert
+nur, wenn die jüngste Kopie älter als das Intervall ist — dadurch übersteht
+der Plan Neustarts und Rollouts, ohne bei jedem Start eine Kopie zu schreiben.
+
+**Warum im Server und nicht als Kubernetes-`CronJob`:** Die Datenbank liegt
+auf einem ReadWriteOnce-PVC, das Deployment fährt mit `Recreate` und genau
+einem Pod, der die einzige Schreibverbindung hält. Ein CronJob-Pod müsste
+dasselbe RWO-Volume einhängen — das gelingt nur auf demselben Knoten und
+ließe einen zweiten Prozess in eine WAL-Datenbank greifen, die einem anderen
+gehört. Der eingebaute Zeitplan nutzt dieselbe Verbindung; SQLite garantiert
+damit eine in sich stimmige Kopie ohne Betriebsunterbrechung.
+
+Eine Sicherung zurückspielen (Pod ist gestoppt, `Recreate` sorgt dafür beim
+nächsten Rollout ohnehin):
+
+```sh
+kubectl -n dorf-app scale deploy/dorf-app-backend --replicas=0
+# im Pod bzw. auf dem Volume:
+cp /data/backups/dorfapp-<Zeitstempel>.sqlite /data/dorfapp.sqlite
+rm -f /data/dorfapp.sqlite-wal /data/dorfapp.sqlite-shm
+kubectl -n dorf-app scale deploy/dorf-app-backend --replicas=1
+```
+
+Sicherheitsreview, Härtung und die Gründe dahinter: `backend/SICHERHEIT.md`.
+
 ### Dev-Container
 
 `.devcontainer/` beschreibt eine fertige Umgebung (JDK 21, Android-SDK 35,

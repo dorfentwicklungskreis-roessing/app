@@ -52,23 +52,25 @@ func newSigner(key []byte) *signer {
 	return &signer{key: key}
 }
 
-// encode serialisiert v als "payload.signatur" (beides base64url).
-func (s *signer) encode(v any) (string, error) {
+// encode serialisiert v als "payload.signatur" (beides base64url). zweck ist
+// der Cookie-Name: er geht in die Signatur ein, damit ein Cookie nicht in der
+// Rolle eines anderen wiederverwendet werden kann.
+func (s *signer) encode(zweck string, v any) (string, error) {
 	raw, err := json.Marshal(v)
 	if err != nil {
 		return "", err
 	}
 	payload := base64.RawURLEncoding.EncodeToString(raw)
-	return payload + "." + s.sign(payload), nil
+	return payload + "." + s.sign(zweck, payload), nil
 }
 
-// decode prüft die Signatur und schreibt den Inhalt nach v.
-func (s *signer) decode(value string, v any) bool {
+// decode prüft die Signatur (samt Zweck) und schreibt den Inhalt nach v.
+func (s *signer) decode(zweck, value string, v any) bool {
 	payload, sig, ok := strings.Cut(value, ".")
 	if !ok {
 		return false
 	}
-	if subtle.ConstantTimeCompare([]byte(sig), []byte(s.sign(payload))) != 1 {
+	if subtle.ConstantTimeCompare([]byte(sig), []byte(s.sign(zweck, payload))) != 1 {
 		return false
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(payload)
@@ -78,8 +80,12 @@ func (s *signer) decode(value string, v any) bool {
 	return json.Unmarshal(raw, v) == nil
 }
 
-func (s *signer) sign(payload string) string {
+// sign bindet Zweck und Nutzlast zusammen. Der Trenner \x00 kann in keinem
+// Cookie-Namen vorkommen, deshalb sind die Bereiche eindeutig getrennt.
+func (s *signer) sign(zweck, payload string) string {
 	m := hmac.New(sha256.New, s.key)
+	m.Write([]byte(zweck))
+	m.Write([]byte{0})
 	m.Write([]byte(payload))
 	return base64.RawURLEncoding.EncodeToString(m.Sum(nil))
 }
@@ -117,7 +123,7 @@ func (a *App) sessionOf(r *http.Request) (session, bool) {
 		return session{}, false
 	}
 	var s session
-	if !a.signer.decode(c.Value, &s) {
+	if !a.signer.decode(cookieSession, c.Value, &s) {
 		return session{}, false
 	}
 	if s.Exp < time.Now().Unix() {
@@ -136,7 +142,7 @@ type flash struct {
 }
 
 func (a *App) setFlash(w http.ResponseWriter, kind, text string) {
-	value, err := a.signer.encode(map[string]string{"k": kind, "t": text})
+	value, err := a.signer.encode(cookieFlash, map[string]string{"k": kind, "t": text})
 	if err != nil {
 		return
 	}
@@ -151,7 +157,7 @@ func (a *App) takeFlash(w http.ResponseWriter, r *http.Request) *flash {
 	}
 	a.clearCookie(w, cookieFlash)
 	var m map[string]string
-	if !a.signer.decode(c.Value, &m) {
+	if !a.signer.decode(cookieFlash, c.Value, &m) {
 		return nil
 	}
 	return &flash{Kind: m["k"], Text: m["t"]}

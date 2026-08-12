@@ -18,8 +18,17 @@ spec:
       labels:
         app: dorf-app-backend
     spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: backend
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           # Image-Referenz wird von kustomize (images:) verwaltet — bare ref.
           image: ghcr.io/dorfentwicklungskreis-roessing/app-backend
           # Explizit statt Image-Entrypoint — erlaubt auch manuell importierte
@@ -44,9 +53,23 @@ spec:
             # Ohne ihn erzeugt der Server beim Start einen zufälligen Schlüssel
             # — Anmeldungen überleben dann kein Rollout. Für dauerhafte
             # Sitzungen ein Secret anlegen und hier per secretKeyRef einhängen.
+            #
+            # Sicherung: Der Server zieht täglich per VACUUM INTO eine Kopie
+            # nach /data/backups (14 Stück). Bewusst kein CronJob: Das PVC ist
+            # ReadWriteOnce und der Pod hält die einzige Schreibverbindung
+            # (siehe README, Abschnitt „Sicherung der Datenbank").
+            - name: BACKUP_DIR
+              value: /data/backups
+            - name: BACKUP_KEEP
+              value: "14"
+            - name: BACKUP_INTERVAL
+              value: 24h
           volumeMounts:
             - name: data
               mountPath: /data
+            # Schreibbares /tmp, weil das Wurzeldateisystem nur lesbar ist.
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /healthz
@@ -69,3 +92,6 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: dorf-app-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

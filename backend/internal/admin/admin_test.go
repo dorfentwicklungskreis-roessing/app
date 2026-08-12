@@ -32,7 +32,7 @@ func aufbau(t *testing.T) (*App, http.Handler, *db.DB, *http.Cookie) {
 	mux := http.NewServeMux()
 	a.register(mux)
 
-	wert, err := a.signer.encode(session{Sub: "u1", Name: "Testadmin", Admin: true,
+	wert, err := a.signer.encode(cookieSession, session{Sub: "u1", Name: "Testadmin", Admin: true,
 		Exp: time.Now().Add(time.Hour).Unix()})
 	if err != nil {
 		t.Fatalf("session: %v", err)
@@ -200,7 +200,7 @@ func TestSessionCookieIstManipulationssicher(t *testing.T) {
 		t.Fatalf("gefälschtes Cookie wurde akzeptiert: %d", w.Code)
 	}
 
-	abgelaufen, _ := a.signer.encode(session{Sub: "u1", Admin: true, Exp: time.Now().Add(-time.Minute).Unix()})
+	abgelaufen, _ := a.signer.encode(cookieSession, session{Sub: "u1", Admin: true, Exp: time.Now().Add(-time.Minute).Unix()})
 	w = hole(t, h, "/admin/dorfpflege/", &http.Cookie{Name: cookieSession, Value: abgelaufen})
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("abgelaufene Session wurde akzeptiert: %d", w.Code)

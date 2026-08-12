@@ -159,10 +159,10 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleListPlaces(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleListPlaces(w http.ResponseWriter, r *http.Request) {
 	places, factor, err := AssemblePlaces(s.DB, s.now())
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"places": places, "wateringFactor": factor})
@@ -187,7 +187,15 @@ func (in *PlaceInput) Validate() error {
 		return errors.New("name fehlt")
 	case !model.ValidPlaceKind(model.PlaceKind(in.Kind)):
 		return errors.New("kind muss blumenkasten, beet oder sonstiges sein")
-	case in.Lat < -90 || in.Lat > 90 || in.Lon < -180 || in.Lon > 180:
+	}
+	if err := pruefeText("name", in.Name); err != nil {
+		return err
+	}
+	if err := pruefeText("description", in.Description); err != nil {
+		return err
+	}
+	// endlich() fängt auch NaN/Inf ab — die bestehen jede Bereichsprüfung.
+	if endlich("lat", in.Lat, -90, 90) != nil || endlich("lon", in.Lon, -180, 180) != nil {
 		return errors.New("ungültige Koordinaten")
 	}
 	return nil
@@ -214,7 +222,7 @@ func (s *Server) handleCreatePlace(w http.ResponseWriter, r *http.Request) {
 	p := model.Place{Active: true, CreatedAt: s.now()}
 	in.Apply(&p)
 	if err := s.DB.InsertPlace(&p); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, p)
@@ -242,7 +250,7 @@ func (s *Server) handleUpdatePlace(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Apply(existing)
 	if err := s.DB.UpdatePlace(existing); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, existing)
@@ -259,7 +267,7 @@ func (s *Server) handleDeletePlace(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusNotFound, "Ort nicht gefunden")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -276,15 +284,26 @@ type TaskInput struct {
 }
 
 func (in *TaskInput) Validate() error {
-	switch {
-	case !model.ValidTaskKind(model.TaskKind(in.Kind)):
+	if !model.ValidTaskKind(model.TaskKind(in.Kind)) {
 		return errors.New("kind muss giessen, jaeten oder sonstiges sein")
-	case in.IntervalDays <= 0:
-		return errors.New("intervalDays muss > 0 sein")
-	case in.RedAfterDays < in.IntervalDays:
+	}
+	if err := pruefeText("title", in.Title); err != nil {
+		return err
+	}
+	// endlich() fängt auch NaN/Inf ab — die bestehen jede Bereichsprüfung.
+	if endlich("intervalDays", in.IntervalDays, 0, MaxTage) != nil || in.IntervalDays <= 0 {
+		return errors.New("intervalDays muss eine Zahl > 0 und <= " + itoa(MaxTage) + " sein")
+	}
+	if endlich("redAfterDays", in.RedAfterDays, 0, MaxTage) != nil {
+		return errors.New("redAfterDays muss eine Zahl > 0 und <= " + itoa(MaxTage) + " sein")
+	}
+	if in.RedAfterDays < in.IntervalDays {
 		return errors.New("redAfterDays muss >= intervalDays sein")
-	case in.Liters != nil && *in.Liters <= 0:
-		return errors.New("liters muss > 0 sein")
+	}
+	if in.Liters != nil {
+		if endlich("liters", *in.Liters, 0, MaxLiter) != nil || *in.Liters <= 0 {
+			return errors.New("liters muss eine Zahl > 0 sein")
+		}
 	}
 	return nil
 }
@@ -320,7 +339,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	t := model.CareTask{PlaceID: placeID, Active: true, CreatedAt: s.now()}
 	in.Apply(&t)
 	if err := s.DB.InsertTask(&t); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, t)
@@ -348,7 +367,7 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Apply(existing)
 	if err := s.DB.UpdateTask(existing); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, existing)
@@ -365,7 +384,7 @@ func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusNotFound, "Aufgabe nicht gefunden")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -380,7 +399,7 @@ func (s *Server) handleListCompletions(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	cs, err := s.DB.ListCompletions(id, limit)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"completions": cs})
@@ -412,7 +431,7 @@ func (s *Server) handleCreateCompletion(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, ce.Status, antwort)
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, c)
@@ -442,16 +461,16 @@ func (s *Server) handleDeleteCompletion(w http.ResponseWriter, r *http.Request) 
 			writeErr(w, http.StatusNotFound, "Meldung nicht gefunden")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	factor, err := s.DB.WateringFactor()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"wateringFactor": factor})
@@ -470,7 +489,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.DB.SetWateringFactor(in.WateringFactor); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		writeInternal(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"wateringFactor": in.WateringFactor})

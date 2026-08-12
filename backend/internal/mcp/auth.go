@@ -3,8 +3,10 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 )
@@ -81,25 +83,38 @@ type upstreamDiscovery struct {
 	JwksURI               string `json:"jwks_uri"`
 }
 
+// upstreamConfig holt die Endpunkte des IdP. Das Ergebnis wird gemerkt,
+// Fehler dagegen nicht: War die Rössing-ID beim ersten Versuch nicht
+// erreichbar, wäre der MCP-Login sonst bis zum nächsten Neustart tot.
 func (s *Server) upstreamConfig() (*upstreamDiscovery, error) {
-	s.discoveryOnce.Do(func() {
-		resp, err := http.Get(s.Issuer + "/.well-known/openid-configuration")
-		if err != nil {
-			s.discoveryErr = err
-			return
-		}
-		defer resp.Body.Close()
-		var d upstreamDiscovery
-		if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
-			s.discoveryErr = err
-			return
-		}
-		s.discovery = &d
-	})
-	return s.discovery, s.discoveryErr
+	s.discoveryMu.Lock()
+	defer s.discoveryMu.Unlock()
+	if s.discovery != nil {
+		return s.discovery, nil
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get(s.Issuer + "/.well-known/openid-configuration")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Discovery lieferte HTTP %d", resp.StatusCode)
+	}
+	var d upstreamDiscovery
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&d); err != nil {
+		return nil, err
+	}
+	s.discovery = &d
+	return s.discovery, nil
 }
 
-// allowedRedirects: nur die offiziellen Claude-Callback-URLs.
+// maxRegisterBody begrenzt die unauthentifizierte DCR-Anfrage.
+const maxRegisterBody = 16 << 10
+
+// allowedRedirects: nur die offiziellen Claude-Callback-URLs. Verglichen wird
+// exakt (siehe register_test.go): keine Präfixe, keine Muster, keine
+// Normalisierung — jede Aufweichung wäre eine offene Weiterleitung.
 var allowedRedirects = map[string]bool{
 	"https://claude.ai/api/mcp/auth_callback":  true,
 	"https://claude.com/api/mcp/auth_callback": true,
@@ -113,7 +128,9 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		RedirectURIs []string `json:"redirect_uris"`
 		ClientName   string   `json:"client_name"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.RedirectURIs) == 0 {
+	// Der Endpunkt ist unauthentifiziert: Der Körper wird hart begrenzt,
+	// damit niemand den Speicher des Pods vollschreiben kann.
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxRegisterBody)).Decode(&req); err != nil || len(req.RedirectURIs) == 0 {
 		writeRegisterError(w, "invalid_client_metadata", "redirect_uris fehlen")
 		return
 	}
