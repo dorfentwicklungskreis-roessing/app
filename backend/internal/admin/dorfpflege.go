@@ -13,7 +13,7 @@ import (
 )
 
 // Bereich „Dorfpflege“: Orte (Blumenkästen, Beete …) mit Pflegeaufgaben.
-// Alles unter /admin/dorfpflege/, damit weitere Bereiche (z.B. Dorfladen ERNA)
+// Alles unter /admin/dorfpflege/, damit weitere Bereiche (z.B. Dorfladen RNah)
 // später danebengesetzt werden können.
 const pflegeBasis = "/admin/dorfpflege"
 

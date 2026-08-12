@@ -11,7 +11,7 @@
 //
 // Die Verwaltung ist in Bereiche gegliedert: /admin/ zeigt die Bereiche,
 // der Bereich Dorfpflege liegt unter /admin/dorfpflege/. Weitere Bereiche
-// (z.B. Dorfladen ERNA) lassen sich danebensetzen, ohne URLs umzubauen.
+// (z.B. Dorfladen RNah) lassen sich danebensetzen, ohne URLs umzubauen.
 package admin
 
 import (
