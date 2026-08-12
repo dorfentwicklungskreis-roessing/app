@@ -1,0 +1,2 @@
+- Login-Overlay verdeckte die komplette Verwaltung
+- Rössing-ID-Login repariert (Absturz beim Browser-Rücksprung)

@@ -1,11 +1,17 @@
 name: Release
 
 # Signierte Release-Artefakte (APK + AAB) bei Git-Tags (v*).
+# Die Tags legt in aller Regel .github/workflows/autorelease.yml automatisch an;
+# von Hand getaggte Stände laufen genauso durch.
+#
 # Play-Store-Upload und Firebase App Distribution schalten sich automatisch
 # scharf, sobald die jeweiligen Secrets im Repo hinterlegt sind:
 #   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD  → Signierung
 #   PLAY_SERVICE_ACCOUNT_JSON                                    → Play Store
 #   FIREBASE_APP_ID, FIREBASE_SERVICE_ACCOUNT_JSON               → App Distribution
+#
+# Version: versionName und versionCode kommen aus dem Tag (APP_VERSION), nicht
+# mehr aus der CI-Laufnummer — siehe scripts/naechste_version.py.
 
 on:
   push:
@@ -23,6 +29,37 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Für die Änderungshinweise werden die Commits seit dem letzten Tag
+          # gebraucht — also volle Historie inklusive Tags.
+          fetch-depth: 0
+
+      - name: Version aus dem Tag ableiten
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            # Handstart auf einem Branch: nur bauen, nicht veröffentlichen.
+            version="0.0.0-dev"
+          fi
+          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Version: $version"
+
+      - name: Änderungshinweise für den Store erzeugen
+        if: github.ref_type == 'tag'
+        working-directory: .
+        run: |
+          # Bewusst hier und nicht nur im Autorelease-Workflow: der Tag zeigt auf
+          # den getesteten Commit und enthält die Notiz deshalb nicht. Sie
+          # entsteht aus derselben Commit-Spanne, also mit demselben Inhalt.
+          python3 scripts/aenderungsnotiz.py --version "$APP_VERSION" --schreiben
+
+      - name: Store-Metadaten prüfen
+        working-directory: .
+        run: python3 store/check_metadata.py
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -39,6 +76,20 @@ jobs:
           else
             echo "::warning::Kein KEYSTORE_BASE64-Secret — Release wird debug-signiert."
           fi
+
+      - name: Version im Build gegenprüfen
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          ./gradlew -q :app:versionInfo | tee /tmp/versionInfo.txt
+          gebaut_name=$(grep '^versionName=' /tmp/versionInfo.txt | cut -d= -f2)
+          gebaut_code=$(grep '^versionCode=' /tmp/versionInfo.txt | cut -d= -f2)
+          erwartet_code=$(python3 ../scripts/naechste_version.py code --version "$APP_VERSION")
+          if [ "$gebaut_name" != "$APP_VERSION" ] || [ "$gebaut_code" != "$erwartet_code" ]; then
+            echo "::error::Build meldet $gebaut_name/$gebaut_code, erwartet wurde $APP_VERSION/$erwartet_code."
+            exit 1
+          fi
+          echo "VERSION_CODE=$gebaut_code" >> "$GITHUB_ENV"
 
       - name: Release bauen (APK + AAB)
         env:
@@ -61,32 +112,42 @@ jobs:
           files: |
             android/app/build/outputs/apk/release/app-release.apk
             android/app/build/outputs/bundle/release/app-release.aab
+          # Die Store-Notiz steht oben, darunter hängt GitHub seine
+          # Commit-Liste an.
+          body_path: store/metadata/android/de-DE/changelogs/${{ env.VERSION_CODE }}.txt
           generate_release_notes: true
 
+      # Verteilung an die Tester: nur bei echten Versionen (v0.1.3), nicht bei
+      # Vorabtags (v0.2.0-rc1, -dev, -nightly) — sonst bekommt das Dorf jeden
+      # Zwischenstand aufs Telefon. Die Empfängergruppen stehen in der
+      # Repository-Variable FIREBASE_TESTER_GROUPS (Vorgabe: "tester"). Wer die
+      # Verteilung vorübergehend anhalten will, setzt sie auf "keine" — ohne am
+      # Workflow zu schrauben.
       - name: Firebase App Distribution (falls Secrets vorhanden)
+        if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
         working-directory: .
         env:
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          GRUPPEN: ${{ vars.FIREBASE_TESTER_GROUPS || 'tester' }}
         run: |
           if [ -z "$FIREBASE_APP_ID" ] || [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
             echo "Firebase-Secrets fehlen — Verteilung übersprungen."
             exit 0
           fi
+          if [ "$GRUPPEN" = "keine" ]; then
+            echo "::notice::FIREBASE_TESTER_GROUPS steht auf \"keine\" — Verteilung ruht."
+            exit 0
+          fi
+          notiz="store/metadata/android/de-DE/changelogs/${VERSION_CODE}.txt"
           echo "$FIREBASE_SERVICE_ACCOUNT_JSON" > /tmp/firebase-sa.json
           curl -sL https://firebase.tools | bash
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json firebase appdistribution:distribute \
             android/app/build/outputs/apk/release/app-release.apk \
             --app "$FIREBASE_APP_ID" \
-            --groups tester \
-            --release-notes "Automatischer Build ${{ github.ref_name }}"
-
-      # Vor dem Play-Upload: Store-Metadaten prüfen. Ein fehlender oder zu
-      # langer Änderungshinweis soll auffallen, bevor Google das Release
-      # ablehnt. Läuft auch ohne Play-Secret, kostet nichts.
-      - name: Store-Metadaten prüfen
-        working-directory: .
-        run: python3 store/check_metadata.py
+            --groups "$GRUPPEN" \
+            --release-notes-file "$notiz"
+          rm -f /tmp/firebase-sa.json
 
       - name: Play-Store-Upload (nur bei Tags, falls Secret vorhanden)
         # Nur getaggte Stände gehen in den Store; ein workflow_dispatch würde

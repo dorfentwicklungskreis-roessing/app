@@ -9,6 +9,32 @@ plugins {
 fun prop(name: String, default: String): String =
     (project.findProperty(name) as String?) ?: System.getenv(name.uppercase().replace(".", "_")) ?: default
 
+// Version: kommt im Release aus dem Git-Tag (der Release-Workflow setzt
+// APP_VERSION=0.1.3), lokal steht "0.0.0-dev" drin. So zeigt die App genau die
+// Version an, die auch getaggt und verteilt wurde.
+val appVersion: String = (project.findProperty("appVersion") as String?)
+    ?: System.getenv("APP_VERSION")?.removePrefix("v")?.takeIf { it.isNotBlank() }
+    ?: "0.0.0-dev"
+
+// versionCode aus der Version: 0.1.3 -> 1000103. Dieselbe Formel steht in
+// scripts/naechste_version.py (Funktion version_code); der Release-Workflow
+// vergleicht beide Werte, damit sie nicht auseinanderlaufen. Der Sockel von
+// 1.000.000 hält Abstand zu den alten Codes (100 + CI-Laufnummer).
+val appVersionCode: Int = Regex("""^(\d+)\.(\d+)\.(\d+)""").find(appVersion)
+    ?.destructured
+    ?.let { (major, minor, patch) ->
+        1_000_000 + major.toInt() * 10_000 + minor.toInt() * 100 + patch.toInt()
+    }
+    ?: 1_000_000
+
+// Für die CI: ./gradlew -q :app:versionInfo gibt beide Werte aus.
+tasks.register("versionInfo") {
+    doLast {
+        println("versionName=$appVersion")
+        println("versionCode=$appVersionCode")
+    }
+}
+
 android {
     namespace = "de.roessing.app"
     compileSdk = 35
@@ -17,12 +43,12 @@ android {
         applicationId = "de.roessing.app"
         minSdk = 26
         targetSdk = 35
-        // Bewusst fest und von Hand hochgezählt: zu jedem versionCode gehört ein
-        // Änderungshinweis unter store/metadata/android/*/changelogs/<code>.txt,
-        // den store/check_metadata.py vor jedem Release einfordert. Eine aus der
-        // CI-Laufnummer abgeleitete Nummer ließe sich damit nicht belegen.
-        versionCode = 2
-        versionName = "0.1.2"
+        // Beides kommt aus dem Tag (oben abgeleitet). Der Änderungshinweis
+        // unter store/metadata/android/*/changelogs/<code>.txt, den
+        // store/check_metadata.py einfordert, ist damit schon beim Taggen
+        // bekannt und wird von scripts/aenderungsnotiz.py erzeugt.
+        versionCode = appVersionCode
+        versionName = appVersion
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

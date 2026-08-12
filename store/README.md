@@ -69,53 +69,58 @@ allein reichen **nicht** mehr, seit die Karte die eigene Position zeigt — die
 beiden Standortberechtigungen sind für diese Funktion nötig und in der
 Store-Beschreibung sowie in `data-safety.md` begründet.
 
-## Offene Änderung am Android-Build: versionCode
+## versionCode und Änderungshinweise (erledigt, automatisch)
 
-**Der `versionCode` steht in `android/app/build.gradle.kts` fest verdrahtet
-(aktuell `2`).** Play nimmt jeden Code nur ein einziges Mal an: Wer zweimal
-hintereinander taggt, ohne die Zahl von Hand zu erhöhen, bekommt beim zweiten
-Upload `403 … version code that has already been used`.
+`versionCode` und `versionName` kommen aus dem Git-Tag, nicht mehr aus der
+CI-Laufnummer oder aus einer von Hand gepflegten Zahl:
 
-Vorschlag (gehört in `defaultConfig`, muss von der Person gemacht werden, die
-`android/` betreut):
-
-```kotlin
-// versionCode aus der CI-Laufnummer, damit er monoton steigt und nie doppelt
-// bei Play ankommt. Lokal (ohne CI) bleibt 1, das reicht für Debug-Builds.
-versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
-versionName = "0.1.1"
+```
+v0.1.3  ->  versionName 0.1.3   versionCode 1000103
 ```
 
-Im Workflow ist dafür nichts zu tun — `GITHUB_RUN_NUMBER` setzt GitHub Actions
-selbst. Wichtig: die Laufnummer ist pro Workflow eindeutig und steigt monoton,
-sie darf aber nie kleiner werden als ein bereits hochgeladener Code. Falls der
-erste manuelle Upload mit `versionCode 2` erfolgt und der Release-Workflow bei
-Lauf 3 steht, passt das; sonst muss einmalig ein Offset addiert werden
-(`+ 100`).
+Die Formel steht in `scripts/naechste_version.py` (`version_code`) und noch
+einmal in `android/app/build.gradle.kts`:
+`1 000 000 + major*10000 + minor*100 + patch`. Der Release-Workflow lässt sich
+den Wert vom Gradle-Build ausgeben (`./gradlew -q :app:versionInfo`) und
+vergleicht ihn mit der Berechnung des Skripts — laufen die beiden Stellen
+auseinander, bricht das Release ab.
 
-Alternative, wenn der Code aus dem Tag kommen soll:
+**Startpunkt:** Der Sockel von 1.000.000 liegt weit über allem, was vorher
+vergeben wurde (`2` beim Handbuild, `100 + Laufnummer` in der Laufnummern-Ära),
+und wächst streng mit der Version, solange `minor` und `patch` unter 100
+bleiben. Play nimmt jeden Code nur einmal an; ein Rückschritt ist damit
+ausgeschlossen. Für lokale Builds ohne Tag gilt `0.0.0-dev` / `1000000`.
 
-```kotlin
-// v1.2.3 -> 10203
-versionCode = System.getenv("GITHUB_REF_NAME")
-    ?.removePrefix("v")?.split(".")?.takeIf { it.size == 3 }
-    ?.let { (a, b, c) -> a.toInt() * 10000 + b.toInt() * 100 + c.toInt() }
-    ?: 1
+**Die Änderungshinweise entstehen automatisch.** `scripts/aenderungsnotiz.py`
+schreibt beim Release `metadata/android/<locale>/changelogs/<versionCode>.txt`
+aus den `feat:`- und `fix:`-Commit-Betreffen seit dem letzten Tag:
+
+```sh
+python3 scripts/aenderungsnotiz.py --version 0.1.3            # nur anzeigen
+python3 scripts/aenderungsnotiz.py --version 0.1.3 --schreiben
 ```
 
-Das ist nachvollziehbarer, verlangt aber Disziplin beim Taggen (jeder Tag muss
-größer sein als der vorige) und einen Fallback für Builds ohne Tag.
+`chore:`, `ci:`, `test:`, `docs:`, `refactor:`, Merge-Commits und alles im
+Bereich `(ci)`/`(e2e)` fallen raus; gekürzt wird auf Googles 500 Zeichen.
+`de-DE` bekommt die Aufzählung, `en-US` eine kurze generische Fassung — die
+Commits sind auf Deutsch, und eine maschinelle Übersetzung wäre schlechter als
+ein ehrlicher Einzeiler. Wer einen schöneren Text will, überschreibt die Datei
+einfach von Hand; erzeugt wird sie nur, wenn das Release läuft.
 
-**Solange nichts davon umgesetzt ist:** vor jedem Release den `versionCode` von
-Hand erhöhen und den passenden Änderungshinweis unter
-`metadata/android/*/changelogs/<versionCode>.txt` anlegen — `check_metadata.py`
-schlägt sonst fehl.
+Warum die Datei zweimal entsteht (im Autorelease-Lauf für `main` und noch
+einmal im Release-Lauf): Der Tag zeigt bewusst auf genau den Commit, der grün
+getestet wurde — die Notiz liegt darin also nicht. Der Release-Lauf baut sie
+aus derselben Commit-Spanne neu auf (gleiches Ergebnis) und benutzt sie für
+Play, GitHub-Release und Firebase; parallel landet sie auf `main`, damit
+`check_metadata.py` sie dauerhaft vorfindet.
+
+Codes unter 1.000.000 (`2.txt` von früher) gibt es nicht mehr — der Text steckt
+jetzt in `1000100.txt`, dem versionCode von `v0.1.0`.
 
 ## Was noch fehlt
 
 - [ ] Telefon-Screenshots (`metadata/android/de-DE/images/phoneScreenshots/`)
 - [ ] Öffentliche Datenschutzerklärung auf roessing.de + URL in der Play Console
 - [ ] Öffentliche Seite zur Konto-/Datenlöschung auf roessing.de
-- [ ] `versionCode`-Automatik (siehe oben)
 - [ ] Play-Console-Konto, Service-Account, Secret `PLAY_SERVICE_ACCOUNT_JSON`
       (Anleitung: `veroeffentlichung.md`)

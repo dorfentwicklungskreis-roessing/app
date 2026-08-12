@@ -11,6 +11,7 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
 | `android/` | Native Android-App (Kotlin, Jetpack Compose, Material 3, MapLibre) |
 | `backend/` | Go-Backend: REST-API, MCP-Server, Web-Admin. SQLite (WAL) |
 | `deploy/`  | Kustomize-Overlay für den K3S-Cluster (Flux deployt) |
+| `scripts/` | Release-Automatik: nächste Version, Änderungshinweise (+ Tests) |
 | `.github/workflows/` | CI: Tests, E2E auf Emulatoren, Multi-Arch-Images, Releases |
 
 ## Architektur
@@ -216,9 +217,46 @@ Multi-Arch-Image (amd64 + arm64, native Runner), bumpt den Tag in
 
 ## Releases (Android)
 
-Git-Tag `v*` → signiertes APK/AAB als GitHub-Release. Play-Store-Upload und
-Firebase App Distribution aktivieren sich, sobald die Secrets existieren
-(siehe `.github/workflows/release.yml`, Kopfkommentar).
+**Getaggt wird automatisch.** Sobald ein Stand auf `main` in beiden Pipelines
+(Android und Backend) grün ist, legt `.github/workflows/autorelease.yml` den
+nächsten Patch-Tag an — auf genau den Commit, der getestet wurde.
+
+```
+Push auf main → Android/Backend grün → Autorelease
+   → Tag vX.Y.(Z+1)  → Release-Workflow: APK+AAB signieren, GitHub-Release,
+                       Firebase-Verteilung, Play-Track "internal"
+```
+
+Kein Tag entsteht, wenn seit dem letzten Tag nichts passiert ist, wenn nur
+Dokumentation, Store-Texte, CI oder das Deploy-Overlay geändert wurden
+(dazu gehört auch der `[skip ci]`-Bump des Backend-Workflows) oder wenn der
+Commit-Betreff `[skip ci]`/`[skip release]` enthält. Die Entscheidung trifft
+`scripts/naechste_version.py`, getestet in `scripts/test_naechste_version.py`:
+
+```sh
+python3 scripts/naechste_version.py entscheiden   # Ja/Nein + nächste Version
+python3 -m unittest discover -s scripts           # Tests der Automatik
+```
+
+Von Hand geht weiterhin alles: ein selbst gesetzter Tag `v*` löst denselben
+Release-Workflow aus, und „Autorelease" lässt sich per `workflow_dispatch`
+als Probelauf starten (entscheidet, taggt aber nicht).
+
+**Version:** `versionName` und `versionCode` kommen aus dem Tag, nicht aus der
+CI-Laufnummer. `v0.1.3` → `versionName 0.1.3`, `versionCode 1000103`
+(`1 000 000 + major*10000 + minor*100 + patch`). Lokale Builds ohne Tag heißen
+`0.0.0-dev`. Der Release-Workflow vergleicht den vom Gradle-Build gemeldeten
+Wert mit der Berechnung im Skript, damit beide Stellen nicht auseinanderlaufen.
+
+**Verteilung an Tester:** Firebase App Distribution bekommt nur echte Versionen
+— Vorabtags mit Suffix (`v0.2.0-rc1`, `-dev`, `-nightly`) werden nicht verteilt.
+Die Empfängergruppen stehen in der Repository-Variable `FIREBASE_TESTER_GROUPS`
+(Vorgabe `tester`); auf `keine` gesetzt, ruht die Verteilung, ohne dass jemand
+am Workflow schrauben muss. Als Release-Notiz geht der automatisch erzeugte
+Änderungshinweis mit, nicht mehr „Automatischer Build".
+
+Play-Store-Upload und Firebase-Verteilung aktivieren sich, sobald die Secrets
+existieren (siehe `.github/workflows/release.yml`, Kopfkommentar).
 
 ## Veröffentlichung im Play Store
 
@@ -240,10 +278,11 @@ bash store/assets/render.sh       # Grafiken neu erzeugen (ImageMagick)
 ```
 
 `.github/workflows/store.yml` prüft die Metadaten bei jeder Änderung an
-`store/` oder am `versionCode`; der Release-Workflow prüft sie erneut, bevor er
-das AAB auf den Play-Track **`internal`** lädt. Fehlt das Secret
+`store/`, `scripts/` oder am Build; der Release-Workflow prüft sie erneut, bevor
+er baut und das AAB auf den Play-Track **`internal`** lädt. Fehlt das Secret
 `PLAY_SERVICE_ACCOUNT_JSON`, wird der Upload übersprungen.
 
-**Offen:** Der `versionCode` steht fest in `android/app/build.gradle.kts`; Play
-verlangt bei jedem Upload einen höheren. Vorschlag zur Automatisierung in
-`store/README.md`.
+Die Änderungshinweise schreibt niemand mehr von Hand: `scripts/aenderungsnotiz.py`
+baut sie beim Release aus den `feat:`- und `fix:`-Commit-Betreffen seit dem
+letzten Tag (auf 500 Zeichen gekürzt, ohne `chore:`/`ci:`-Rauschen). Ein von
+Hand geschriebener Text darf die Datei jederzeit ersetzen.
