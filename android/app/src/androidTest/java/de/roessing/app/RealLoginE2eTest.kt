@@ -99,8 +99,14 @@ class RealLoginE2eTest {
         listeTab.click()
         // Bewusst kein konkreter Ortsname: geprüft wird der Status-Text, den jeder
         // geladene Ort trägt. So hängt der Test nicht am Inhalt der Produktionsdaten.
+        // Auf Ortsebene sind die Texte neutral (dort können Gieß- und
+        // Jätaufgaben zusammenkommen); die Gieß-Texte bleiben als Altbestand
+        // in der Liste zulässig.
         val ortStatus = By.text(
-            Pattern.compile("alles gut|bitte gießen|dringend gießen", Pattern.CASE_INSENSITIVE),
+            Pattern.compile(
+                "alles gut|bitte erledigen|dringend!|bitte gießen|dringend gießen",
+                Pattern.CASE_INSENSITIVE,
+            ),
         )
         check(device.wait(Until.hasObject(ortStatus), 60_000)) {
             "Orte-Liste wurde nach dem Login nicht geladen"
