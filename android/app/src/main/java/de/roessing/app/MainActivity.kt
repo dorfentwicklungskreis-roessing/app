@@ -22,6 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import de.roessing.app.auth.LoginResult
 import de.roessing.app.auth.SessionState
 import de.roessing.app.ui.HomeScreen
+import de.roessing.app.ui.LeaderboardViewModel
 import de.roessing.app.ui.LoginScreen
 import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.theme.DorfAppTheme
@@ -79,9 +80,12 @@ private fun Root() {
         )
 
         is SessionState.LoggedIn -> {
-            val vm: PlacesViewModel = viewModel(factory = viewModelFactory(container))
+            val factory = viewModelFactory(container)
+            val vm: PlacesViewModel = viewModel(factory = factory)
+            val rangVm: LeaderboardViewModel = viewModel(factory = factory)
             HomeScreen(
                 viewModel = vm,
+                leaderboardViewModel = rangVm,
                 onLogout = { scope.launch { container.authManager.logout() } },
             )
         }
@@ -91,6 +95,13 @@ private fun Root() {
 private fun viewModelFactory(container: AppContainer) =
     object : androidx.lifecycle.ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T =
-            PlacesViewModel(container.repository) as T
+        override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T = when {
+            modelClass.isAssignableFrom(PlacesViewModel::class.java) ->
+                PlacesViewModel(container.repository) as T
+
+            modelClass.isAssignableFrom(LeaderboardViewModel::class.java) ->
+                LeaderboardViewModel(container.statsRepository) as T
+
+            else -> error("Unbekanntes ViewModel: ${modelClass.name}")
+        }
     }

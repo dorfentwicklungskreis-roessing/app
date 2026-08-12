@@ -8,17 +8,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.roessing.app.R
 import de.roessing.app.data.CompletionDto
 import de.roessing.app.data.PlaceDto
 import de.roessing.app.data.TaskDto
@@ -43,6 +51,9 @@ fun PlaceDetail(
     LaunchedEffect(place.id) {
         place.tasks.forEach { onLoadHistory(it.id) }
     }
+    // Vor dem Melden wird nachgefragt: der Knopf ist schnell versehentlich
+    // getroffen, und eine Meldung, die es nie gab, verdirbt Ampel und Rangliste.
+    var nachfrage by remember { mutableStateOf<TaskDto?>(null) }
     Column(
         Modifier
             .padding(horizontal = 20.dp)
@@ -68,11 +79,72 @@ fun PlaceDetail(
                 task = task,
                 pending = task.id in pendingTasks,
                 history = history[task.id].orEmpty(),
-                onComplete = { onComplete(task.id, task.liters) },
+                onComplete = { nachfrage = task },
             )
             Spacer(Modifier.height(12.dp))
         }
     }
+
+    nachfrage?.let { task ->
+        CompletionConfirmDialog(
+            place = place,
+            task = task,
+            onDismiss = { nachfrage = null },
+            onConfirm = {
+                nachfrage = null
+                onComplete(task.id, task.liters)
+            },
+        )
+    }
+}
+
+/** Rückfrage vor dem Melden — mit Ort und vorgesehener Menge. */
+@Composable
+private fun CompletionConfirmDialog(
+    place: PlaceDto,
+    task: TaskDto,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("confirm-completion"),
+        title = {
+            Text(
+                stringResource(
+                    when (task.kind) {
+                        "giessen" -> R.string.confirm_completion_watering
+                        "jaeten" -> R.string.confirm_completion_weeding
+                        else -> R.string.confirm_completion_other
+                    },
+                ),
+            )
+        },
+        text = {
+            Column {
+                Text(stringResource(R.string.confirm_completion_place, place.name))
+                task.liters?.let {
+                    Text(stringResource(R.string.confirm_completion_amount, it.trimmed()))
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.confirm_completion_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.testTag("confirm-completion-yes")) {
+                Text(stringResource(R.string.confirm_completion_yes))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.testTag("confirm-completion-no")) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
 }
 
 @Composable

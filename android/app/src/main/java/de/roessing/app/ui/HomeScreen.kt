@@ -3,6 +3,7 @@ package de.roessing.app.ui
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -38,8 +39,13 @@ import de.roessing.app.R
 /** Hauptbildschirm: Karte/Liste der Pflege-Orte mit Detail-Sheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: PlacesViewModel, onLogout: () -> Unit) {
+fun HomeScreen(
+    viewModel: PlacesViewModel,
+    leaderboardViewModel: LeaderboardViewModel,
+    onLogout: () -> Unit,
+) {
     val state by viewModel.state.collectAsState()
+    val leaderboard by leaderboardViewModel.state.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(0) }
@@ -59,13 +65,23 @@ fun HomeScreen(viewModel: PlacesViewModel, onLogout: () -> Unit) {
     LaunchedEffect(state.offline) {
         if (state.offline) snackbar.showSnackbar(failMsg)
     }
+    // Beim Wechsel auf die Rangliste den aktuellen Stand holen.
+    LaunchedEffect(tab) {
+        if (tab == 2) leaderboardViewModel.refresh()
+    }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.map_title)) },
                 actions = {
-                    IconButton(onClick = { viewModel.refresh() }, modifier = Modifier.testTag("refresh")) {
+                    IconButton(
+                        onClick = {
+                            viewModel.refresh()
+                            leaderboardViewModel.refresh()
+                        },
+                        modifier = Modifier.testTag("refresh"),
+                    ) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Aktualisieren")
                     }
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.testTag("menu")) {
@@ -98,6 +114,12 @@ fun HomeScreen(viewModel: PlacesViewModel, onLogout: () -> Unit) {
                     label = { Text(stringResource(R.string.list_title)) },
                     modifier = Modifier.testTag("tab-list"),
                 )
+                NavigationBarItem(
+                    selected = tab == 2, onClick = { tab = 2 },
+                    icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
+                    label = { Text(stringResource(R.string.leaderboard_title)) },
+                    modifier = Modifier.testTag("tab-leaderboard"),
+                )
             }
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -116,6 +138,12 @@ fun HomeScreen(viewModel: PlacesViewModel, onLogout: () -> Unit) {
                 state = state,
                 modifier = Modifier.padding(padding),
                 onPlaceTap = { selectedPlaceId = it },
+            )
+
+            2 -> LeaderboardScreen(
+                state = leaderboard,
+                modifier = Modifier.padding(padding),
+                onSelectPeriod = { leaderboardViewModel.select(it) },
             )
         }
     }

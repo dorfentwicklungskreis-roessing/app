@@ -21,4 +21,27 @@
     <string name="delete">Löschen</string>
     <string name="cancel">Abbrechen</string>
     <string name="error_network">Keine Verbindung zum Server. Es werden ggf. alte Daten angezeigt.</string>
+    <!-- Bestätigung vor dem Melden einer Erledigung -->
+    <string name="confirm_completion_watering">Hast du wirklich gegossen?</string>
+    <string name="confirm_completion_weeding">Hast du wirklich gejätet?</string>
+    <string name="confirm_completion_other">Wirklich als erledigt melden?</string>
+    <string name="confirm_completion_place">Ort: %1$s</string>
+    <string name="confirm_completion_amount">Menge: %1$s Liter</string>
+    <string name="confirm_completion_hint">Die Meldung erscheint mit deinem Namen in der Historie.</string>
+    <string name="confirm_completion_yes">Ja, erledigt</string>
+
+    <!-- Rangliste -->
+    <string name="leaderboard_title">Rangliste</string>
+    <string name="period_week">Woche</string>
+    <string name="period_month">Monat</string>
+    <string name="period_season">Saison</string>
+    <string name="period_year">Jahr</string>
+    <string name="period_all">Gesamt</string>
+    <string name="leaderboard_totals_title">Das ganze Dorf</string>
+    <string name="leaderboard_totals">%1$d Erledigungen · %2$s Liter · %3$d Beteiligte</string>
+    <string name="leaderboard_completions">%1$d× erledigt</string>
+    <string name="leaderboard_empty">In diesem Zeitraum wurde noch nichts gemeldet.</string>
+    <string name="leaderboard_my_rank">Dein Platz: %1$d</string>
+    <string name="leaderboard_my_none">Du hast in diesem Zeitraum noch nichts gemeldet.</string>
+    <string name="leaderboard_you">Du</string>
 </resources>

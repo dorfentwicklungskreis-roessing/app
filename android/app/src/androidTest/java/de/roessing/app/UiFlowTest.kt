@@ -105,7 +105,7 @@ class UiFlowTest {
         compose.onNodeWithTag("complete-task-11").performClick()
         compose.onNodeWithTag("confirm-completion").assertIsDisplayed()
         compose.onNodeWithText("Hast du wirklich gegossen?").assertIsDisplayed()
-        compose.onNodeWithText("Unter den Eichen — Kasten 1").assertIsDisplayed()
+        compose.onNodeWithText("Ort: Unter den Eichen — Kasten 1").assertIsDisplayed()
         compose.onNodeWithText("Menge: 10 Liter").assertIsDisplayed()
         assertNull("Ohne Bestätigung darf nichts gemeldet werden", completed)
 
@@ -136,7 +136,7 @@ class UiFlowTest {
         }
         compose.onNodeWithTag("complete-task-21").performClick()
         compose.onNodeWithText("Hast du wirklich gejätet?").assertIsDisplayed()
-        compose.onNodeWithText("Dorfbeet").assertIsDisplayed()
+        compose.onNodeWithText("Ort: Dorfbeet").assertIsDisplayed()
     }
 
     @Test

@@ -42,6 +42,10 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
   schlichte Auszeichnungen (Gießkanne des Monats, Frühaufsteher, Retter,
   Ausdauer). Eine irrtümliche Meldung nimmt
   `DELETE /api/v1/completions/{id}` zurück — erlaubt dem Melder und Admins.
+  In der App gibt es dazu den Tab „Rangliste"; gemeldet wird erst nach einer
+  Rückfrage (Ort und Menge), damit ein Fehlklick nichts einträgt. In der
+  Verwaltung liegt beides unter `/admin/dorfpflege/rangliste` bzw. als
+  eigene Bestätigungsseite in der Historie eines Ortes.
 
 ## Entwicklung
 
