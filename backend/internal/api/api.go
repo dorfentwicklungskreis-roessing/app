@@ -392,13 +392,8 @@ func (s *Server) handleCreateCompletion(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
 		return
 	}
-	task, err := s.DB.GetTask(id)
-	if err != nil {
-		writeErr(w, http.StatusNotFound, "Aufgabe nicht gefunden")
-		return
-	}
+	// Ob es die Aufgabe gibt, prüft CreateCompletion mit (404).
 	var in CompletionInput
-	_ = task
 	if r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, "ungültiges JSON")
@@ -406,7 +401,7 @@ func (s *Server) handleCreateCompletion(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	u, _ := auth.FromContext(r.Context())
-	c, err := CreateCompletion(s.DB, s.now(), task.ID, in, u)
+	c, err := CreateCompletion(s.DB, s.now(), id, in, u)
 	if err != nil {
 		var ce *CompletionError
 		if errors.As(err, &ce) {
