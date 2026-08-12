@@ -13,7 +13,6 @@ on:
       - "scripts/**"
       - "android/app/build.gradle.kts"
       - ".github/workflows/store.yml"
-      - ".github/workflows/autorelease.yml"
   push:
     branches: [main]
     paths:
@@ -21,7 +20,6 @@ on:
       - "scripts/**"
       - "android/app/build.gradle.kts"
       - ".github/workflows/store.yml"
-      - ".github/workflows/autorelease.yml"
   workflow_dispatch:
 
 concurrency:

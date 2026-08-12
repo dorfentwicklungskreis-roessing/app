@@ -1,7 +1,7 @@
 name: Release
 
 # Signierte Release-Artefakte (APK + AAB) bei Git-Tags (v*).
-# Die Tags legt in aller Regel .github/workflows/autorelease.yml automatisch an;
+# Tags werden bewusst von Hand gesetzt (siehe README, Abschnitt Releases);
 # von Hand getaggte Stände laufen genauso durch.
 #
 # Play-Store-Upload und Firebase App Distribution schalten sich automatisch

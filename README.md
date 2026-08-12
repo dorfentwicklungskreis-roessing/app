@@ -217,30 +217,27 @@ Multi-Arch-Image (amd64 + arm64, native Runner), bumpt den Tag in
 
 ## Releases (Android)
 
-**Getaggt wird automatisch.** Sobald ein Stand auf `main` in beiden Pipelines
-(Android und Backend) grün ist, legt `.github/workflows/autorelease.yml` den
-nächsten Patch-Tag an — auf genau den Commit, der getestet wurde.
-
-```
-Push auf main → Android/Backend grün → Autorelease
-   → Tag vX.Y.(Z+1)  → Release-Workflow: APK+AAB signieren, GitHub-Release,
-                       Firebase-Verteilung, Play-Track "internal"
-```
-
-Kein Tag entsteht, wenn seit dem letzten Tag nichts passiert ist, wenn nur
-Dokumentation, Store-Texte, CI oder das Deploy-Overlay geändert wurden
-(dazu gehört auch der `[skip ci]`-Bump des Backend-Workflows) oder wenn der
-Commit-Betreff `[skip ci]`/`[skip release]` enthält. Die Entscheidung trifft
-`scripts/naechste_version.py`, getestet in `scripts/test_naechste_version.py`:
+**Getaggt wird von Hand.** Eine Automatik dafür gibt es bewusst nicht: Ein
+Tag-Push aus einem Workflow löst wegen der GitHub-Token-Sperre keine weiteren
+Ereignisse aus, sauber ginge das nur mit einer eigenen GitHub-App. Solange die
+fehlt, ist der Weg:
 
 ```sh
-python3 scripts/naechste_version.py entscheiden   # Ja/Nein + nächste Version
-python3 -m unittest discover -s scripts           # Tests der Automatik
+# 1. Stand prüfen: Android- und Backend-Workflow müssen grün sein
+gh run list --limit 5
+
+# 2. Tag auf genau diesen Commit setzen
+git tag v0.1.4 && git push origin v0.1.4
+
+# 3. Release-Workflow starten (der Tag-Push allein genügt NICHT)
+gh workflow run release.yml --ref v0.1.4
 ```
 
-Von Hand geht weiterhin alles: ein selbst gesetzter Tag `v*` löst denselben
-Release-Workflow aus, und „Autorelease" lässt sich per `workflow_dispatch`
-als Probelauf starten (entscheidet, taggt aber nicht).
+Der Release-Workflow signiert APK und AAB, legt das GitHub-Release an,
+verteilt über Firebase App Distribution an die Gruppe `tester` und lädt (nur
+mit hinterlegtem `PLAY_SERVICE_ACCOUNT_JSON`) in den Play-Track „internal".
+Die Änderungsnotiz für den Store erzeugt `scripts/aenderungsnotiz.py` im
+Release-Lauf aus den `feat:`/`fix:`-Commits seit dem letzten Tag.
 
 **Version:** `versionName` und `versionCode` kommen aus dem Tag, nicht aus der
 CI-Laufnummer. `v0.1.3` → `versionName 0.1.3`, `versionCode 1000103`
