@@ -12,6 +12,12 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Ein Tag-Push löst diesen Workflow in der Regel selbst aus; wer zusätzlich
+# von Hand auslöst, bekäme sonst zwei Läufe, die um den Asset-Upload rennen.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest

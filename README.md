@@ -240,7 +240,9 @@ einer eigenen GitHub-App. Solange die fehlt, wäre die Automatik Overkill.
 5. **Taggen und den Release-Workflow starten**:
    ```sh
    git tag v0.1.4 && git push origin v0.1.4
-   gh workflow run release.yml --ref v0.1.4     # der Tag-Push allein genügt nicht
+   # Der Tag-Push startet den Release-Workflow normalerweise selbst.
+   # Passiert nach ~1 Minute nichts (kommt bei Pushes aus Workflows vor):
+   gh workflow run release.yml --ref v0.1.4
    gh run watch "$(gh run list --workflow=release.yml --limit 1 \
      --json databaseId --jq '.[0].databaseId')"
    ```
@@ -251,7 +253,8 @@ hinterlegtem `PLAY_SERVICE_ACCOUNT_JSON`) in den Play-Track „internal".
 
 ### Zwei Stolpersteine
 
-* **Der Tag-Push startet den Workflow nicht immer.** Wird der Tag aus einem
+* **Der Tag-Push startet den Workflow meistens selbst** — bei Tags, die von
+  Hand gepusht werden, verlässlich. Nur wird der Tag aus einem
   Workflow heraus mit dem `GITHUB_TOKEN` gepusht, greift `push: tags` nicht —
   GitHub unterbindet so Endlosketten. Deshalb immer
   `gh workflow run release.yml --ref <tag>` hinterherschicken; von Hand mit
