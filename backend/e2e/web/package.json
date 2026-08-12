@@ -1,0 +1,13 @@
+{
+  "name": "dorf-app-web-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser-E2E des Web-Admin gegen echtes Zitadel und echtes Backend.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}

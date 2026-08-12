@@ -57,10 +57,55 @@ jobs:
         if: failure()
         run: docker compose -f e2e/docker-compose.yml logs --tail 100
 
+  # Browser-E2E des Web-Admin: echter Chromium, echtes Zitadel, echter
+  # Login über die Zitadel-Oberfläche. Nichts wird gemockt.
+  web-e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/e2e/web/package-lock.json
+      - name: Zitadel + Postgres starten
+        run: |
+          mkdir -p e2e/machinekey && chmod 777 e2e/machinekey
+          docker compose -f e2e/docker-compose.yml up -d --wait --wait-timeout 180
+      - name: Playwright einrichten
+        working-directory: backend/e2e/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Browser-E2E
+        working-directory: backend/e2e/web
+        run: npx playwright test
+      - name: Artefakte bei Fehler
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-artefakte
+          path: |
+            backend/e2e/web/playwright-report/
+            backend/e2e/web/test-results/
+            backend/e2e/web/backend.log
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Compose-Logs bei Fehler
+        if: failure()
+        run: docker compose -f e2e/docker-compose.yml logs --tail 200
+
   # 1) Pro Architektur ein natives Image bauen (nur auf main).
   build:
     if: github.event_name != 'pull_request'
-    needs: [test, e2e]
+    needs: [test, e2e, web-e2e]
     strategy:
       fail-fast: true
       matrix:

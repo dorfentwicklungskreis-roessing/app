@@ -50,6 +50,26 @@ cd android
 Der „Entwickler-Login" erscheint nur in Debug-Builds mit `-PdevAuth=true`
 und funktioniert nur gegen ein Backend mit `AUTH_MODE=insecure-dev`.
 
+### End-to-End-Tests (echtes Zitadel, keine Mocks)
+
+Beide E2E-Suiten brauchen die Compose-Umgebung mit echtem Zitadel:
+
+```sh
+cd backend
+mkdir -p e2e/machinekey && chmod 777 e2e/machinekey
+docker compose -f e2e/docker-compose.yml up -d --wait
+
+# API + MCP gegen echte Tokens
+go test -tags e2e -v ./e2e/
+
+# Web-Admin im echten Browser (Login über die Zitadel-Oberfläche)
+cd e2e/web && npm ci && npx playwright install --with-deps chromium && npx playwright test
+```
+
+Der Browser-E2E bootstrappt Projekt, Rollen, eine PKCE-App und zwei Nutzer
+mit Passwort in Zitadel, startet das echte Backend-Binary und lässt den Test
+scheitern, sobald im Browser eine Konsolen- oder Skriptfehlermeldung auftritt.
+
 ## MCP für Admins
 
 In claude.ai einbinden (Einstellungen → Connectors → Custom Connector):

@@ -1,0 +1,11 @@
+# Testartefakte gehören nicht in den Build-Kontext.
+e2e/web/node_modules/
+e2e/web/test-results/
+e2e/web/playwright-report/
+e2e/web/blob-report/
+e2e/web/backend.log
+e2e/web/.e2e-state.json
+e2e/machinekey/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
