@@ -149,6 +149,36 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     await expect(page.locator('#historie tbody tr').first()).toContainText('vom Browser-E2E');
   });
 
+  await test.step('Spielschutz: erst nach bewusstem Übergehen ein zweites Mal', async () => {
+    // Frisch erledigt: die Ortsseite sagt es, und die Bestätigungsseite auch.
+    const aufgabe = page.locator('[data-aufgabe-id]').first();
+    await expect(aufgabe).toContainText('Bereits erledigt');
+    await aufgabe.locator('.erledigt-melden').click();
+    await expect(page.locator('#erledigt-gesperrt')).toBeVisible();
+
+    // Ohne Haken wird nichts eingetragen — die Seite kommt mit Erklärung zurück.
+    await page.locator('#erledigt-bestaetigen').click();
+    await expect(page.locator('#erledigt-gesperrt')).toBeVisible();
+    await page.goto(ortURL);
+    await expect(page.locator('#historie tbody tr')).toHaveCount(1);
+
+    // Mit Haken trägt der Admin bewusst nach; der Eintrag ist gekennzeichnet.
+    await page.locator('[data-aufgabe-id]').first().locator('.erledigt-melden').click();
+    await page.locator('#feld-uebergehen').check();
+    await page.locator('#erledigt-bestaetigen').click();
+    await expect(page).toHaveURL(ortURL);
+    await expect(page.locator('#meldung')).toHaveAttribute('data-art', 'success');
+    await expect(page.locator('#historie tbody tr')).toHaveCount(2);
+    await expect(page.locator('[data-nachgetragen]').first()).toBeVisible();
+
+    // Den Nachtrag wieder zurücknehmen — die folgenden Schritte rechnen mit
+    // genau einer Meldung.
+    await page.locator('[data-zuruecknehmen]').first().click();
+    await page.locator('#loeschen-bestaetigen').click();
+    await expect(page).toHaveURL(ortURL);
+    await expect(page.locator('#historie tbody tr')).toHaveCount(1);
+  });
+
   await test.step('Rangliste zeigt die Erledigung und lässt den Zeitraum umschalten', async () => {
     await page.goto('/admin/dorfpflege/');
     await page.locator('#zur-rangliste').click();

@@ -36,6 +36,9 @@ import (
 const (
 	issuer      = "http://localhost:8123"
 	backendAddr = "http://localhost:8124"
+	// nachtragsName: unter diesem Namen trägt der Admin telefonisch
+	// gemeldeten Vollzug nach (force + name).
+	nachtragsName = "Telefon-Nachtrag"
 )
 
 // --- Zitadel-Hilfen ---------------------------------------------------------
@@ -313,6 +316,56 @@ func TestEndToEnd(t *testing.T) {
 		}
 	})
 
+	// --- Spielschutz ---
+	// Die Sperrfrist muss am echten Server hängen, nicht in der App: sonst
+	// ließe sie sich mit einem selbstgebauten Client umgehen.
+	t.Run("Spielschutz: zweite Meldung wird abgewiesen", func(t *testing.T) {
+		pfad := fmt.Sprintf("/api/v1/tasks/%.0f/completions", taskID)
+
+		resp, out := request(t, "POST", pfad, memberToken, map[string]any{"liters": 10})
+		if resp.StatusCode != 409 {
+			t.Fatalf("zweite Meldung: HTTP %d, erwartet 409: %v", resp.StatusCode, out)
+		}
+		if _, ok := out["error"].(string); !ok {
+			t.Fatalf("409 ohne Erklärung: %v", out)
+		}
+		frei, err := time.Parse(time.RFC3339, out["retryAfter"].(string))
+		if err != nil {
+			t.Fatalf("retryAfter ist kein RFC3339: %v", out["retryAfter"])
+		}
+
+		// Die Ampel-Ansicht sagt dasselbe, damit die App den Knopf sperrt.
+		_, list := request(t, "GET", "/api/v1/places", memberToken, nil)
+		gesperrt := ""
+		for _, p := range list["places"].([]any) {
+			for _, task := range p.(map[string]any)["tasks"].([]any) {
+				if task.(map[string]any)["id"].(float64) == taskID {
+					gesperrt, _ = task.(map[string]any)["lockedUntil"].(string)
+				}
+			}
+		}
+		if bis, err := time.Parse(time.RFC3339, gesperrt); err != nil || !bis.Equal(frei) {
+			t.Fatalf("lockedUntil = %q, erwartet %s", gesperrt, frei.Format(time.RFC3339))
+		}
+
+		// Mitglieder dürfen die Sperre nicht übergehen, Admins schon.
+		resp, _ = request(t, "POST", pfad, memberToken, map[string]any{"force": true})
+		if resp.StatusCode != 403 {
+			t.Fatalf("Mitglied mit force: HTTP %d, erwartet 403", resp.StatusCode)
+		}
+		resp, nachtrag := request(t, "POST", pfad, adminToken,
+			map[string]any{"force": true, "name": nachtragsName, "liters": 8})
+		if resp.StatusCode != 201 || nachtrag["forced"] != true {
+			t.Fatalf("Admin-Nachtrag: HTTP %d: %v", resp.StatusCode, nachtrag)
+		}
+		// Und niemand darf in die Zukunft melden.
+		resp, _ = request(t, "POST", pfad, adminToken, map[string]any{
+			"force": true, "doneAt": time.Now().Add(2 * time.Hour).Format(time.RFC3339)})
+		if resp.StatusCode != 400 {
+			t.Fatalf("Meldung aus der Zukunft: HTTP %d, erwartet 400", resp.StatusCode)
+		}
+	})
+
 	// --- MCP ---
 	t.Run("MCP ohne Token → 401 + OAuth-Metadata", func(t *testing.T) {
 		resp, _ := mcpCall(t, "", "tools/list", nil)
@@ -375,16 +428,27 @@ func TestEndToEnd(t *testing.T) {
 	// --- Rangliste und Rücknahme ---
 	t.Run("Rangliste, eigener Rang und Rücknahme", func(t *testing.T) {
 		// Stand bisher: Mitglied 1 Erledigung (gegossen), Admin 1 (via MCP
-		// am Beet). Das Mitglied legt zwei nach, der Admin eine.
+		// am Beet), dazu der Nachtrag aus dem Spielschutz-Block. Das Mitglied
+		// legt zwei nach — jede auf einer eigenen Aufgabe, denn dieselbe
+		// Aufgabe ist gesperrt (so stehen im Dorf ja auch mehrere Kästen).
 		var memberCompletionID float64
 		for i := 0; i < 2; i++ {
-			resp, c := request(t, "POST", fmt.Sprintf("/api/v1/tasks/%.0f/completions", taskID), memberToken, map[string]any{})
+			resp, task := request(t, "POST", fmt.Sprintf("/api/v1/places/%.0f/tasks", placeID), adminToken,
+				map[string]any{"kind": "giessen", "liters": 10, "intervalDays": 7, "redAfterDays": 14})
+			if resp.StatusCode != 201 {
+				t.Fatalf("Aufgabe %d: HTTP %d: %v", i, resp.StatusCode, task)
+			}
+			resp, c := request(t, "POST", fmt.Sprintf("/api/v1/tasks/%.0f/completions", task["id"].(float64)),
+				memberToken, map[string]any{})
 			if resp.StatusCode != 201 {
 				t.Fatalf("Erledigung %d: HTTP %d: %v", i, resp.StatusCode, c)
 			}
 			memberCompletionID = c["id"].(float64)
 		}
-		text, isErr := mcpToolText(t, adminToken, "erledigung_melden", map[string]any{"taskId": taskID})
+		// Der Admin trägt über MCP nach — auf der gesperrten Aufgabe geht das
+		// nur bewusst mit force.
+		text, isErr := mcpToolText(t, adminToken, "erledigung_melden",
+			map[string]any{"taskId": taskID, "force": true})
 		if isErr {
 			t.Fatalf("erledigung_melden: %s", text)
 		}
@@ -402,17 +466,25 @@ func TestEndToEnd(t *testing.T) {
 			}
 			return out
 		}
-		// Anzahl der Erledigungen einer Kennung in der Rangliste.
+		// Gewertete Erledigungen einer Kennung. Nachträge, die unter einem
+		// anderen Namen laufen, bleiben außen vor — sie gehören der genannten
+		// Person, nicht dem eintragenden Admin.
 		countOf := func(lb map[string]any, sub string) float64 {
 			t.Helper()
+			var n float64
+			gefunden := false
 			for _, e := range lb["entries"].([]any) {
 				entry := e.(map[string]any)
-				if entry["userSub"] == sub {
-					return entry["completions"].(float64)
+				if entry["userSub"] != sub || entry["userName"] == nachtragsName {
+					continue
 				}
+				n += entry["completions"].(float64)
+				gefunden = true
 			}
-			t.Fatalf("Kennung %s fehlt in der Rangliste: %v", sub, lb["entries"])
-			return 0
+			if !gefunden {
+				t.Fatalf("Kennung %s fehlt in der Rangliste: %v", sub, lb["entries"])
+			}
+			return n
 		}
 
 		lb := leaderboard(memberToken)
@@ -426,8 +498,18 @@ func TestEndToEnd(t *testing.T) {
 		if me := lb["me"].(map[string]any); me["rank"].(float64) != 1 {
 			t.Fatalf("eigener Rang des Mitglieds = %v, erwartet 1", me["rank"])
 		}
-		if totals := lb["totals"].(map[string]any); totals["completions"].(float64) != 5 {
-			t.Fatalf("Gesamtsumme = %v, erwartet 5", totals["completions"])
+		if totals := lb["totals"].(map[string]any); totals["completions"].(float64) != 6 {
+			t.Fatalf("Gesamtsumme = %v, erwartet 6", totals["completions"])
+		}
+		// Der erzwungene Nachtrag zählt der genannten Person — genau einmal.
+		nachtrag := 0.0
+		for _, e := range lb["entries"].([]any) {
+			if e.(map[string]any)["userName"] == nachtragsName {
+				nachtrag = e.(map[string]any)["completions"].(float64)
+			}
+		}
+		if nachtrag != 1 {
+			t.Fatalf("Nachtrag für %s zählt %v, erwartet 1", nachtragsName, nachtrag)
 		}
 
 		// Der Admin liegt hinten und bekommt trotzdem seinen Rang.
