@@ -86,26 +86,10 @@ jobs:
           target: ${{ matrix.api-level >= 30 && 'google_apis' || 'default' }}
           disable-animations: true
           working-directory: android
-          script: |
-            set -e
-            ./gradlew connectedDebugAndroidTest -PapiBaseUrl=http://10.0.2.2:8099 -PdevAuth=true -Pandroid.testInstrumentationRunnerArguments.e2e=true
-
-            # Echter Rössing-ID-Login gegen die Produktion — bewusst OHNE devAuth
-            # und ohne apiBaseUrl-Override. Deckt den Weg ab, der zuvor kaputt war:
-            # Browser-Login → Rücksprung über AppAuth → Token-Tausch → angemeldete
-            # Ansicht. Nur auf API 35, weil erst das google_apis-Image Chrome (und
-            # damit Custom Tabs) mitbringt; ohne Secrets wird der Block übersprungen.
-            if [ "$API_LEVEL" = "35" ] && [ -n "$REAL_LOGIN_USER" ] && [ -n "$REAL_LOGIN_PASSWORD" ]; then
-              # Chrome-Erststart-Dialoge unterdrücken, damit der Custom Tab direkt
-              # die Zitadel-Anmeldung zeigt.
-              adb shell 'echo "chrome --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line' || true
-              ./gradlew connectedDebugAndroidTest \
-                -Pandroid.testInstrumentationRunnerArguments.class=de.roessing.app.RealLoginE2eTest \
-                -Pandroid.testInstrumentationRunnerArguments.realLoginUser="$REAL_LOGIN_USER" \
-                -Pandroid.testInstrumentationRunnerArguments.realLoginPassword="$REAL_LOGIN_PASSWORD"
-            else
-              echo "Echter Login-Test übersprungen (API $API_LEVEL bzw. keine Secrets)."
-            fi
+          # Einzeiler: android-emulator-runner führt das Script zeilenweise über
+          # `sh -c` aus, mehrzeilige if/fi-Blöcke zerfallen dabei. Die Logik steht
+          # deshalb in android/ci-e2e.sh.
+          script: bash ci-e2e.sh
 
       - name: E2E-Berichte hochladen
         if: failure()
