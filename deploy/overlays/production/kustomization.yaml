@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+
+# Der konkrete Image-Tag wird von der CI via
+#   kustomize edit set image ghcr.io/dorfentwicklungskreis-roessing/app-backend=...:<git-sha>
+# auf den gebauten Multi-Arch-Tag gesetzt und nach main committet.
+images:
+  - name: ghcr.io/dorfentwicklungskreis-roessing/app-backend
+    newName: ghcr.io/dorfentwicklungskreis-roessing/app-backend
+    newTag: latest

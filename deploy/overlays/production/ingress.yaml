@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dorf-app-backend
+  namespace: dorf-app
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - api.xn--rssing-wxa.de
+      secretName: dorf-app-api-tls
+  rules:
+    - host: api.xn--rssing-wxa.de
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dorf-app-backend
+                port:
+                  number: 8080

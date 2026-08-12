@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dorfpflege Rössing — Admin</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root { --green:#2e7d32; --yellow:#f9a825; --red:#c62828; --bg:#f7fbf1; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background: var(--bg); color:#1a1c19; }
+  header { display:flex; align-items:center; gap:1rem; padding:.7rem 1rem; background:#3b6939; color:#fff; }
+  header h1 { font-size:1.1rem; margin:0; flex:1; }
+  main { display:grid; grid-template-columns: 1fr 380px; gap:0; height: calc(100vh - 52px); }
+  #map { height:100%; }
+  aside { overflow-y:auto; padding:1rem; background:#fff; border-left:1px solid #ddd; }
+  .card { border:1px solid #e0e0e0; border-radius:10px; padding:.7rem .9rem; margin-bottom:.7rem; }
+  .card h3 { margin:.1rem 0 .3rem; font-size:1rem; }
+  .badge { display:inline-block; border-radius:99px; padding:.05rem .6rem; color:#fff; font-size:.78rem; }
+  .green{background:var(--green)} .yellow{background:var(--yellow);color:#222} .red{background:var(--red)}
+  button { border:0; border-radius:8px; padding:.45rem .8rem; cursor:pointer; background:#3b6939; color:#fff; font-size:.85rem; }
+  button.secondary { background:#e6eae2; color:#222; }
+  button.danger { background:var(--red); }
+  input, select { width:100%; padding:.4rem; margin:.15rem 0 .5rem; border:1px solid #ccc; border-radius:6px; font-size:.9rem; }
+  label { font-size:.8rem; color:#555; }
+  .row { display:flex; gap:.5rem; }
+  .row > * { flex:1; }
+  .task { border-top:1px dashed #ddd; margin-top:.4rem; padding-top:.4rem; font-size:.87rem; }
+  .muted { color:#777; font-size:.8rem; }
+  #login-overlay { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; z-index:99; }
+  dialog { border:0; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,.25); padding:1.2rem; width:min(420px, 92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.35); }
+  .factor { display:flex; align-items:center; gap:.5rem; margin-bottom:1rem; }
+  .factor input { width:70px; margin:0; }
+</style>
+</head>
+<body>
+<div id="login-overlay">
+  <h1>🌻 Dorfpflege Rössing</h1>
+  <p>Admin-Bereich — bitte mit deiner Rössing-ID anmelden.</p>
+  <button onclick="login()">Mit Rössing-ID anmelden</button>
+  <p id="login-error" style="color:var(--red)"></p>
+</div>
+
+<header hidden id="app-header">
+  <h1>🌻 Dorfpflege Rössing — Admin</h1>
+  <span id="who" class="muted" style="color:#dfe8dc"></span>
+  <button class="secondary" onclick="logout()">Abmelden</button>
+</header>
+<main hidden id="app-main">
+  <div id="map"></div>
+  <aside>
+    <div class="factor card">
+      <label style="flex:2">Hitze-Faktor (1 = normal, 0.5 = Hitzewelle)</label>
+      <input id="factor" type="number" step="0.1" min="0.1" max="4">
+      <button onclick="saveFactor()">Setzen</button>
+    </div>
+    <p class="muted">Klick auf die Karte, um einen neuen Ort anzulegen. Klick auf einen Punkt, um ihn zu bearbeiten.</p>
+    <div id="places"></div>
+  </aside>
+</main>
+
+<dialog id="place-dialog">
+  <h3 id="dlg-title">Ort</h3>
+  <form method="dialog" onsubmit="return savePlace(event)">
+    <input type="hidden" id="p-id">
+    <label>Name</label><input id="p-name" required placeholder="z.B. Unter den Eichen — Kasten 1">
+    <label>Art</label>
+    <select id="p-kind">
+      <option value="blumenkasten">Blumenkasten</option>
+      <option value="beet">Beet</option>
+      <option value="sonstiges">Sonstiges</option>
+    </select>
+    <label>Beschreibung</label><input id="p-desc">
+    <div class="row">
+      <div><label>Breitengrad</label><input id="p-lat" type="number" step="any" required></div>
+      <div><label>Längengrad</label><input id="p-lon" type="number" step="any" required></div>
+    </div>
+    <div class="row">
+      <button type="submit">Speichern</button>
+      <button type="button" class="secondary" onclick="placeDialog.close()">Abbrechen</button>
+      <button type="button" class="danger" id="p-delete" onclick="deletePlace()">Löschen</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="task-dialog">
+  <h3>Pflegeaufgabe</h3>
+  <form method="dialog" onsubmit="return saveTask(event)">
+    <input type="hidden" id="t-id"><input type="hidden" id="t-place">
+    <label>Art</label>
+    <select id="t-kind" onchange="document.getElementById('liters-row').style.display = this.value==='giessen'?'':'none'">
+      <option value="giessen">Gießen</option>
+      <option value="jaeten">Jäten</option>
+      <option value="sonstiges">Sonstiges</option>
+    </select>
+    <div id="liters-row"><label>Liter pro Gießvorgang</label><input id="t-liters" type="number" step="any" min="0"></div>
+    <label>Titel (optional, für „Sonstiges")</label><input id="t-title">
+    <div class="row">
+      <div><label>Intervall (Tage, dann gelb)</label><input id="t-interval" type="number" step="any" min="0.5" required></div>
+      <div><label>Rot nach (Tagen)</label><input id="t-red" type="number" step="any" min="0.5" required></div>
+    </div>
+    <div class="row">
+      <button type="submit">Speichern</button>
+      <button type="button" class="secondary" onclick="taskDialog.close()">Abbrechen</button>
+      <button type="button" class="danger" id="t-delete" onclick="deleteTask()">Löschen</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const ISSUER = "__OIDC_ISSUER__";
+const CLIENT_ID = "__OIDC_CLIENT_ID__";
+const REDIRECT = location.origin + "/admin/";
+const SCOPES = "openid profile email";
+
+// ---------- OIDC (Authorization Code + PKCE) ----------
+function b64url(bytes) {
+  return btoa(String.fromCharCode(...new Uint8Array(bytes)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+async function discovery() {
+  const r = await fetch(ISSUER + "/.well-known/openid-configuration");
+  return r.json();
+}
+async function login() {
+  const d = await discovery();
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+  sessionStorage.setItem("pkce", verifier);
+  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  const u = new URL(d.authorization_endpoint);
+  u.search = new URLSearchParams({
+    client_id: CLIENT_ID, redirect_uri: REDIRECT, response_type: "code",
+    scope: SCOPES, code_challenge: challenge, code_challenge_method: "S256", prompt: "consent",
+  });
+  location.href = u;
+}
+async function exchangeCode(code) {
+  const d = await discovery();
+  const r = await fetch(d.token_endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code", code, redirect_uri: REDIRECT,
+      client_id: CLIENT_ID, code_verifier: sessionStorage.getItem("pkce"),
+    }),
+  });
+  if (!r.ok) throw new Error("Token-Tausch fehlgeschlagen");
+  const t = await r.json();
+  sessionStorage.setItem("token", t.access_token);
+}
+function logout() { sessionStorage.clear(); location.href = REDIRECT; }
+
+// ---------- API ----------
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({ "Authorization": "Bearer " + sessionStorage.getItem("token") }, opts.headers);
+  if (opts.body) opts.headers["Content-Type"] = "application/json";
+  const r = await fetch("/api/v1" + path, opts);
+  if (r.status === 401) { logout(); return; }
+  if (!r.ok) { alert("Fehler: " + (await r.json().catch(() => ({}))).error || r.status); throw new Error("api"); }
+  return r.status === 204 ? null : r.json();
+}
+
+// ---------- UI ----------
+const placeDialog = document.getElementById("place-dialog");
+const taskDialog = document.getElementById("task-dialog");
+let map, data = { places: [] };
+const statusText = { green: "Alles gut", yellow: "Bitte erledigen", red: "Dringend!" };
+const kindText = { giessen: "Gießen", jaeten: "Jäten", sonstiges: "Pflege" };
+
+async function boot() {
+  const params = new URLSearchParams(location.search);
+  if (params.get("code")) {
+    try { await exchangeCode(params.get("code")); } catch (e) {
+      document.getElementById("login-error").textContent = e.message;
+    }
+    history.replaceState(null, "", REDIRECT);
+  }
+  if (!sessionStorage.getItem("token")) return;
+  const me = await api("/me");
+  if (!me.isAdmin) {
+    document.getElementById("login-error").textContent = "Dein Konto hat keine Admin-Rechte für die Dorfpflege.";
+    sessionStorage.removeItem("token");
+    return;
+  }
+  document.getElementById("login-overlay").hidden = true;
+  document.getElementById("app-header").hidden = false;
+  document.getElementById("app-main").hidden = false;
+  document.getElementById("who").textContent = me.name;
+  initMap();
+  await refresh();
+}
+
+function initMap() {
+  map = new maplibregl.Map({
+    container: "map",
+    style: "https://tiles.openfreemap.org/styles/liberty",
+    center: [9.870, 52.211], zoom: 15,
+  });
+  map.addControl(new maplibregl.NavigationControl());
+  map.on("click", (e) => {
+    // Klick auf einen Marker öffnet Bearbeiten (via Feature-Query), sonst Neuanlage.
+    const f = map.queryRenderedFeatures(e.point, { layers: ["places-layer"] })[0];
+    if (f) openPlace(data.places.find(p => p.id === f.properties.id));
+    else openPlace(null, e.lngLat);
+  });
+  map.on("load", renderMarkers);
+}
+
+async function refresh() {
+  data = await api("/places");
+  document.getElementById("factor").value = data.wateringFactor;
+  renderList();
+  if (map.isStyleLoaded()) renderMarkers();
+}
+
+function renderMarkers() {
+  const features = data.places.map(p => ({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+    properties: { id: p.id, status: p.status },
+  }));
+  const src = map.getSource("places");
+  const geojson = { type: "FeatureCollection", features };
+  if (src) { src.setData(geojson); return; }
+  map.addSource("places", { type: "geojson", data: geojson });
+  map.addLayer({
+    id: "places-layer", type: "circle", source: "places",
+    paint: {
+      "circle-radius": 11,
+      "circle-color": ["match", ["get", "status"], "yellow", "#f9a825", "red", "#c62828", "#2e7d32"],
+      "circle-stroke-width": 2.5, "circle-stroke-color": "#ffffff",
+    },
+  });
+}
+
+function renderList() {
+  const el = document.getElementById("places");
+  el.innerHTML = "";
+  for (const p of data.places) {
+    const card = document.createElement("div");
+    card.className = "card";
+    const tasks = (p.tasks || []).map(t => {
+      const last = t.lastCompletion
+        ? `zuletzt ${new Date(t.lastCompletion.doneAt).toLocaleDateString("de-DE")} (${t.lastCompletion.userName})`
+        : "noch nie erledigt";
+      const liters = t.liters ? `, ${t.liters} l` : "";
+      return `<div class="task">
+        <span class="badge ${t.status}">${kindText[t.kind] || t.title || "Pflege"}</span>
+        alle ${t.intervalDays} Tage${liters} · ${last}
+        <div style="margin-top:.3rem">
+          <button class="secondary" onclick='openTask(${p.id}, ${JSON.stringify(JSON.stringify(t))})'>Bearbeiten</button>
+          <button onclick="markDone(${t.id})">Erledigt melden</button>
+        </div>
+      </div>`;
+    }).join("");
+    card.innerHTML = `
+      <h3>${p.name} <span class="badge ${p.status}">${statusText[p.status]}</span></h3>
+      <div class="muted">${p.kind}${p.description ? " · " + p.description : ""}</div>
+      ${tasks}
+      <div style="margin-top:.5rem">
+        <button class="secondary" onclick='openPlace(data.places.find(x=>x.id===${p.id}))'>Ort bearbeiten</button>
+        <button class="secondary" onclick="openTask(${p.id}, null)">+ Aufgabe</button>
+      </div>`;
+    el.appendChild(card);
+  }
+}
+
+function openPlace(p, lngLat) {
+  document.getElementById("dlg-title").textContent = p ? "Ort bearbeiten" : "Neuer Ort";
+  document.getElementById("p-id").value = p ? p.id : "";
+  document.getElementById("p-name").value = p ? p.name : "";
+  document.getElementById("p-kind").value = p ? p.kind : "blumenkasten";
+  document.getElementById("p-desc").value = p ? p.description : "";
+  document.getElementById("p-lat").value = p ? p.lat : lngLat.lat.toFixed(6);
+  document.getElementById("p-lon").value = p ? p.lon : lngLat.lng.toFixed(6);
+  document.getElementById("p-delete").hidden = !p;
+  placeDialog.showModal();
+}
+
+async function savePlace(e) {
+  e.preventDefault();
+  const id = document.getElementById("p-id").value;
+  const body = JSON.stringify({
+    name: document.getElementById("p-name").value,
+    kind: document.getElementById("p-kind").value,
+    description: document.getElementById("p-desc").value,
+    lat: parseFloat(document.getElementById("p-lat").value),
+    lon: parseFloat(document.getElementById("p-lon").value),
+  });
+  if (id) await api("/places/" + id, { method: "PUT", body });
+  else await api("/places", { method: "POST", body });
+  placeDialog.close();
+  await refresh();
+}
+
+async function deletePlace() {
+  const id = document.getElementById("p-id").value;
+  if (!confirm("Diesen Ort samt Aufgaben und Historie löschen?")) return;
+  await api("/places/" + id, { method: "DELETE" });
+  placeDialog.close();
+  await refresh();
+}
+
+function openTask(placeId, tJson) {
+  const t = tJson ? JSON.parse(tJson) : null;
+  document.getElementById("t-id").value = t ? t.id : "";
+  document.getElementById("t-place").value = placeId;
+  document.getElementById("t-kind").value = t ? t.kind : "giessen";
+  document.getElementById("t-liters").value = t && t.liters ? t.liters : "";
+  document.getElementById("t-title").value = t ? (t.title || "") : "";
+  document.getElementById("t-interval").value = t ? t.intervalDays : 7;
+  document.getElementById("t-red").value = t ? t.redAfterDays : 14;
+  document.getElementById("t-delete").hidden = !t;
+  document.getElementById("liters-row").style.display =
+    document.getElementById("t-kind").value === "giessen" ? "" : "none";
+  taskDialog.showModal();
+}
+
+async function saveTask(e) {
+  e.preventDefault();
+  const id = document.getElementById("t-id").value;
+  const placeId = document.getElementById("t-place").value;
+  const liters = parseFloat(document.getElementById("t-liters").value);
+  const body = JSON.stringify({
+    kind: document.getElementById("t-kind").value,
+    title: document.getElementById("t-title").value,
+    liters: isNaN(liters) ? null : liters,
+    intervalDays: parseFloat(document.getElementById("t-interval").value),
+    redAfterDays: parseFloat(document.getElementById("t-red").value),
+  });
+  if (id) await api("/tasks/" + id, { method: "PUT", body });
+  else await api("/places/" + placeId + "/tasks", { method: "POST", body });
+  taskDialog.close();
+  await refresh();
+}
+
+async function deleteTask() {
+  const id = document.getElementById("t-id").value;
+  if (!confirm("Diese Aufgabe samt Historie löschen?")) return;
+  await api("/tasks/" + id, { method: "DELETE" });
+  taskDialog.close();
+  await refresh();
+}
+
+async function markDone(taskId) {
+  await api("/tasks/" + taskId + "/completions", { method: "POST", body: JSON.stringify({}) });
+  await refresh();
+}
+
+async function saveFactor() {
+  const f = parseFloat(document.getElementById("factor").value);
+  await api("/settings", { method: "PUT", body: JSON.stringify({ wateringFactor: f }) });
+  await refresh();
+}
+
+boot();
+</script>
+</body>
+</html>

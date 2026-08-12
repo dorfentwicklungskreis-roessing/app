@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dorf-app-backend
+  namespace: dorf-app
+  labels:
+    app: dorf-app-backend
+spec:
+  replicas: 1
+  # SQLite auf RWO-PVC: niemals zwei Pods gleichzeitig auf die Datei lassen.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: dorf-app-backend
+  template:
+    metadata:
+      labels:
+        app: dorf-app-backend
+    spec:
+      containers:
+        - name: backend
+          # Image-Referenz wird von kustomize (images:) verwaltet — bare ref.
+          image: ghcr.io/dorfentwicklungskreis-roessing/app-backend
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: DB_PATH
+              value: /data/dorfapp.sqlite
+            - name: AUTH_ISSUER
+              value: https://id.xn--rssing-wxa.de
+            - name: ADMIN_CLIENT_ID
+              value: "385942875872952515"
+            # Seed legt nur bei leerer DB die Beispiel-Kästen an.
+            - name: SEED
+              value: "1"
+            - name: MCP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: dorf-app-secrets
+                  key: mcp-token
+                  # Ohne Secret startet der Server trotzdem — MCP ist dann aus.
+                  optional: true
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: dorf-app-data

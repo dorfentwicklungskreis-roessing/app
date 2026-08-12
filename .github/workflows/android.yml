@@ -1,0 +1,88 @@
+name: Android
+
+on:
+  pull_request:
+    paths: ["android/**", "backend/**", ".github/workflows/android.yml"]
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: android
+
+jobs:
+  # Unit-Tests + Debug-APK als Artefakt (pro PR installierbar).
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit-Tests
+        run: ./gradlew testDebugUnitTest
+      - name: Debug-APK bauen
+        run: ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Testberichte hochladen
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: android/app/build/reports/tests/
+
+  # E2E: echtes Backend + App auf Emulatoren (mehrere API-Level = Gerätevielfalt).
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [28, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - name: KVM aktivieren
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: backend/go.sum
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Backend starten (insecure-dev + Seed)
+        working-directory: backend
+        run: |
+          DB_PATH=/tmp/e2e.sqlite AUTH_MODE=insecure-dev SEED=1 LISTEN_ADDR=:8099 \
+            go run ./cmd/server &
+          for i in $(seq 1 30); do curl -sf localhost:8099/healthz && break; sleep 1; done
+      - name: Instrumented- und E2E-Tests auf Emulator (API ${{ matrix.api-level }})
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: ${{ matrix.api-level >= 30 && 'google_apis' || 'default' }}
+          disable-animations: true
+          working-directory: android
+          script: ./gradlew connectedDebugAndroidTest -PapiBaseUrl=http://10.0.2.2:8099 -PdevAuth=true -Pandroid.testInstrumentationRunnerArguments.e2e=true
+      - name: E2E-Berichte hochladen
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-reports-api${{ matrix.api-level }}
+          path: android/app/build/reports/androidTests/

@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">Rössing</string>
+    <string name="login_title">Willkommen in Rössing</string>
+    <string name="login_subtitle">Die App fürs Dorf: Blumenkästen gießen, Dorfleben im Blick.</string>
+    <string name="login_button">Mit Rössing-ID anmelden</string>
+    <string name="login_dev_button">Entwickler-Login (nur Test)</string>
+    <string name="login_error">Anmeldung fehlgeschlagen. Bitte erneut versuchen.</string>
+    <string name="map_title">Blumenkästen</string>
+    <string name="list_title">Liste</string>
+    <string name="water_now">Ich habe gegossen</string>
+    <string name="watered_success">Danke fürs Gießen! 💚</string>
+    <string name="status_green">Alles gut</string>
+    <string name="status_yellow">Bitte gießen</string>
+    <string name="status_red">Dringend gießen!</string>
+    <string name="last_watered_never">Noch nie gegossen</string>
+    <string name="settings_title">Einstellungen</string>
+    <string name="logout">Abmelden</string>
+    <string name="admin_new_box">Neuer Kasten</string>
+    <string name="admin_edit_box">Kasten bearbeiten</string>
+    <string name="save">Speichern</string>
+    <string name="delete">Löschen</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="error_network">Keine Verbindung zum Server. Es werden ggf. alte Daten angezeigt.</string>
+</resources>
