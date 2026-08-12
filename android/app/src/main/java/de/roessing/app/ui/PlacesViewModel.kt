@@ -8,6 +8,8 @@ import de.roessing.app.data.MeDto
 import de.roessing.app.data.PlaceDto
 import de.roessing.app.data.PlaceSort
 import de.roessing.app.data.PlacesRepository
+import de.roessing.app.data.CompletionLockedException
+import de.roessing.app.data.distanceMeters
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -65,10 +67,7 @@ class PlacesViewModel(private val repo: PlacesRepository) : ViewModel() {
                     _state.update {
                         it.copy(
                             loading = false, offline = false,
-                            places = resp.places.sortedWith(
-                                compareByDescending<PlaceDto> { p -> p.careStatus.ordinal }
-                                    .thenBy { p -> p.name },
-                            ),
+                            places = sortiert(resp.places, it.sort, it.userLocation),
                             wateringFactor = resp.wateringFactor,
                             me = me ?: it.me,
                         )
@@ -90,18 +89,45 @@ class PlacesViewModel(private val repo: PlacesRepository) : ViewModel() {
                     loadHistory(taskId)
                     refresh()
                 }
-                .onFailure { _events.emit(UiEvent.CompletionFailed) }
+                .onFailure { fehler ->
+                    if (fehler is CompletionLockedException) {
+                        _events.emit(UiEvent.CompletionLocked(fehler.retryAfter))
+                        refresh()
+                    } else {
+                        _events.emit(UiEvent.CompletionFailed)
+                    }
+                }
             _state.update { it.copy(pendingTasks = it.pendingTasks - taskId) }
         }
     }
 
     /** Sortierung der Liste umschalten (Dringlichkeit oder Entfernung). */
     fun setSort(sort: PlaceSort) {
+        _state.update { it.copy(sort = sort, places = sortiert(it.places, sort, it.userLocation)) }
     }
 
     /** Neuen Standort übernehmen (oder null, wenn keiner bekannt ist). */
     fun setUserLocation(location: LatLon?) {
+        _state.update {
+            it.copy(userLocation = location, places = sortiert(it.places, it.sort, location))
+        }
     }
+
+    /**
+     * Nach Entfernung nur, wenn ein Standort bekannt ist — sonst bleibt es
+     * bei der Dringlichkeit (rot vor gelb vor grün).
+     */
+    private fun sortiert(places: List<PlaceDto>, sort: PlaceSort, user: LatLon?): List<PlaceDto> =
+        if (sort == PlaceSort.DISTANCE && user != null) {
+            places.sortedWith(
+                compareBy<PlaceDto> { p -> distanceMeters(user, LatLon(p.lat, p.lon)) }
+                    .thenBy { p -> p.name },
+            )
+        } else {
+            places.sortedWith(
+                compareByDescending<PlaceDto> { p -> p.careStatus.ordinal }.thenBy { p -> p.name },
+            )
+        }
 
     fun loadHistory(taskId: Long) {
         viewModelScope.launch {

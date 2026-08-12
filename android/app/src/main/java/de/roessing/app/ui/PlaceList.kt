@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import de.roessing.app.R
 import de.roessing.app.data.CareStatus
 import de.roessing.app.data.PlaceDto
+import de.roessing.app.data.PlaceSort
 import de.roessing.app.ui.theme.StatusGreen
 import de.roessing.app.ui.theme.StatusRed
 import de.roessing.app.ui.theme.StatusYellow
@@ -61,6 +62,7 @@ fun PlaceListScreen(
     state: PlacesUiState,
     modifier: Modifier = Modifier,
     onPlaceTap: (Long) -> Unit,
+    onSortChange: (PlaceSort) -> Unit = {},
 ) {
     LazyColumn(
         modifier = modifier.testTag("place-list"),

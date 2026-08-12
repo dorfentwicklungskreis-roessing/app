@@ -1,6 +1,7 @@
 package de.roessing.app
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -8,10 +9,15 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import de.roessing.app.data.BadgeDto
+import de.roessing.app.data.LatLon
 import de.roessing.app.data.LeaderboardEntryDto
 import de.roessing.app.data.LeaderboardTotalsDto
 import de.roessing.app.data.PlaceDto
+import de.roessing.app.data.PlaceSort
+import de.roessing.app.data.ROESSING
 import de.roessing.app.data.TaskDto
+import de.roessing.app.data.distanceMeters
+import de.roessing.app.data.formatDistance
 import de.roessing.app.ui.LeaderboardPeriod
 import de.roessing.app.ui.LeaderboardScreen
 import de.roessing.app.ui.LeaderboardUiState
@@ -218,5 +224,77 @@ class UiFlowTest {
         }
         compose.onNodeWithTag("leaderboard-empty").assertIsDisplayed()
         compose.onNodeWithTag("podium-1").assertDoesNotExist()
+    }
+
+    // --- Spielschutz und Standort ------------------------------------------
+
+    @Test
+    fun detail_gesperrteAufgabeLaesstSichNichtMelden() {
+        var completed = false
+        val gesperrt = places[0].copy(
+            tasks = listOf(task(11, "giessen", "green").copy(lockedUntil = "2099-08-15T09:00:00Z")),
+        )
+        compose.setContent {
+            DorfAppTheme {
+                PlaceDetail(
+                    place = gesperrt,
+                    pendingTasks = emptySet(),
+                    history = emptyMap(),
+                    onComplete = { _, _ -> completed = true },
+                    onLoadHistory = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("complete-task-11").assertIsNotEnabled()
+        compose.onNodeWithText("Wieder ab", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("complete-task-11").performClick()
+        compose.onNodeWithTag("confirm-completion").assertDoesNotExist()
+        assertEquals(false, completed)
+    }
+
+    @Test
+    fun liste_zeigtEntfernungUndSchaltetSortierung() {
+        var gewaehlt: PlaceSort? = null
+        // Der erste Ort liegt genau in der Dorfmitte, der zweite gut 300 m weg.
+        val nah = places[0].copy(lat = ROESSING.lat, lon = ROESSING.lon)
+        val fern = places[1].copy(lat = ROESSING.lat + 0.003, lon = ROESSING.lon)
+        compose.setContent {
+            DorfAppTheme {
+                PlaceListScreen(
+                    state = PlacesUiState(places = listOf(nah, fern), userLocation = ROESSING),
+                    onPlaceTap = {},
+                    onSortChange = { gewaehlt = it },
+                )
+            }
+        }
+        compose.onNodeWithText(formatDistance(0.0)).assertIsDisplayed()
+        val weit = distanceMeters(ROESSING, LatLon(fern.lat, fern.lon))
+        compose.onNodeWithText(formatDistance(weit)).assertIsDisplayed()
+
+        compose.onNodeWithTag("sort-distance").performClick()
+        assertEquals(PlaceSort.DISTANCE, gewaehlt)
+    }
+
+    @Test
+    fun liste_ohneStandortBleibtDieEntfernungWeg() {
+        compose.setContent {
+            DorfAppTheme {
+                PlaceListScreen(state = PlacesUiState(places = places), onPlaceTap = {})
+            }
+        }
+        compose.onNodeWithTag("sort-distance").assertIsNotEnabled()
+        compose.onNodeWithTag("distance-1").assertDoesNotExist()
+    }
+
+    @Test
+    fun standorthinweis_erklaertVorDerAbfrage() {
+        var gefragt = false
+        compose.setContent {
+            DorfAppTheme { LocationHint(onRequest = { gefragt = true }) }
+        }
+        compose.onNodeWithTag("location-hint").assertIsDisplayed()
+        compose.onNodeWithText("Standort freigeben").assertIsDisplayed()
+        compose.onNodeWithTag("location-hint-button").performClick()
+        assertEquals(true, gefragt)
     }
 }

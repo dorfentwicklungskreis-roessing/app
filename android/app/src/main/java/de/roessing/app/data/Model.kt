@@ -128,3 +128,7 @@ data class LeaderboardDto(
     /** Der eigene Eintrag — auch, wenn er nicht in entries steht. */
     val me: LeaderboardEntryDto? = null,
 )
+
+/** Fehlerantwort des Backends (z.B. bei HTTP 409 mit Sperrfrist). */
+@Serializable
+data class ApiErrorDto(val error: String = "", val retryAfter: String? = null)
