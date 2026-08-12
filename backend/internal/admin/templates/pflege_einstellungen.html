@@ -16,11 +16,11 @@
     </p>
     <form method="post" action="/admin/dorfpflege/einstellungen" class="mt-2 flex flex-wrap items-end gap-2"
           id="einstellungen-formular">
-      <label class="form-control">
-        <span class="label"><span class="label-text">Faktor</span></span>
+      <fieldset class="fieldset">
+        <label class="fieldset-legend" for="feld-hitzefaktor">Faktor</label>
         <input type="text" inputmode="decimal" name="hitzefaktor" id="feld-hitzefaktor" required
-               value="{{.Data.Hitzefaktor}}" class="input input-bordered w-32">
-      </label>
+               value="{{.Data.Hitzefaktor}}" class="input w-32">
+      </fieldset>
       <button type="submit" class="btn btn-primary" id="hitzefaktor-speichern">Speichern</button>
       <a class="btn btn-ghost" href="/admin/dorfpflege/">Zurück</a>
     </form>

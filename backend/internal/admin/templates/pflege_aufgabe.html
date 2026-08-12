@@ -17,41 +17,41 @@
       <div role="alert" class="alert alert-error" id="formularfehler"><span>{{.Data.Fehler}}</span></div>
     {{end}}
     <form method="post" action="{{.Data.Ziel}}" id="aufgabe-formular">
-      <label class="form-control w-full">
-        <span class="label"><span class="label-text">Art</span></span>
-        <select name="art" id="feld-art" class="select select-bordered w-full">
+      <fieldset class="fieldset">
+        <label class="fieldset-legend" for="feld-art">Art</label>
+        <select name="art" id="feld-art" class="select w-full">
           <option value="giessen" {{if eq (printf "%s" .Data.Aufgabe.Kind) "giessen"}}selected{{end}}>Gießen</option>
           <option value="jaeten" {{if eq (printf "%s" .Data.Aufgabe.Kind) "jaeten"}}selected{{end}}>Jäten</option>
           <option value="sonstiges" {{if eq (printf "%s" .Data.Aufgabe.Kind) "sonstiges"}}selected{{end}}>Sonstiges</option>
         </select>
-      </label>
-      <label class="form-control w-full">
-        <span class="label"><span class="label-text">Bezeichnung (optional)</span></span>
+
+        <label class="fieldset-legend" for="feld-titel">Bezeichnung (optional)</label>
         <input type="text" name="titel" id="feld-titel" value="{{.Data.Aufgabe.Title}}"
-               class="input input-bordered w-full" placeholder="z.B. Unkraut am Rand">
-      </label>
-      <label class="form-control w-full">
-        <span class="label"><span class="label-text">Liter je Durchgang (nur beim Gießen)</span></span>
+               class="input w-full" placeholder="z.B. Unkraut am Rand">
+
+        <label class="fieldset-legend" for="feld-liter">Liter je Durchgang (nur beim Gießen)</label>
         <input type="text" inputmode="decimal" name="liter" id="feld-liter" value="{{.Data.LiterText}}"
-               class="input input-bordered w-full">
-      </label>
-      <div class="grid grid-cols-2 gap-3">
-        <label class="form-control w-full">
-          <span class="label"><span class="label-text">Intervall (Tage)</span></span>
-          <input type="text" inputmode="decimal" name="intervall" id="feld-intervall" required
-                 value="{{zahl .Data.Aufgabe.IntervalDays}}" class="input input-bordered w-full">
+               class="input w-full">
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="fieldset-legend" for="feld-intervall">Intervall (Tage)</label>
+            <input type="text" inputmode="decimal" name="intervall" id="feld-intervall" required
+                   value="{{zahl .Data.Aufgabe.IntervalDays}}" class="input w-full">
+          </div>
+          <div>
+            <label class="fieldset-legend" for="feld-rot">Rot nach (Tage)</label>
+            <input type="text" inputmode="decimal" name="rot" id="feld-rot" required
+                   value="{{zahl .Data.Aufgabe.RedAfterDays}}" class="input w-full">
+          </div>
+        </div>
+
+        <label class="fieldset-label mt-2">
+          <input type="checkbox" name="aktiv" id="feld-aktiv" value="1" class="checkbox checkbox-primary"
+                 {{if .Data.Aufgabe.Active}}checked{{end}}>
+          Aufgabe ist aktiv
         </label>
-        <label class="form-control w-full">
-          <span class="label"><span class="label-text">Rot nach (Tage)</span></span>
-          <input type="text" inputmode="decimal" name="rot" id="feld-rot" required
-                 value="{{zahl .Data.Aufgabe.RedAfterDays}}" class="input input-bordered w-full">
-        </label>
-      </div>
-      <label class="label cursor-pointer justify-start gap-3 py-3">
-        <input type="checkbox" name="aktiv" id="feld-aktiv" value="1" class="checkbox checkbox-primary"
-               {{if .Data.Aufgabe.Active}}checked{{end}}>
-        <span class="label-text">Aufgabe ist aktiv</span>
-      </label>
+      </fieldset>
       <div class="mt-2 flex flex-wrap gap-2">
         <button type="submit" class="btn btn-primary" id="aufgabe-speichern">
           {{if .Data.Neu}}Aufgabe anlegen{{else}}Speichern{{end}}

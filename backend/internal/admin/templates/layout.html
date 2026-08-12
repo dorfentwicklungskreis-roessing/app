@@ -75,38 +75,37 @@
   {{if .Fehler}}
     <div role="alert" class="alert alert-error mb-4" id="formularfehler"><span>{{.Fehler}}</span></div>
   {{end}}
-  <label class="form-control w-full">
-    <span class="label"><span class="label-text">Name</span></span>
+  <fieldset class="fieldset">
+    <label class="fieldset-legend" for="feld-name">Name</label>
     <input type="text" name="name" id="feld-name" required value="{{.Ort.Name}}"
-           class="input input-bordered w-full" placeholder="z.B. Unter den Eichen — Kasten 3">
-  </label>
-  <label class="form-control w-full">
-    <span class="label"><span class="label-text">Art</span></span>
-    <select name="art" id="feld-art" class="select select-bordered w-full">
+           class="input w-full" placeholder="z.B. Unter den Eichen — Kasten 3">
+
+    <label class="fieldset-legend" for="feld-art">Art</label>
+    <select name="art" id="feld-art" class="select w-full">
       <option value="blumenkasten" {{if eq (printf "%s" .Ort.Kind) "blumenkasten"}}selected{{end}}>Blumenkasten</option>
       <option value="beet" {{if eq (printf "%s" .Ort.Kind) "beet"}}selected{{end}}>Beet</option>
       <option value="sonstiges" {{if eq (printf "%s" .Ort.Kind) "sonstiges"}}selected{{end}}>Sonstiges</option>
     </select>
-  </label>
-  <label class="form-control w-full">
-    <span class="label"><span class="label-text">Beschreibung</span></span>
-    <input type="text" name="beschreibung" id="feld-beschreibung" value="{{.Ort.Description}}"
-           class="input input-bordered w-full">
-  </label>
-  <div class="grid grid-cols-2 gap-3">
-    <label class="form-control w-full">
-      <span class="label"><span class="label-text">Breitengrad</span></span>
-      <input type="text" inputmode="decimal" name="lat" id="feld-lat" required value="{{zahl .Ort.Lat}}"
-             class="input input-bordered w-full">
+
+    <label class="fieldset-legend" for="feld-beschreibung">Beschreibung</label>
+    <input type="text" name="beschreibung" id="feld-beschreibung" value="{{.Ort.Description}}" class="input w-full">
+
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="fieldset-legend" for="feld-lat">Breitengrad</label>
+        <input type="text" inputmode="decimal" name="lat" id="feld-lat" required value="{{zahl .Ort.Lat}}"
+               class="input w-full">
+      </div>
+      <div>
+        <label class="fieldset-legend" for="feld-lon">Längengrad</label>
+        <input type="text" inputmode="decimal" name="lon" id="feld-lon" required value="{{zahl .Ort.Lon}}"
+               class="input w-full">
+      </div>
+    </div>
+
+    <label class="fieldset-label mt-2">
+      <input type="checkbox" name="aktiv" id="feld-aktiv" value="1" class="checkbox checkbox-primary" {{if .Ort.Active}}checked{{end}}>
+      Ort ist aktiv
     </label>
-    <label class="form-control w-full">
-      <span class="label"><span class="label-text">Längengrad</span></span>
-      <input type="text" inputmode="decimal" name="lon" id="feld-lon" required value="{{zahl .Ort.Lon}}"
-             class="input input-bordered w-full">
-    </label>
-  </div>
-  <label class="label cursor-pointer justify-start gap-3 py-3">
-    <input type="checkbox" name="aktiv" id="feld-aktiv" value="1" class="checkbox checkbox-primary" {{if .Ort.Active}}checked{{end}}>
-    <span class="label-text">Ort ist aktiv</span>
-  </label>
+  </fieldset>
 {{end}}
