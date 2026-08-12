@@ -67,22 +67,13 @@
           {{end}}
           · fällig ab {{datum .DueAt}}
         </div>
-        <form method="post" action="/admin/dorfpflege/aufgaben/{{.ID}}/erledigt"
-              class="mt-2 flex flex-wrap items-end gap-2">
-          <fieldset class="fieldset">
-            <label class="fieldset-legend" for="liter-{{.ID}}">Liter (optional)</label>
-            <input type="text" inputmode="decimal" name="liter" id="liter-{{.ID}}" class="input input-sm w-24"
-                   value="{{zahlOpt .Liters}}">
-          </fieldset>
-          <fieldset class="fieldset grow">
-            <label class="fieldset-legend" for="notiz-{{.ID}}">Notiz (optional)</label>
-            <input type="text" name="notiz" id="notiz-{{.ID}}" class="input input-sm w-full">
-          </fieldset>
-          <button type="submit" class="btn btn-success btn-sm erledigt-melden">Erledigt melden</button>
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <a class="btn btn-success btn-sm erledigt-melden"
+             href="/admin/dorfpflege/aufgaben/{{.ID}}/erledigt">Erledigt melden</a>
           <a class="btn btn-ghost btn-sm aufgabe-bearbeiten" href="/admin/dorfpflege/aufgaben/{{.ID}}">Bearbeiten</a>
           <a class="btn btn-ghost btn-sm text-error aufgabe-loeschen"
              href="/admin/dorfpflege/aufgaben/{{.ID}}/loeschen">Löschen</a>
-        </form>
+        </div>
       </div>
       {{else}}
       <p class="text-base-content/60" id="keine-aufgaben">Für diesen Ort ist noch keine Aufgabe angelegt.</p>
@@ -96,7 +87,7 @@
     <h2 class="text-xl font-semibold">Historie der Erledigungen</h2>
     <div class="overflow-x-auto">
       <table class="table table-sm" id="historie">
-        <thead><tr><th>Wann</th><th>Aufgabe</th><th>Wer</th><th>Menge</th><th>Notiz</th></tr></thead>
+        <thead><tr><th>Wann</th><th>Aufgabe</th><th>Wer</th><th>Menge</th><th>Notiz</th><th></th></tr></thead>
         <tbody>
           {{range .Data.Historie}}
           <tr>
@@ -105,9 +96,13 @@
             <td>{{.Erledigung.UserName}}</td>
             <td>{{liter .Erledigung.Liters}}</td>
             <td>{{.Erledigung.Note}}</td>
+            <td class="text-right">
+              <a class="btn btn-ghost btn-xs text-error" data-zuruecknehmen="{{.Erledigung.ID}}"
+                 href="/admin/dorfpflege/erledigungen/{{.Erledigung.ID}}/zuruecknehmen">Zurücknehmen</a>
+            </td>
           </tr>
           {{else}}
-          <tr><td colspan="5" class="text-center text-base-content/60" id="keine-historie">Noch nichts gemeldet.</td></tr>
+          <tr><td colspan="6" class="text-center text-base-content/60" id="keine-historie">Noch nichts gemeldet.</td></tr>
           {{end}}
         </tbody>
       </table>

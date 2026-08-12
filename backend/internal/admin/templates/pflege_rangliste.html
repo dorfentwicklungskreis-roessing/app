@@ -1,0 +1,121 @@
+{{/* Rangliste der Dorfpflege. Der Zeitraum wird über echte Links mit
+     Query-Parameter umgeschaltet — kein JavaScript, echte Seitenwechsel. */}}
+{{define "seite"}}
+<div class="breadcrumbs text-sm">
+  <ul><li><a href="/admin/dorfpflege/">Dorfpflege</a></li><li>Rangliste</li></ul>
+</div>
+
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold" id="seitentitel">Rangliste</h1>
+    <p class="text-base-content/70">Wer kümmert sich ums Dorf — und wie viel.</p>
+  </div>
+</div>
+
+<div class="join mt-4" id="zeitraum-wahl">
+  {{range .Data.Zeitraeume}}
+    <a class="btn join-item btn-sm {{if .Aktiv}}btn-primary{{end}}"
+       id="zeitraum-{{.Wert}}" href="{{.URL}}">{{.Name}}</a>
+  {{end}}
+</div>
+
+<div id="rangliste" data-zeitraum="{{.Data.Zeitraum}}">
+  {{if .Data.Einzeln}}
+    <p class="mt-2 text-sm text-base-content/60" id="zeitraum-spanne">
+      {{datum .Data.Von}} bis {{datum .Data.Bis}}
+    </p>
+  {{else}}
+    <p class="mt-2 text-sm text-base-content/60" id="zeitraum-spanne">seit dem Anfang</p>
+  {{end}}
+
+  <div class="stats mt-4 bg-base-100 shadow-sm" id="rangliste-gesamt"
+       data-erledigungen="{{.Data.Summen.Completions}}">
+    <div class="stat">
+      <div class="stat-title">Erledigungen</div>
+      <div class="stat-value text-2xl">{{.Data.Summen.Completions}}</div>
+      <div class="stat-desc">im ganzen Dorf</div>
+    </div>
+    <div class="stat">
+      <div class="stat-title">Wasser</div>
+      <div class="stat-value text-2xl">{{zahl .Data.Summen.Liters}} l</div>
+      <div class="stat-desc">{{index .Data.Summen.ByKind "giessen"}}× gegossen</div>
+    </div>
+    <div class="stat">
+      <div class="stat-title">Beteiligte</div>
+      <div class="stat-value text-2xl">{{.Data.Summen.Participants}}</div>
+      <div class="stat-desc">{{index .Data.Summen.ByKind "jaeten"}}× gejätet</div>
+    </div>
+  </div>
+
+  {{if .Data.Podest}}
+  <div class="mt-4 grid gap-4 sm:grid-cols-3" id="podest">
+    {{range .Data.Podest}}
+    <div class="card bg-base-100 shadow-sm" data-platz="{{.Rank}}">
+      <div class="card-body items-center text-center">
+        <p class="text-4xl">{{if eq .Rank 1}}🥇{{else if eq .Rank 2}}🥈{{else}}🥉{{end}}</p>
+        <h2 class="card-title">{{.UserName}}</h2>
+        <p class="text-base-content/70">
+          {{.Completions}}× erledigt{{if gt .Liters 0.0}} · {{zahl .Liters}} l{{end}}
+        </p>
+        <div class="flex flex-wrap justify-center gap-1">
+          {{range .Badges}}<span class="badge badge-primary badge-sm" title="{{.Description}}">{{.Label}}</span>{{end}}
+        </div>
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+
+  <div class="card mt-4 bg-base-100 shadow-sm">
+    <div class="card-body">
+      <h2 class="text-xl font-semibold">Alle Beteiligten</h2>
+      <div class="overflow-x-auto">
+        <table class="table" id="rangliste-tabelle">
+          <thead>
+            <tr>
+              <th>Platz</th><th>Wer</th><th>Erledigungen</th><th>Gießen</th>
+              <th>Jäten</th><th>Wasser</th><th>Zuletzt</th><th>Auszeichnungen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Data.Alle}}
+            <tr data-rang="{{.Rank}}">
+              <td>{{.Rank}}</td>
+              <td class="font-medium">{{.UserName}}</td>
+              <td>{{.Completions}}</td>
+              <td>{{index .ByKind "giessen"}}</td>
+              <td>{{index .ByKind "jaeten"}}</td>
+              <td>{{zahl .Liters}} l</td>
+              <td>{{datumOpt .LastCompletion}}</td>
+              <td>
+                <div class="flex flex-wrap gap-1">
+                  {{range .Badges}}<span class="badge badge-ghost badge-sm" title="{{.Description}}">{{.Label}}</span>{{end}}
+                </div>
+              </td>
+            </tr>
+            {{else}}
+            <tr>
+              <td colspan="8" class="text-center text-base-content/60" id="keine-erledigungen">
+                In diesem Zeitraum wurde noch nichts gemeldet.
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {{with .Data.Ich}}
+  <div class="alert mt-4" id="mein-rang" data-rang="{{.Rank}}">
+    <span>
+      {{if .Rank}}
+        Du stehst auf Platz {{.Rank}} — {{.Completions}}× erledigt.
+      {{else}}
+        In diesem Zeitraum hast du noch nichts gemeldet.
+      {{end}}
+    </span>
+  </div>
+  {{end}}
+</div>
+{{end}}

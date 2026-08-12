@@ -1,0 +1,45 @@
+{{/* Bestätigung vor dem Melden einer Erledigung. Eigene Seite statt Popup:
+     ein versehentlicher Klick trägt so nichts ein. */}}
+{{define "seite"}}
+<div class="breadcrumbs text-sm">
+  <ul>
+    <li><a href="/admin/dorfpflege/">Dorfpflege</a></li>
+    <li><a href="/admin/dorfpflege/orte/{{.Data.Ort.ID}}">{{.Data.Ort.Name}}</a></li>
+    <li>Erledigt melden</li>
+  </ul>
+</div>
+
+<div class="card mx-auto mt-2 max-w-xl bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h1 class="card-title" id="seitentitel">Erledigt melden</h1>
+    <p id="erledigt-frage">
+      Hast du <strong>{{aufgabenart .Data.Aufgabe.Kind}}</strong>
+      {{if .Data.Aufgabe.Title}}({{.Data.Aufgabe.Title}}){{end}}
+      an <strong>{{.Data.Ort.Name}}</strong> wirklich erledigt?
+    </p>
+    {{if .Data.LiterText}}
+      <p class="text-sm text-base-content/70">
+        Vorgesehen sind {{.Data.LiterText}} Liter je Durchgang.
+      </p>
+    {{end}}
+
+    <form method="post" action="{{.Data.Ziel}}">
+      <fieldset class="fieldset">
+        <label class="fieldset-legend" for="feld-liter">Menge in Litern (optional)</label>
+        <input type="text" inputmode="decimal" name="liter" id="feld-liter"
+               class="input w-full" value="{{.Data.LiterText}}">
+
+        <label class="fieldset-legend" for="feld-notiz">Notiz (optional)</label>
+        <input type="text" name="notiz" id="feld-notiz" class="input w-full"
+               placeholder="z.B. Erde war sehr trocken">
+      </fieldset>
+
+      <div class="card-actions mt-4">
+        <button type="submit" class="btn btn-success" id="erledigt-bestaetigen">Ja, erledigt</button>
+        <a class="btn btn-ghost" id="erledigt-abbrechen"
+           href="{{.Data.Zurueck}}">Abbrechen</a>
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}

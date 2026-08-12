@@ -148,7 +148,14 @@ var funcs = template.FuncMap{
 	"aufgabenart": aufgabenart,
 	"datum":       func(t time.Time) string { return t.Local().Format("02.01.2006") },
 	"datumZeit":   func(t time.Time) string { return t.Local().Format("02.01.2006, 15:04") },
-	"zahl":        zahl,
+	// datumOpt formatiert einen optionalen Zeitpunkt (leer statt Nulldatum).
+	"datumOpt": func(t *time.Time) string {
+		if t == nil {
+			return ""
+		}
+		return t.Local().Format("02.01.2006")
+	},
+	"zahl": zahl,
 	// zahlOpt formatiert eine optionale Zahl (leer statt 0) — für Formularfelder.
 	"zahlOpt": func(v *float64) string {
 		if v == nil {

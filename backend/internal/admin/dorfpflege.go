@@ -7,8 +7,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
@@ -43,7 +45,13 @@ func (a *App) registerDorfpflege(mux *http.ServeMux) {
 	post("/aufgaben/{id}", a.aufgabeSpeichern)
 	get("/aufgaben/{id}/loeschen", a.aufgabeLoeschenFrage)
 	post("/aufgaben/{id}/loeschen", a.aufgabeLoeschen)
+	get("/aufgaben/{id}/erledigt", a.erledigtFrage)
 	post("/aufgaben/{id}/erledigt", a.erledigtMelden)
+
+	get("/erledigungen/{id}/zuruecknehmen", a.erledigungZuruecknehmenFrage)
+	post("/erledigungen/{id}/zuruecknehmen", a.erledigungZuruecknehmen)
+
+	get("/rangliste", a.rangliste)
 
 	get("/einstellungen", a.einstellungenFormular)
 	post("/einstellungen", a.einstellungenSpeichern)
@@ -433,6 +441,33 @@ func (a *App) aufgabeLoeschen(w http.ResponseWriter, r *http.Request, _ session)
 	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID), http.StatusSeeOther)
 }
 
+// erledigtFrage zeigt die Bestätigungsseite vor dem Melden. Ein Klick allein
+// meldet nichts — sonst steht schnell eine Erledigung in der Historie, die es
+// nie gegeben hat.
+func (a *App) erledigtFrage(w http.ResponseWriter, r *http.Request, _ session) {
+	t, p, ok := a.aufgabeUndOrt(w, r)
+	if !ok {
+		return
+	}
+	a.render(w, r, http.StatusOK, "pflege_erledigt", view{
+		Title: "Erledigt melden", Nav: "dorfpflege",
+		Data: erledigtDaten{
+			Ort: *p, Aufgabe: *t, LiterText: zahlOderLeer(t.Liters),
+			Ziel:    fmt.Sprintf("%s/aufgaben/%d/erledigt", pflegeBasis, t.ID),
+			Zurueck: fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID),
+		},
+	})
+}
+
+type erledigtDaten struct {
+	Ort     model.Place
+	Aufgabe model.CareTask
+	// LiterText ist die vorgeschlagene Menge aus dem Gießplan.
+	LiterText string
+	Ziel      string
+	Zurueck   string
+}
+
 func (a *App) erledigtMelden(w http.ResponseWriter, r *http.Request, s session) {
 	t, p, ok := a.aufgabeUndOrt(w, r)
 	if !ok {
@@ -453,6 +488,143 @@ func (a *App) erledigtMelden(w http.ResponseWriter, r *http.Request, s session) 
 	}
 	a.setFlash(w, "success", "Erledigung für "+zitat(aufgabenName(*t))+" wurde eingetragen.")
 	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID), http.StatusSeeOther)
+}
+
+// --- Rücknahme einer Erledigung ---------------------------------------------
+
+// erledigungZuruecknehmenFrage fragt vor der Rücknahme nach — wieder auf einer
+// eigenen Seite statt per confirm().
+func (a *App) erledigungZuruecknehmenFrage(w http.ResponseWriter, r *http.Request, _ session) {
+	c, t, p, ok := a.erledigungMitAufgabe(w, r)
+	if !ok {
+		return
+	}
+	menge := ""
+	if c.Liters != nil {
+		menge = " (" + zahl(*c.Liters) + " l)"
+	}
+	a.render(w, r, http.StatusOK, "bestaetigen", view{
+		Title: "Erledigung zurücknehmen", Nav: "dorfpflege",
+		Data: bestaetigenDaten{
+			Ueberschrift: "Erledigung zurücknehmen",
+			Text: "Die Meldung von " + c.UserName + " vom " + c.DoneAt.Local().Format("02.01.2006, 15:04") +
+				" für " + zitat(aufgabenName(*t)) + " an " + zitat(p.Name) + menge + " wird gelöscht. " +
+				"Der Ampel-Status rechnet sich danach neu.",
+			Aktion:  fmt.Sprintf("%s/erledigungen/%d/zuruecknehmen", pflegeBasis, c.ID),
+			Knopf:   "Ja, Meldung zurücknehmen",
+			Zurueck: fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID),
+		},
+	})
+}
+
+func (a *App) erledigungZuruecknehmen(w http.ResponseWriter, r *http.Request, _ session) {
+	c, _, p, ok := a.erledigungMitAufgabe(w, r)
+	if !ok {
+		return
+	}
+	if err := a.db.DeleteCompletion(c.ID); err != nil {
+		a.fail(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	a.setFlash(w, "success", "Die Meldung wurde zurückgenommen.")
+	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID), http.StatusSeeOther)
+}
+
+// erledigungMitAufgabe lädt Erledigung, Aufgabe und Ort; antwortet mit 404.
+func (a *App) erledigungMitAufgabe(w http.ResponseWriter, r *http.Request) (*model.Completion, *model.CareTask, *model.Place, bool) {
+	id, err := pfadID(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return nil, nil, nil, false
+	}
+	c, err := a.db.GetCompletion(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return nil, nil, nil, false
+	}
+	t, err := a.db.GetTask(c.TaskID)
+	if err != nil {
+		http.NotFound(w, r)
+		return nil, nil, nil, false
+	}
+	p, err := a.db.GetPlace(t.PlaceID)
+	if err != nil {
+		http.NotFound(w, r)
+		return nil, nil, nil, false
+	}
+	return c, t, p, true
+}
+
+// --- Rangliste --------------------------------------------------------------
+
+type zeitraumWahl struct {
+	Wert  model.Period
+	Name  string
+	URL   string
+	Aktiv bool
+}
+
+type ranglisteDaten struct {
+	Zeitraum   model.Period
+	Zeitraeume []zeitraumWahl
+	// Podest: die ersten drei Plätze, Rest: alle weiteren.
+	Podest  []model.LeaderboardEntry
+	Alle    []model.LeaderboardEntry
+	Summen  model.LeaderboardTotals
+	Ich     *model.LeaderboardEntry
+	Von     time.Time
+	Bis     time.Time
+	Einzeln bool
+}
+
+// zeitraeume sind die auswählbaren Zeiträume in der Reihenfolge der Anzeige.
+var zeitraeume = []struct {
+	Wert model.Period
+	Name string
+}{
+	{model.PeriodWeek, "Diese Woche"},
+	{model.PeriodMonth, "Dieser Monat"},
+	{model.PeriodSeason, "Saison"},
+	{model.PeriodYear, "Dieses Jahr"},
+	{model.PeriodAll, "Gesamt"},
+}
+
+func (a *App) rangliste(w http.ResponseWriter, r *http.Request, s session) {
+	zeitraum, err := model.ParsePeriod(r.URL.Query().Get("zeitraum"))
+	if err != nil {
+		a.fail(w, r, http.StatusBadRequest, err)
+		return
+	}
+	// Der eigene Rang wird für die angemeldete Person mitgeliefert.
+	liste, err := api.AssembleLeaderboard(a.db, a.now(), zeitraum, 0,
+		auth.User{Sub: s.Sub, Name: anzeigeName(s)})
+	if err != nil {
+		a.fail(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
+	wahl := make([]zeitraumWahl, 0, len(zeitraeume))
+	for _, z := range zeitraeume {
+		wahl = append(wahl, zeitraumWahl{
+			Wert: z.Wert, Name: z.Name,
+			URL:   pflegeBasis + "/rangliste?zeitraum=" + string(z.Wert),
+			Aktiv: z.Wert == zeitraum,
+		})
+	}
+	podest := liste.Entries
+	if len(podest) > 3 {
+		podest = podest[:3]
+	}
+	// Bis ist die exklusive Obergrenze — angezeigt wird der letzte Tag davor.
+	a.render(w, r, http.StatusOK, "pflege_rangliste", view{
+		Title: "Rangliste", Nav: "dorfpflege",
+		Data: ranglisteDaten{
+			Zeitraum: zeitraum, Zeitraeume: wahl,
+			Podest: podest, Alle: liste.Entries, Summen: liste.Totals, Ich: liste.Me,
+			Von: liste.From, Bis: liste.To.Add(-time.Second),
+			Einzeln: zeitraum != model.PeriodAll,
+		},
+	})
 }
 
 // aufgabeUndOrt lädt Aufgabe samt zugehörigem Ort; antwortet selbst mit 404.
@@ -575,6 +747,14 @@ func aufgabenName(t model.CareTask) string {
 		return t.Title
 	}
 	return aufgabenart(t.Kind)
+}
+
+// zahlOderLeer formatiert eine optionale Zahl (leer statt 0).
+func zahlOderLeer(v *float64) string {
+	if v == nil {
+		return ""
+	}
+	return zahl(*v)
 }
 
 // zitat setzt einen Namen in deutsche Anführungszeichen.

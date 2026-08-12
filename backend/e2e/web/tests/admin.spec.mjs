@@ -16,9 +16,11 @@ test('Startseite antwortet und verlinkt Verwaltung und App', async ({ page }) =>
 
   await page.goto('/');
   await expect(page.getByRole('link', { name: /Verwaltung/ })).toBeVisible();
-  // Die Dorf-App ist mehr als Dorfpflege — das muss die Startseite sagen.
+  // Die Dorf-App ist mehr als Dorfpflege — das muss die Startseite sagen,
+  // ohne Bereiche anzukündigen, die es noch nicht gibt.
   await expect(page.locator('body')).toContainText('Dorf-App Rössing');
-  await expect(page.locator('body')).toContainText('Dorfladen ERNA');
+  await expect(page.locator('body')).toContainText('Dorfpflege');
+  await expect(page.locator('body')).toContainText('Weitere Bereiche');
 
   const css = await page.request.get('/admin/static/app.css');
   expect(css.status()).toBe(200);
@@ -122,9 +124,21 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     await expect(page).toHaveURL(ortURL);
   });
 
-  await test.step('Erledigung melden macht den Ort grün', async () => {
+  await test.step('Erledigung melden fragt auf einer eigenen Seite nach', async () => {
     const aufgabe = page.locator('[data-aufgabe-id]').first();
     await aufgabe.locator('.erledigt-melden').click();
+    await expect(page).toHaveURL(/\/admin\/dorfpflege\/aufgaben\/\d+\/erledigt$/);
+    await expect(page.locator('#seitentitel')).toContainText('Erledigt melden');
+    await expect(page.locator('body')).toContainText(ortsname);
+    // Abbrechen meldet nichts.
+    await page.locator('#erledigt-abbrechen').click();
+    await expect(page).toHaveURL(ortURL);
+    await expect(page.locator('[data-aufgabe-id]').first()).toContainText('noch nie erledigt');
+
+    await page.locator('[data-aufgabe-id]').first().locator('.erledigt-melden').click();
+    await page.locator('#feld-liter').fill('12');
+    await page.locator('#feld-notiz').fill('vom Browser-E2E');
+    await page.locator('#erledigt-bestaetigen').click();
     await expect(page).toHaveURL(ortURL);
     await expect(page.locator('#meldung')).toHaveAttribute('data-art', 'success');
     await expect(page.locator('[data-aufgabe-id]').first()).toHaveAttribute('data-status', 'green');
@@ -132,6 +146,43 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     await expect(page.locator('[data-aufgabe-id]').first()).toContainText('zuletzt');
     // Historie steht auf derselben Seite.
     await expect(page.locator('#historie tbody tr').first()).toContainText(state().admin.userName);
+    await expect(page.locator('#historie tbody tr').first()).toContainText('vom Browser-E2E');
+  });
+
+  await test.step('Rangliste zeigt die Erledigung und lässt den Zeitraum umschalten', async () => {
+    await page.goto('/admin/dorfpflege/');
+    await page.locator('#zur-rangliste').click();
+    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/rangliste`);
+    await expect(page.locator('#seitentitel')).toHaveText('Rangliste');
+    await expect(page.locator('#rangliste')).toHaveAttribute('data-zeitraum', 'saison');
+    await expect(page.locator('#rangliste-gesamt')).toBeVisible();
+
+    // Zeitraum-Umschaltung ist ein echter Seitenwechsel per Link. Geprüft wird
+    // auf „gesamt", damit der Test unabhängig vom Kalender läuft (außerhalb
+    // der Saison wäre die Standardliste zu Recht leer).
+    await page.locator('#zeitraum-gesamt').click();
+    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/rangliste?zeitraum=gesamt`);
+    await expect(page.locator('#rangliste')).toHaveAttribute('data-zeitraum', 'gesamt');
+    await expect(page.locator('#rangliste-tabelle')).toContainText(admin.userName);
+    const gesamt = Number(await page.locator('#rangliste-gesamt').getAttribute('data-erledigungen'));
+    expect(gesamt).toBeGreaterThanOrEqual(1);
+    await expect(page.locator('#mein-rang')).toBeVisible();
+  });
+
+  await test.step('Irrtümliche Meldung über eine Bestätigungsseite zurücknehmen', async () => {
+    await page.goto(ortURL);
+    await page.locator('[data-zuruecknehmen]').first().click();
+    await expect(page).toHaveURL(/\/erledigungen\/\d+\/zuruecknehmen$/);
+    await page.locator('#loeschen-abbrechen').click();
+    await expect(page).toHaveURL(ortURL);
+    await expect(page.locator('#historie tbody tr').first()).toContainText(state().admin.userName);
+
+    await page.locator('[data-zuruecknehmen]').first().click();
+    await page.locator('#loeschen-bestaetigen').click();
+    await expect(page).toHaveURL(ortURL);
+    await expect(page.locator('#keine-historie')).toBeVisible();
+    // Ohne Erledigung ist die Aufgabe wieder offen.
+    await expect(page.locator('[data-aufgabe-id]').first()).toContainText('noch nie erledigt');
   });
 
   await test.step('Hitzefaktor auf eigener Seite setzen', async () => {
@@ -232,7 +283,20 @@ test('Verwaltung funktioniert vollständig ohne JavaScript', async ({ browser })
     await page.locator('#aufgabe-speichern').click();
     await expect(page).toHaveURL(ortURL);
     await page.locator('.erledigt-melden').first().click();
+    await page.locator('#erledigt-bestaetigen').click();
     await expect(page.locator('#ort-status')).toHaveAttribute('data-status', 'green');
+
+    // Rangliste ist auch ohne JavaScript vollständig bedienbar.
+    await page.goto('/admin/dorfpflege/rangliste?zeitraum=gesamt');
+    await expect(page.locator('#rangliste-tabelle')).toContainText(admin.userName);
+    await page.locator('#zeitraum-monat').click();
+    await expect(page.locator('#rangliste')).toHaveAttribute('data-zeitraum', 'monat');
+
+    // Und die Rücknahme ebenso.
+    await page.goto(ortURL);
+    await page.locator('[data-zuruecknehmen]').first().click();
+    await page.locator('#loeschen-bestaetigen').click();
+    await expect(page.locator('#keine-historie')).toBeVisible();
 
     // Löschen über die Bestätigungsseite — ohne confirm() geht das auch ohne JS.
     await page.locator('#ort-loeschen').click();
