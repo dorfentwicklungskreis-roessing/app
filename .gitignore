@@ -13,6 +13,9 @@ backend/dorfserver
 *.sqlite-shm
 *.sqlite-wal
 
+# E2E: von Zitadel generierter Admin-Key
+backend/e2e/machinekey/
+
 # IDE
 .idea/
 *.iml

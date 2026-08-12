@@ -35,10 +35,32 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
 
+  # Voller E2E: echtes Zitadel (compose) + echtes Backend-Binary, keine Mocks.
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: backend/go.sum
+      - name: Zitadel + Postgres starten
+        run: |
+          mkdir -p e2e/machinekey && chmod 777 e2e/machinekey
+          docker compose -f e2e/docker-compose.yml up -d --wait --wait-timeout 180
+      - name: E2E-Tests
+        run: go test -tags e2e -v -count=1 ./e2e/
+      - name: Compose-Logs bei Fehler
+        if: failure()
+        run: docker compose -f e2e/docker-compose.yml logs --tail 100
+
   # 1) Pro Architektur ein natives Image bauen (nur auf main).
   build:
     if: github.event_name != 'pull_request'
-    needs: test
+    needs: [test, e2e]
     strategy:
       fail-fast: true
       matrix:

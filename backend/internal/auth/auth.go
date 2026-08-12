@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -64,12 +65,32 @@ func NewOIDCVerifier(ctx context.Context, issuer string, audiences []string) (*O
 }
 
 type zitadelClaims struct {
-	Name              string          `json:"name"`
-	PreferredUsername string          `json:"preferred_username"`
-	Email             string          `json:"email"`
-	Audience          json.RawMessage `json:"aud"`
-	// Projektrollen: {"admin": {"<orgid>": "<orgdomain>"}, ...}
-	ProjectRoles map[string]any `json:"urn:zitadel:iam:org:project:roles"`
+	Name              string `json:"name"`
+	PreferredUsername string `json:"preferred_username"`
+	Email             string `json:"email"`
+}
+
+// Zitadel liefert Rollen je nach Token-Typ unter verschiedenen Claims:
+// generisch (urn:zitadel:iam:org:project:roles) bei Login-Tokens mit
+// Role-Assertion, projekt-spezifisch (…:project:<id>:roles) z.B. bei
+// Machine-User-Tokens mit Projekt-Audience. Wir akzeptieren beide.
+var roleClaimPattern = regexp.MustCompile(`^urn:zitadel:iam:org:project:(\d+:)?roles$`)
+
+func extractRoles(allClaims map[string]json.RawMessage) map[string]bool {
+	roles := map[string]bool{}
+	for claim, rawValue := range allClaims {
+		if !roleClaimPattern.MatchString(claim) {
+			continue
+		}
+		var m map[string]any
+		if err := json.Unmarshal(rawValue, &m); err != nil {
+			continue
+		}
+		for r := range m {
+			roles[r] = true
+		}
+	}
+	return roles
 }
 
 func (o *OIDCVerifier) Verify(ctx context.Context, raw string) (User, error) {
@@ -81,15 +102,15 @@ func (o *OIDCVerifier) Verify(ctx context.Context, raw string) (User, error) {
 	if err := tok.Claims(&claims); err != nil {
 		return User{}, err
 	}
+	var allClaims map[string]json.RawMessage
+	if err := tok.Claims(&allClaims); err != nil {
+		return User{}, err
+	}
 	name := claims.Name
 	if name == "" {
 		name = claims.PreferredUsername
 	}
-	roles := map[string]bool{}
-	for r := range claims.ProjectRoles {
-		roles[r] = true
-	}
-	return User{Sub: tok.Subject, Name: name, Email: claims.Email, Roles: roles}, nil
+	return User{Sub: tok.Subject, Name: name, Email: claims.Email, Roles: extractRoles(allClaims)}, nil
 }
 
 // Middleware erzwingt ein gültiges Bearer-Token und legt den Nutzer in den Context.

@@ -87,6 +87,24 @@ func TestOIDCVerifier(t *testing.T) {
 		}
 	})
 
+	t.Run("projekt-spezifischer Rollen-Claim (Machine-User-Token)", func(t *testing.T) {
+		// Zitadel nutzt bei Tokens mit Projekt-Audience den Claim
+		// urn:zitadel:iam:org:project:<projectid>:roles — in Produktion
+		// verifiziert am 12.08.2026, Bug-Fix-Regression-Test.
+		raw := f.token(t, map[string]any{
+			"urn:zitadel:iam:org:project:385941791695700163:roles": map[string]any{
+				"admin": map[string]any{"377268803274342501": "rössing.id.xn--rssing-wxa.de"},
+			},
+		})
+		u, err := v.Verify(context.Background(), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !u.IsAdmin() {
+			t.Fatalf("admin-Rolle aus projekt-spezifischem Claim nicht erkannt: %+v", u)
+		}
+	})
+
 	t.Run("ohne Rollen kein Admin", func(t *testing.T) {
 		u, err := v.Verify(context.Background(), f.token(t, map[string]any{"name": "Erna"}))
 		if err != nil {
