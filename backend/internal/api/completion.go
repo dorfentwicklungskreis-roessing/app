@@ -58,6 +58,17 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 			"nur Admins dürfen Meldungen nachtragen oder die Sperrfrist übergehen")
 	}
 
+	// Stillgelegtes nimmt keine Meldungen mehr an: Ist die Aufgabe oder der
+	// ganze Ort auf inaktiv gesetzt (Kasten im Winter, Beet aufgegeben), wird
+	// dort nicht mehr gepflegt — und es soll auch nichts mehr gemeldet und
+	// gewertet werden. Admins können per force nachtragen, was vor der
+	// Stilllegung noch geleistet wurde.
+	if !in.Force {
+		if err := pruefeAktiv(d, *task); err != nil {
+			return nil, err
+		}
+	}
+
 	doneAt := now
 	if in.DoneAt != "" {
 		t, err := time.Parse(time.RFC3339, in.DoneAt)
@@ -144,3 +155,26 @@ func LockedUntil(task model.CareTask, last *model.Completion, now time.Time, fac
 	frei, _ := model.NextAllowed(task, last, factor)
 	return &frei
 }
+
+// pruefeAktiv weist Meldungen auf stillgelegte Aufgaben und Orte ab. Der
+// Status ist 409: Die Anfrage ist in Ordnung, sie passt nur nicht zum
+// aktuellen Zustand — genauso wie bei der Sperrfrist.
+func pruefeAktiv(d *db.DB, task model.CareTask) error {
+	if !task.Active {
+		return completionErr(http.StatusConflict,
+			"Diese Aufgabe ist derzeit deaktiviert und nimmt keine Meldungen an.")
+	}
+	place, err := d.GetPlace(task.PlaceID)
+	if err != nil {
+		// Ohne Ort gibt es nichts zu pflegen.
+		return completionErr(http.StatusNotFound, "Der Ort zu dieser Aufgabe wurde nicht gefunden.")
+	}
+	if !place.Active {
+		return completionErr(http.StatusConflict,
+			"Der Ort %s ist derzeit deaktiviert und nimmt keine Meldungen an.", zitat(place.Name))
+	}
+	return nil
+}
+
+// zitat setzt einen Namen in deutsche Anführungszeichen.
+func zitat(s string) string { return "„" + s + "“" }

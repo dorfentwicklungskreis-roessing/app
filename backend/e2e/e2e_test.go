@@ -366,6 +366,53 @@ func TestEndToEnd(t *testing.T) {
 		}
 	})
 
+	// --- Stilllegung ---
+	// Eine deaktivierte Aufgabe (Kasten im Winter) oder ein deaktivierter Ort
+	// nehmen keine Meldungen mehr an. Auch das muss am Server hängen.
+	t.Run("Stillgelegtes nimmt keine Meldungen an", func(t *testing.T) {
+		aufgabePfad := fmt.Sprintf("/api/v1/tasks/%.0f", taskID)
+		ortPfad := fmt.Sprintf("/api/v1/places/%.0f", placeID)
+		meldePfad := fmt.Sprintf("/api/v1/tasks/%.0f/completions", taskID)
+		aufgabe := func(aktiv bool) {
+			t.Helper()
+			resp, out := request(t, "PUT", aufgabePfad, adminToken, map[string]any{
+				"kind": "giessen", "liters": 10, "intervalDays": 7, "redAfterDays": 14, "active": aktiv})
+			if resp.StatusCode != 200 {
+				t.Fatalf("Aufgabe auf active=%v: HTTP %d: %v", aktiv, resp.StatusCode, out)
+			}
+		}
+		ort := func(aktiv bool) {
+			t.Helper()
+			resp, out := request(t, "PUT", ortPfad, adminToken, map[string]any{
+				"name": "E2E-Kasten", "kind": "blumenkasten", "lat": 52.211, "lon": 9.87, "active": aktiv})
+			if resp.StatusCode != 200 {
+				t.Fatalf("Ort auf active=%v: HTTP %d: %v", aktiv, resp.StatusCode, out)
+			}
+		}
+
+		aufgabe(false)
+		resp, out := request(t, "POST", meldePfad, memberToken, map[string]any{"liters": 10})
+		if resp.StatusCode != 409 {
+			t.Fatalf("Meldung auf inaktive Aufgabe: HTTP %d, erwartet 409: %v", resp.StatusCode, out)
+		}
+		if text, _ := out["error"].(string); !strings.Contains(text, "deaktiviert") {
+			t.Fatalf("409 ohne verständlichen Grund: %v", out)
+		}
+
+		// Jetzt die Aufgabe wieder an, dafür der ganze Ort aus.
+		aufgabe(true)
+		ort(false)
+		resp, out = request(t, "POST", meldePfad, memberToken, map[string]any{"liters": 10})
+		if resp.StatusCode != 409 {
+			t.Fatalf("Meldung an inaktivem Ort: HTTP %d, erwartet 409: %v", resp.StatusCode, out)
+		}
+		if text, _ := out["error"].(string); !strings.Contains(text, "deaktiviert") {
+			t.Fatalf("409 ohne verständlichen Grund: %v", out)
+		}
+		// Aufräumen: Der Rest des Tests rechnet mit einem aktiven Ort.
+		ort(true)
+	})
+
 	// --- MCP ---
 	t.Run("MCP ohne Token → 401 + OAuth-Metadata", func(t *testing.T) {
 		resp, _ := mcpCall(t, "", "tools/list", nil)

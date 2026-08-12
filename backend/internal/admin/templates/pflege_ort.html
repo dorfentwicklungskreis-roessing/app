@@ -11,8 +11,13 @@
 
 <div class="flex flex-wrap items-center justify-between gap-3">
   <h1 class="text-2xl font-bold" id="seitentitel">{{.Data.Ort.Name}}</h1>
-  <span class="badge badge-lg {{statusBadge .Data.Ort.Status}}" id="ort-status"
-        data-status="{{.Data.Ort.Status}}">{{statusText .Data.Ort.Status}}</span>
+  <div class="flex flex-wrap items-center gap-2">
+    {{if not .Data.Ort.Active}}
+      <span class="badge badge-ghost" id="ort-inaktiv" data-ort-inaktiv>Ort deaktiviert</span>
+    {{end}}
+    <span class="badge badge-lg {{statusBadge .Data.Ort.Status}}" id="ort-status"
+          data-status="{{.Data.Ort.Status}}">{{statusText .Data.Ort.Status}}</span>
+  </div>
 </div>
 
 <div class="mt-4 grid gap-4 lg:grid-cols-2">
@@ -72,9 +77,19 @@
           Bereits erledigt — wieder ab {{datumZeitOpt .LockedUntil}}
         </div>
         {{end}}
+        {{/* Stillgelegtes nimmt nichts an: kein Melden-Knopf, dafür der Grund.
+             Nachtragen geht weiterhin über die Aufgabe selbst. */}}
+        {{if not (and $.Data.Ort.Active .Active)}}
+        <div class="mt-1 text-sm text-base-content/70" data-stillgelegt>
+          {{if not .Active}}Diese Aufgabe ist deaktiviert und nimmt keine Meldungen an.
+          {{else}}Der Ort ist deaktiviert und nimmt keine Meldungen an.{{end}}
+        </div>
+        {{end}}
         <div class="mt-2 flex flex-wrap items-center gap-2">
+          {{if and $.Data.Ort.Active .Active}}
           <a class="btn btn-success btn-sm erledigt-melden"
              href="/admin/dorfpflege/aufgaben/{{.ID}}/erledigt">Erledigt melden</a>
+          {{end}}
           <a class="btn btn-ghost btn-sm aufgabe-bearbeiten" href="/admin/dorfpflege/aufgaben/{{.ID}}">Bearbeiten</a>
           <a class="btn btn-ghost btn-sm text-error aufgabe-loeschen"
              href="/admin/dorfpflege/aufgaben/{{.ID}}/loeschen">Löschen</a>

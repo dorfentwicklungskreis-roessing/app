@@ -466,8 +466,9 @@ func (a *App) zeigeErledigtFrage(w http.ResponseWriter, r *http.Request, status 
 		Title: "Erledigt melden", Nav: "dorfpflege",
 		Data: erledigtDaten{
 			Ort: p, Aufgabe: t, LiterText: zahlOderLeer(t.Liters), Gesperrt: gesperrt, Fehler: fehler,
-			Ziel:    fmt.Sprintf("%s/aufgaben/%d/erledigt", pflegeBasis, t.ID),
-			Zurueck: fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID),
+			Stillgelegt: stilllegungsGrund(p, t),
+			Ziel:        fmt.Sprintf("%s/aufgaben/%d/erledigt", pflegeBasis, t.ID),
+			Zurueck:     fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID),
 		},
 	})
 }
@@ -479,6 +480,9 @@ type erledigtDaten struct {
 	LiterText string
 	// Gesperrt: Ende der Sperrfrist, wenn die Aufgabe frisch erledigt ist.
 	Gesperrt *time.Time
+	// Stillgelegt erklärt, warum hier gerade nichts zu melden ist (Aufgabe
+	// oder Ort auf inaktiv gesetzt). Leer, wenn alles läuft.
+	Stillgelegt string
 	// Fehler steht in der Seite, wenn eine Meldung abgewiesen wurde.
 	Fehler  string
 	Ziel    string
@@ -779,6 +783,18 @@ func aufgabenName(t model.CareTask) string {
 		return t.Title
 	}
 	return aufgabenart(t.Kind)
+}
+
+// stilllegungsGrund erklärt, warum an dieser Aufgabe gerade nichts gemeldet
+// werden kann. Leerer Text = alles in Ordnung.
+func stilllegungsGrund(p model.Place, t model.CareTask) string {
+	switch {
+	case !t.Active:
+		return "Diese Aufgabe ist deaktiviert und nimmt keine Meldungen an."
+	case !p.Active:
+		return "Der Ort " + zitat(p.Name) + " ist deaktiviert und nimmt keine Meldungen an."
+	}
+	return ""
 }
 
 // zahlOderLeer formatiert eine optionale Zahl (leer statt 0).

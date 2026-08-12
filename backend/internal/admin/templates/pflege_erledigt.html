@@ -17,6 +17,14 @@
       {{if .Data.Aufgabe.Title}}({{.Data.Aufgabe.Title}}){{end}}
       an <strong>{{.Data.Ort.Name}}</strong> wirklich erledigt?
     </p>
+    {{if .Data.Stillgelegt}}
+      {{/* Aufgabe oder Ort sind stillgelegt (z.B. Kasten im Winter). Gemeldet
+           wird hier nichts mehr; Admins dürfen bewusst nachtragen. */}}
+      <div class="alert alert-warning" id="erledigt-stillgelegt">
+        <span>{{.Data.Stillgelegt}}</span>
+      </div>
+    {{end}}
+
     {{if .Data.Gesperrt}}
       {{/* Der Spielschutz sperrt die Aufgabe nach einer Erledigung. Admins
            dürfen ihn übergehen — aber nur bewusst, per Haken im Formular. */}}
@@ -44,7 +52,15 @@
         <input type="text" name="notiz" id="feld-notiz" class="input w-full"
                placeholder="z.B. Erde war sehr trocken">
 
-        {{if .Data.Gesperrt}}
+        {{if .Data.Stillgelegt}}
+      {{/* Aufgabe oder Ort sind stillgelegt (z.B. Kasten im Winter). Gemeldet
+           wird hier nichts mehr; Admins dürfen bewusst nachtragen. */}}
+      <div class="alert alert-warning" id="erledigt-stillgelegt">
+        <span>{{.Data.Stillgelegt}}</span>
+      </div>
+    {{end}}
+
+    {{if .Data.Gesperrt}}
         <label class="label mt-2 items-start gap-2" for="feld-uebergehen">
           <input type="checkbox" name="uebergehen" id="feld-uebergehen" value="1" class="checkbox checkbox-sm">
           <span>Sperrfrist übergehen und trotzdem eintragen — für telefonisch
