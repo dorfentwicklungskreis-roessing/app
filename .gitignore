@@ -16,6 +16,14 @@ backend/dorfserver
 # E2E: von Zitadel generierter Admin-Key
 backend/e2e/machinekey/
 
+# E2E: Browser-Tests (Playwright)
+backend/e2e/web/node_modules/
+backend/e2e/web/test-results/
+backend/e2e/web/playwright-report/
+backend/e2e/web/blob-report/
+backend/e2e/web/.e2e-state.json
+backend/e2e/web/backend.log
+
 # IDE
 .idea/
 *.iml
