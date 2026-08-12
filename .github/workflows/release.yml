@@ -81,19 +81,32 @@ jobs:
             --groups tester \
             --release-notes "Automatischer Build ${{ github.ref_name }}"
 
-      - name: Play-Store-Upload (falls Secret vorhanden)
+      # Vor dem Play-Upload: Store-Metadaten prüfen. Ein fehlender oder zu
+      # langer Änderungshinweis soll auffallen, bevor Google das Release
+      # ablehnt. Läuft auch ohne Play-Secret, kostet nichts.
+      - name: Store-Metadaten prüfen
+        working-directory: .
+        run: python3 store/check_metadata.py
+
+      - name: Play-Store-Upload (nur bei Tags, falls Secret vorhanden)
+        # Nur getaggte Stände gehen in den Store; ein workflow_dispatch würde
+        # sonst denselben versionCode ein zweites Mal hochladen und scheitern.
+        if: startsWith(github.ref, 'refs/tags/')
         working-directory: .
         env:
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
           if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
-            echo "Play-Secret fehlt — Upload übersprungen."
+            echo "::notice::PLAY_SERVICE_ACCOUNT_JSON fehlt — Play-Upload übersprungen."
             exit 0
           fi
+          umask 077
           echo "$PLAY_SERVICE_ACCOUNT_JSON" > /tmp/play-sa.json
           pip install --quiet google-api-python-client google-auth
           python .github/scripts/upload_play.py \
             --package de.roessing.app \
             --aab android/app/build/outputs/bundle/release/app-release.aab \
             --credentials /tmp/play-sa.json \
+            --metadata store/metadata/android \
             --track internal
+          rm -f /tmp/play-sa.json

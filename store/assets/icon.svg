@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Quelle für store/metadata/android/de-DE/images/icon.png (512x512, Play Store).
+
+  Nachgebaut aus dem Adaptive Icon der App:
+    android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+    android/app/src/main/res/drawable/ic_launcher_foreground.xml (Blume)
+    android/app/src/main/res/values/colors.xml (Hintergrund #3B6939)
+
+  Geometrie: Das Adaptive Icon hat eine 108dp-Fläche, sichtbar ist davon nur
+  die mittige 72dp-Zone. Diese Zone ist hier auf 512x512 hochgerechnet
+  (Faktor 512/72 = 7,1111; Versatz -18dp). Die Blütenblätter sind im
+  Vector-Drawable als Kreisbögen notiert — hier stehen dieselben Kreise als
+  <circle>, damit die Datei ohne SVG-Renderer-Eigenheiten reproduzierbar ist.
+  Zusätzlich ist die Gruppenskalierung 0.6 um den Punkt (54,54) eingerechnet.
+
+  Neu rendern: store/assets/render.sh
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect x="0" y="0" width="512" height="512" fill="#3B6939"/>
+  <!-- Blütenblätter (r=42.67) -->
+  <circle cx="256" cy="162.13" r="42.67" fill="#FFF3C4"/>
+  <circle cx="256" cy="332.80" r="42.67" fill="#FFF3C4"/>
+  <circle cx="170.67" cy="247.47" r="42.67" fill="#FFF3C4"/>
+  <circle cx="341.33" cy="247.47" r="42.67" fill="#FFF3C4"/>
+  <!-- Blütenmitte -->
+  <circle cx="256" cy="256" r="51.20" fill="#F9A825"/>
+</svg>

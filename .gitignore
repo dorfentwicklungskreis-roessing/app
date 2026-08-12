@@ -32,3 +32,7 @@ backend/internal/admin/node_modules/
 .idea/
 *.iml
 .vscode/
+
+# Python
+__pycache__/
+*.pyc

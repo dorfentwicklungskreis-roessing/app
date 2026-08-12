@@ -1,0 +1,7 @@
+Erste Fassung im Play Store.
+
+- Karte der Blumenkästen und Beete mit Ampel-Status
+- Gieß- und Jätpläne mit Intervallen und Hitzefaktor
+- Erledigungen melden (mit Rückfrage) und zurücknehmen
+- Rangliste für Woche, Monat, Saison, Jahr und gesamt
+- Anmeldung mit der Rössing-ID

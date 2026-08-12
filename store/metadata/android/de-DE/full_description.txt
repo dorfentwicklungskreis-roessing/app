@@ -1,0 +1,30 @@
+Die Dorf-App ist die App für Rössing (Gemeinde Nordstemmen). Sie richtet sich an die Menschen im Dorf, die hier etwas tun — angefangen bei der Dorfpflege.
+
+WICHTIG VOR DEM INSTALLIEREN
+Die App lässt sich nur mit einer Rössing-ID benutzen. Das ist das Nutzerkonto des Dorfes, betrieben auf id.rössing.de. Ohne dieses Konto kommt man nicht über den Anmeldebildschirm hinaus. Wer im Dorf mitmachen und eine Rössing-ID bekommen möchte, spricht den Dorfentwicklungskreis an.
+
+WAS DIE APP KANN
+
+Dorfkarte
+Alle Blumenkästen, Beete und sonstigen Pflege-Orte des Dorfes auf einer Karte. Jeder Ort hat einen Ampel-Status: grün heißt versorgt, gelb heißt fällig, rot heißt überfällig.
+
+Gieß- und Jätpläne
+Zu jedem Ort gehören Pflegeaufgaben mit einem Intervall — zum Beispiel „alle drei Tage gießen, 10 Liter". Daraus errechnet die App, wann etwas fällig wird. Bei Hitze lässt sich zentral ein Faktor setzen, der nur die Gieß-Aufgaben schneller fällig werden lässt.
+
+Erledigungen melden
+Wer gegossen oder gejätet hat, meldet das mit zwei Tippern. Vorher fragt die App noch einmal nach, damit ein Fehlgriff nichts einträgt. Die Meldung erscheint mit dem eigenen Namen in der Historie des Ortes und lässt sich auch wieder zurücknehmen.
+
+Rangliste
+Wer hat wie oft gegossen oder gejätet — für Woche, Monat, Gießsaison, Jahr oder insgesamt. Dazu die Gesamtsumme des ganzen Dorfes und ein paar freundliche Auszeichnungen. Das ist als Ansporn gedacht, nicht als Wettkampf.
+
+WAS DIE APP NICHT MACHT
+Kein Zugriff auf den Standort des Geräts. Keine Werbung, kein Tracking, keine Analyse-SDKs. Keine Weitergabe von Daten an Dritte zu Werbezwecken. Kein Kauf in der App.
+
+DATEN
+Beim Anmelden kommen Name und E-Mail-Adresse aus der Rössing-ID. Gespeichert werden auf dem Server des Dorfes nur die Erledigungsmeldungen: Nutzerkennung, angezeigter Name, Zeitpunkt, gegebenenfalls Liter und eine Notiz. Diese Meldungen sind für alle angemeldeten Dorfbewohner sichtbar — das ist der Zweck der gemeinsamen Übersicht. Die Verbindung zum Server läuft verschlüsselt über HTTPS. Das Kartenmaterial kommt von OpenFreeMap (OpenStreetMap-Daten); dabei erfährt dieser Dienst die IP-Adresse des Geräts, wie bei jedem Aufruf einer Internetseite.
+
+BETRIEB
+Server und Nutzerkonten betreibt der Dorfentwicklungskreis Rössing selbst. Es steckt kein Unternehmen dahinter und es wird nichts verkauft.
+
+AUSBLICK
+Die Dorfpflege ist der erste Bereich der App. Weitere Bereiche können folgen; versprochen wird hier nichts, was noch nicht da ist.

@@ -166,3 +166,31 @@ Multi-Arch-Image (amd64 + arm64, native Runner), bumpt den Tag in
 Git-Tag `v*` → signiertes APK/AAB als GitHub-Release. Play-Store-Upload und
 Firebase App Distribution aktivieren sich, sobald die Secrets existieren
 (siehe `.github/workflows/release.yml`, Kopfkommentar).
+
+## Veröffentlichung im Play Store
+
+Alles, was ohne Play-Console-Konto vorbereitbar ist, liegt in **`store/`**:
+
+| Datei | Inhalt |
+|---|---|
+| `store/metadata/android/{de-DE,en-US}/` | Store-Texte im Fastlane-Format (Titel, Kurz-/Langbeschreibung, Änderungshinweise je `versionCode`) |
+| `store/metadata/android/de-DE/images/` | Icon 512×512 und Feature-Grafik 1024×500; Screenshots fehlen noch (README im Unterverzeichnis erklärt, wie sie entstehen) |
+| `store/assets/` | SVG-Quellen der Grafiken + `render.sh` |
+| `store/veroeffentlichung.md` | Schritt-für-Schritt in der Play Console: Kontotyp, Play App Signing, Service-Account, Secret |
+| `store/data-safety.md` | Antworten für das Formular „Datensicherheit", belegt am Code |
+| `store/content-rating.md` | Antworten für den IARC-Fragebogen zur Altersfreigabe |
+| `store/datenschutz.md` | Kurzfassung; die verbindliche Erklärung kommt öffentlich auf roessing.de |
+
+```sh
+python3 store/check_metadata.py   # Zeichenlimits, Vollständigkeit, Bildmaße
+bash store/assets/render.sh       # Grafiken neu erzeugen (ImageMagick)
+```
+
+`.github/workflows/store.yml` prüft die Metadaten bei jeder Änderung an
+`store/` oder am `versionCode`; der Release-Workflow prüft sie erneut, bevor er
+das AAB auf den Play-Track **`internal`** lädt. Fehlt das Secret
+`PLAY_SERVICE_ACCOUNT_JSON`, wird der Upload übersprungen.
+
+**Offen:** Der `versionCode` steht fest in `android/app/build.gradle.kts`; Play
+verlangt bei jedem Upload einen höheren. Vorschlag zur Automatisierung in
+`store/README.md`.

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Quelle für store/metadata/android/de-DE/images/featureGraphic.png (1024x500).
+
+  Enthält bewusst NUR Hintergrund und Blume — der Schriftzug wird von
+  store/assets/render.sh mit ImageMagick gesetzt, weil der SVG-Renderer von
+  ImageMagick keine verlässliche Textausgabe liefert.
+
+  Farben und Blumenform stammen aus dem App-Icon (siehe icon.svg).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <rect x="0" y="0" width="1024" height="500" fill="#3B6939"/>
+  <!-- Dezenter hellerer Kreis hinter der Blume -->
+  <circle cx="178" cy="250" r="166.60" fill="#48804A"/>
+  <!-- Blütenblätter -->
+  <circle cx="178" cy="156.64" r="42.43" fill="#FFF3C4"/>
+  <circle cx="178" cy="326.38" r="42.43" fill="#FFF3C4"/>
+  <circle cx="93.14" cy="241.52" r="42.43" fill="#FFF3C4"/>
+  <circle cx="262.86" cy="241.52" r="42.43" fill="#FFF3C4"/>
+  <!-- Blütenmitte -->
+  <circle cx="178" cy="250" r="50.92" fill="#F9A825"/>
+</svg>

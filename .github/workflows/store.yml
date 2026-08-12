@@ -1,0 +1,41 @@
+name: Store-Metadaten
+
+# Prüft die Play-Store-Eintragung unter store/: Zeichenlimits, Vollständigkeit,
+# Bildmaße und ob zum versionCode ein Änderungshinweis existiert.
+# Läuft absichtlich auch bei Änderungen an build.gradle.kts — ein neuer
+# versionCode ohne Änderungshinweis soll auffallen, bevor getaggt wird.
+
+on:
+  pull_request:
+    paths:
+      - "store/**"
+      - "android/app/build.gradle.kts"
+      - ".github/workflows/store.yml"
+  push:
+    branches: [main]
+    paths:
+      - "store/**"
+      - "android/app/build.gradle.kts"
+      - ".github/workflows/store.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: store-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  metadaten:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Metadaten prüfen
+        run: python3 store/check_metadata.py
+
+      # Die committeten PNGs prüft check_metadata.py bereits auf Maße, Farbtiefe
+      # und Größe. Hier wird nur sichergestellt, dass sich die Grafiken aus den
+      # SVG-Quellen weiterhin erzeugen lassen — ein Byte-Vergleich wäre wertlos,
+      # weil verschiedene ImageMagick-Versionen minimal anders rastern.
+      - name: ImageMagick installieren
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick fonts-dejavu-core
+      - name: Grafiken probeweise rendern
+        run: OUT_DIR="$RUNNER_TEMP/store-bilder" bash store/assets/render.sh

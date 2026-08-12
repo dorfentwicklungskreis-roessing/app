@@ -1,0 +1,7 @@
+First release on Google Play.
+
+- Map of flower boxes and beds with traffic-light status
+- Watering and weeding schedules with intervals and heat factor
+- Report and withdraw completed tasks
+- Leaderboard per week, month, season, year and all time
+- Sign-in with the Rössing-ID
