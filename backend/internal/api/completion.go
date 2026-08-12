@@ -66,28 +66,6 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 		doneAt = t
 	}
 
-	if !in.Force {
-		last, err := d.LastCompletion(task.ID)
-		if err != nil {
-			return nil, err
-		}
-		// Der Hitzefaktor verkürzt die Sperre — im Sommer darf öfter
-		// gegossen werden. Für andere Aufgabenarten gilt er nicht.
-		factor := 1.0
-		if task.Kind == model.TaskWatering {
-			factor, _ = d.WateringFactor()
-		}
-		if model.Blocked(*task, last, doneAt, factor) {
-			frei, _ := model.NextAllowed(*task, last, factor)
-			return nil, &CompletionError{
-				Status: http.StatusConflict,
-				Message: fmt.Sprintf("Für diese Aufgabe wurde gerade erst eine Erledigung gemeldet. Wieder möglich ab %s.",
-					frei.Local().Format("02.01.2006, 15:04")),
-				RetryAfter: &frei,
-			}
-		}
-	}
-
 	name := u.Name
 	if in.Name != "" {
 		name = in.Name
@@ -96,10 +74,57 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 		TaskID: task.ID, UserSub: u.Sub, UserName: name,
 		Liters: in.Liters, Note: in.Note, DoneAt: doneAt, Forced: in.Force,
 	}
-	if err := d.InsertCompletion(&c); err != nil {
+
+	if in.Force {
+		if err := d.InsertCompletion(&c); err != nil {
+			return nil, err
+		}
+		return &c, nil
+	}
+
+	// Prüfen und Eintragen gehören zusammen: sonst kommen zwei gleichzeitige
+	// Meldungen beide durch die Prüfung, bevor die erste eingetragen ist.
+	frei, ok, err := d.InsertCompletionIfFree(&c, TaskCooldown(d, *task))
+	if err != nil {
 		return nil, err
 	}
+	if !ok {
+		return nil, &CompletionError{
+			Status: http.StatusConflict,
+			Message: fmt.Sprintf("Für diese Aufgabe wurde gerade erst eine Erledigung gemeldet. Wieder möglich ab %s.",
+				// Ortszeit des Dorfes: der Server läuft in UTC, die Meldung
+				// liest aber jemand in Rössing.
+				frei.In(model.Location()).Format("02.01.2006, 15:04")),
+			RetryAfter: &frei,
+		}
+	}
 	return &c, nil
+}
+
+// TaskCooldown liefert die Sperrfrist einer Aufgabe mit der aktuellen
+// Einstellung. Der Hitzefaktor verkürzt sie — im Sommer darf öfter gegossen
+// werden. Für andere Aufgabenarten (Jäten …) gilt er ausdrücklich nicht.
+func TaskCooldown(d *db.DB, task model.CareTask) time.Duration {
+	factor := 1.0
+	if task.Kind == model.TaskWatering {
+		factor, _ = d.WateringFactor()
+	}
+	return model.CooldownFor(task, factor)
+}
+
+// TaskLockedUntil liefert das Ende der Sperrfrist einer Aufgabe (oder nil,
+// wenn gerade gemeldet werden darf). Für Aufrufer, die nur die Aufgabe
+// kennen — etwa die Verwaltung.
+func TaskLockedUntil(d *db.DB, task model.CareTask, now time.Time) (*time.Time, error) {
+	last, err := d.LastCompletion(task.ID)
+	if err != nil || last == nil {
+		return nil, err
+	}
+	frei := last.DoneAt.Add(TaskCooldown(d, task))
+	if !now.Before(frei) {
+		return nil, nil
+	}
+	return &frei, nil
 }
 
 // LockedUntil liefert den Zeitpunkt, bis zu dem der Spielschutz greift —

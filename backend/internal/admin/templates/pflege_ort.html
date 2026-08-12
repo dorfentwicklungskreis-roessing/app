@@ -67,6 +67,11 @@
           {{end}}
           · fällig ab {{datum .DueAt}}
         </div>
+        {{if .LockedUntil}}
+        <div class="mt-1 text-sm text-warning" data-gesperrt="{{datumZeitOpt .LockedUntil}}">
+          Bereits erledigt — wieder ab {{datumZeitOpt .LockedUntil}}
+        </div>
+        {{end}}
         <div class="mt-2 flex flex-wrap items-center gap-2">
           <a class="btn btn-success btn-sm erledigt-melden"
              href="/admin/dorfpflege/aufgaben/{{.ID}}/erledigt">Erledigt melden</a>
@@ -93,7 +98,10 @@
           <tr>
             <td>{{datumZeit .Erledigung.DoneAt}}</td>
             <td>{{.Aufgabe}}</td>
-            <td>{{.Erledigung.UserName}}</td>
+            <td>
+              {{.Erledigung.UserName}}
+              {{if .Erledigung.Forced}}<span class="badge badge-ghost badge-sm" data-nachgetragen>nachgetragen</span>{{end}}
+            </td>
             <td>{{liter .Erledigung.Liters}}</td>
             <td>{{.Erledigung.Note}}</td>
             <td class="text-right">

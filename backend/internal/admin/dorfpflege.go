@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -449,10 +450,22 @@ func (a *App) erledigtFrage(w http.ResponseWriter, r *http.Request, _ session) {
 	if !ok {
 		return
 	}
-	a.render(w, r, http.StatusOK, "pflege_erledigt", view{
+	a.zeigeErledigtFrage(w, r, http.StatusOK, *p, *t, "")
+}
+
+// zeigeErledigtFrage rendert die Bestätigungsseite. Läuft gerade die
+// Sperrfrist des Spielschutzes, steht das auf der Seite — samt der
+// Möglichkeit, sie bewusst zu übergehen (die Verwaltung sehen nur Admins).
+func (a *App) zeigeErledigtFrage(w http.ResponseWriter, r *http.Request, status int, p model.Place, t model.CareTask, fehler string) {
+	gesperrt, err := api.TaskLockedUntil(a.db, t, a.now())
+	if err != nil {
+		a.fail(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	a.render(w, r, status, "pflege_erledigt", view{
 		Title: "Erledigt melden", Nav: "dorfpflege",
 		Data: erledigtDaten{
-			Ort: *p, Aufgabe: *t, LiterText: zahlOderLeer(t.Liters),
+			Ort: p, Aufgabe: t, LiterText: zahlOderLeer(t.Liters), Gesperrt: gesperrt, Fehler: fehler,
 			Ziel:    fmt.Sprintf("%s/aufgaben/%d/erledigt", pflegeBasis, t.ID),
 			Zurueck: fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID),
 		},
@@ -464,8 +477,12 @@ type erledigtDaten struct {
 	Aufgabe model.CareTask
 	// LiterText ist die vorgeschlagene Menge aus dem Gießplan.
 	LiterText string
-	Ziel      string
-	Zurueck   string
+	// Gesperrt: Ende der Sperrfrist, wenn die Aufgabe frisch erledigt ist.
+	Gesperrt *time.Time
+	// Fehler steht in der Seite, wenn eine Meldung abgewiesen wurde.
+	Fehler  string
+	Ziel    string
+	Zurueck string
 }
 
 func (a *App) erledigtMelden(w http.ResponseWriter, r *http.Request, s session) {
@@ -473,20 +490,34 @@ func (a *App) erledigtMelden(w http.ResponseWriter, r *http.Request, s session) 
 	if !ok {
 		return
 	}
-	c := model.Completion{
-		TaskID: t.ID, UserSub: s.Sub, UserName: anzeigeName(s),
-		Note: strings.TrimSpace(r.FormValue("notiz")), DoneAt: a.now(),
+	in := api.CompletionInput{
+		Note: strings.TrimSpace(r.FormValue("notiz")),
+		// Der Haken auf der Bestätigungsseite ist die bewusste Entscheidung,
+		// die Sperrfrist zu übergehen — z.B. für einen telefonischen Nachtrag.
+		Force: r.FormValue("uebergehen") != "",
 	}
 	if v, err := formularZahl(r, "liter"); err == nil && v > 0 {
-		c.Liters = &v
+		in.Liters = &v
 	} else if t.Liters != nil {
-		c.Liters = t.Liters
+		in.Liters = t.Liters
 	}
-	if err := a.db.InsertCompletion(&c); err != nil {
+	// Dieselbe Prüfung wie in der App: die Verwaltung geht nicht am
+	// Spielschutz vorbei, sie darf ihn nur bewusst übergehen.
+	nutzer := auth.User{Sub: s.Sub, Name: anzeigeName(s), Roles: map[string]bool{"admin": s.Admin}}
+	if _, err := api.CreateCompletion(a.db, a.now(), t.ID, in, nutzer); err != nil {
+		var abgewiesen *api.CompletionError
+		if errors.As(err, &abgewiesen) {
+			a.zeigeErledigtFrage(w, r, abgewiesen.Status, *p, *t, abgewiesen.Message)
+			return
+		}
 		a.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
-	a.setFlash(w, "success", "Erledigung für "+zitat(aufgabenName(*t))+" wurde eingetragen.")
+	meldung := "Erledigung für " + zitat(aufgabenName(*t)) + " wurde eingetragen."
+	if in.Force {
+		meldung = "Nachtrag für " + zitat(aufgabenName(*t)) + " wurde eingetragen (Sperrfrist übergangen)."
+	}
+	a.setFlash(w, "success", meldung)
 	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID), http.StatusSeeOther)
 }
 

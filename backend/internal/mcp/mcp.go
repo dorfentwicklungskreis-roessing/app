@@ -298,7 +298,7 @@ func (s *Server) registerTools() {
 				"liters": num("Tatsächlich gegossene Liter (optional)"),
 				"note":   str("Optionale Notiz"),
 				"force":  boolean("Spielschutz übergehen (Sperrfrist nach der letzten Meldung)"),
-				"doneAt": str("Zeitpunkt der Erledigung (RFC3339), höchstens 7 Tage zurück"),
+				"doneAt": str("Zeitpunkt der Erledigung (RFC3339), höchstens 14 Tage zurück"),
 			}),
 			Handler: s.toolCreateCompletion,
 		},

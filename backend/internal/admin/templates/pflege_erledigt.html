@@ -17,6 +17,17 @@
       {{if .Data.Aufgabe.Title}}({{.Data.Aufgabe.Title}}){{end}}
       an <strong>{{.Data.Ort.Name}}</strong> wirklich erledigt?
     </p>
+    {{if .Data.Gesperrt}}
+      {{/* Der Spielschutz sperrt die Aufgabe nach einer Erledigung. Admins
+           dürfen ihn übergehen — aber nur bewusst, per Haken im Formular. */}}
+      <div class="alert alert-warning" id="erledigt-gesperrt">
+        <span>
+          Bereits erledigt — wieder ab {{datumZeitOpt .Data.Gesperrt}}.
+          {{if .Data.Fehler}}<br>{{.Data.Fehler}}{{end}}
+        </span>
+      </div>
+    {{end}}
+
     {{if .Data.LiterText}}
       <p class="text-sm text-base-content/70">
         Vorgesehen sind {{.Data.LiterText}} Liter je Durchgang.
@@ -32,6 +43,14 @@
         <label class="fieldset-legend" for="feld-notiz">Notiz (optional)</label>
         <input type="text" name="notiz" id="feld-notiz" class="input w-full"
                placeholder="z.B. Erde war sehr trocken">
+
+        {{if .Data.Gesperrt}}
+        <label class="label mt-2 items-start gap-2" for="feld-uebergehen">
+          <input type="checkbox" name="uebergehen" id="feld-uebergehen" value="1" class="checkbox checkbox-sm">
+          <span>Sperrfrist übergehen und trotzdem eintragen — für telefonisch
+                gemeldete Nachträge. Der Eintrag wird gekennzeichnet.</span>
+        </label>
+        {{end}}
       </fieldset>
 
       <div class="card-actions mt-4">

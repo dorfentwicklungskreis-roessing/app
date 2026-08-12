@@ -146,14 +146,23 @@ var funcs = template.FuncMap{
 	"statusBadge": statusBadge,
 	"ortsart":     ortsart,
 	"aufgabenart": aufgabenart,
-	"datum":       func(t time.Time) string { return t.Local().Format("02.01.2006") },
-	"datumZeit":   func(t time.Time) string { return t.Local().Format("02.01.2006, 15:04") },
+	// Alle Zeiten stehen in der Ortszeit des Dorfes (Europe/Berlin) — der
+	// Server läuft in UTC, gelesen wird die Seite aber in Rössing.
+	"datum":     func(t time.Time) string { return ortszeit(t).Format("02.01.2006") },
+	"datumZeit": func(t time.Time) string { return ortszeit(t).Format("02.01.2006, 15:04") },
 	// datumOpt formatiert einen optionalen Zeitpunkt (leer statt Nulldatum).
 	"datumOpt": func(t *time.Time) string {
 		if t == nil {
 			return ""
 		}
-		return t.Local().Format("02.01.2006")
+		return ortszeit(*t).Format("02.01.2006")
+	},
+	// datumZeitOpt formatiert einen optionalen Zeitpunkt mit Uhrzeit.
+	"datumZeitOpt": func(t *time.Time) string {
+		if t == nil {
+			return ""
+		}
+		return ortszeit(*t).Format("02.01.2006, 15:04")
 	},
 	"zahl": zahl,
 	// zahlOpt formatiert eine optionale Zahl (leer statt 0) — für Formularfelder.
@@ -305,6 +314,9 @@ func aufgabenart(k model.TaskKind) string {
 func zahl(f float64) string {
 	return strconv.FormatFloat(f, 'g', -1, 64)
 }
+
+// ortszeit rechnet einen Zeitpunkt in die Ortszeit des Dorfes um.
+func ortszeit(t time.Time) time.Time { return t.In(model.Location()) }
 
 func anzeigeName(s session) string {
 	if s.Name != "" {

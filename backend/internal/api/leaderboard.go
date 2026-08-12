@@ -31,15 +31,21 @@ func AssembleLeaderboard(d *db.DB, now time.Time, period model.Period, limit int
 	if err != nil {
 		return model.Leaderboard{}, err
 	}
-	entries, err := d.Leaderboard(from, to)
+	// Der Hitzefaktor gehört zur Wertung: er bestimmt die Sperrfrist, und
+	// nur außerhalb der Sperrfrist gemeldete Erledigungen zählen (stats.go).
+	factor, err := d.WateringFactor()
 	if err != nil {
 		return model.Leaderboard{}, err
 	}
-	totals, err := d.LeaderboardTotals(from, to)
+	entries, err := d.Leaderboard(from, to, factor)
 	if err != nil {
 		return model.Leaderboard{}, err
 	}
-	awarded, err := d.Badges(from, to, now, loc)
+	totals, err := d.LeaderboardTotals(from, to, factor)
+	if err != nil {
+		return model.Leaderboard{}, err
+	}
+	awarded, err := d.Badges(from, to, now, loc, factor)
 	if err != nil {
 		return model.Leaderboard{}, err
 	}

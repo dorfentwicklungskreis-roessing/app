@@ -47,15 +47,30 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
   Verwaltung liegt beides unter `/admin/dorfpflege/rangliste` bzw. als
   eigene Bestätigungsseite in der Historie eines Ortes.
 - **Spielschutz**: Nach einer Erledigung bleibt dieselbe Aufgabe gesperrt —
-  50 % des Soll-Intervalls (mit Hitzefaktor skaliert), mindestens 12 Stunden,
-  höchstens das volle Intervall. Ein Verstoß ergibt **HTTP 409** mit
-  `retryAfter`; `GET /api/v1/places` liefert je Aufgabe `lockedUntil`, damit
-  die App den Knopf gar nicht erst anbietet. Admins dürfen mit `force: true`
-  übergehen (wird als `forced` vermerkt) und mit `doneAt` bis zu 7 Tage
-  zurückdatieren; Zeitpunkte in der Zukunft werden abgelehnt. Die Sperre gilt
-  je Aufgabe, nicht je Person — sonst könnten mehrere Leute denselben Kasten
-  nacheinander „gießen". In der Rangliste zählt, was in der Datenbank steht;
-  der Spielschutz sitzt bewusst beim Anlegen.
+  50 % des Soll-Intervalls (beim Gießen mit dem Hitzefaktor skaliert, bei
+  Jäten & Co. nicht), mindestens 12 Stunden, höchstens das volle Intervall.
+  Ein Verstoß ergibt **HTTP 409** mit `{"error":…,"retryAfter":…}` (RFC3339);
+  `GET /api/v1/places` liefert je Aufgabe `lockedUntil` (fehlt, wenn nicht
+  gesperrt), damit die App den Knopf gar nicht erst anbietet. Prüfen und
+  Eintragen laufen in einer Transaktion, damit ein Doppeltipp nicht zwei
+  Meldungen erzeugt. Admins dürfen mit `force: true` übergehen (wird als
+  `forced` vermerkt) und mit `doneAt` bis zu 14 Tage zurückdatieren;
+  Zeitpunkte in der Zukunft werden abgelehnt. Die Sperre gilt je Aufgabe,
+  nicht je Person — sonst könnten mehrere Leute denselben Kasten nacheinander
+  „gießen". Dieselbe Prüfung gilt für REST, MCP und die Web-Verwaltung; dort
+  zeigt die Ortsseite „Bereits erledigt — wieder ab …" und die
+  Bestätigungsseite bietet das Übergehen als Haken an (kein Popup).
+- **Wertung der Rangliste**: Gezählt wird nur, was eine echte Erledigung sein
+  kann — eine Meldung auf eine Aufgabe, die zu diesem Zeitpunkt nicht frisch
+  erledigt war (Sperrfrist abgelaufen, Ampel also gelb oder rot). Alles
+  andere bleibt in der Historie sichtbar, zählt aber weder für Rang, Liter,
+  Gesamtsummen noch für Auszeichnungen; das betrifft vor allem den
+  Altbestand aus der Zeit vor dem Spielschutz. Erzwungene Nachträge eines
+  Admins (`forced`) zählen der genannten Person normal und sind in der
+  Historie als „nachgetragen" gekennzeichnet. Die Regel steht als SQL in
+  `backend/internal/db/stats.go` (`gewertetSQL`) und rechnet mit dem aktuell
+  eingestellten Hitzefaktor — er ist eine tagesaktuelle Einstellung und wird
+  nicht historisiert.
 
 ## Entwicklung
 

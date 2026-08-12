@@ -27,25 +27,68 @@ const personKey = "user_sub || char(10) || user_name"
 // Auszeichnungen zu den Ranglisten-Zeilen).
 func PersonKey(userSub, userName string) string { return userSub + "\n" + userName }
 
+// --- Wertung: was zählt überhaupt? -------------------------------------------
+//
+// Gewertet wird nur, was eine echte Erledigung sein kann: eine Meldung auf
+// eine Aufgabe, die zu diesem Zeitpunkt nicht frisch erledigt war — also
+// nachdem die Sperrfrist des Spielschutzes abgelaufen war (Ampel gelb oder
+// rot). Zwei Gründe:
+//
+//   - Fachlich: eine Stunde nach dem Gießen nochmal gießen ist keine Pflege.
+//   - In der Datenbank steht Altbestand aus der Zeit vor dem Spielschutz;
+//     ohne diese Regel würde er die Rangliste bis heute verfälschen.
+//
+// Erzwungene Nachträge eines Admins (forced, z.B. telefonisch gemeldet)
+// zählen dagegen immer — sie sind bewusst eingetragen und der genannten
+// Person gutgeschrieben.
+//
+// Die Sperrfrist wird mit dem aktuell eingestellten Hitzefaktor gerechnet,
+// derselben Regel wie beim Melden (siehe model/cooldown.go). Der Faktor ist
+// eine tagesaktuelle Einstellung und wird nicht historisiert; er gilt nur
+// fürs Gießen.
+func gewertetSQL(factor float64) string {
+	if factor <= 0 {
+		factor = 1
+	}
+	return fmt.Sprintf(`
+WITH alle AS (
+  SELECT c.id AS id, c.task_id AS task_id, c.user_sub AS user_sub, c.user_name AS user_name,
+         c.liters AS liters, c.done_at AS done_at, c.forced AS forced,
+         t.kind AS kind, t.created_at AS task_created, t.red_after_days AS red_after_days,
+         MAX(MIN(t.interval_days * (CASE WHEN t.kind = 'giessen' THEN %[1]g ELSE 1 END) * %[2]g,
+                 t.interval_days), %[3]g) AS sperre_tage,
+         LAG(c.done_at) OVER (PARTITION BY c.task_id ORDER BY c.done_at) AS vorherige
+    FROM completions c
+    JOIN care_tasks t ON t.id = c.task_id
+),
+gewertet AS (
+  SELECT * FROM alle
+   WHERE forced = 1
+      OR vorherige IS NULL
+      -- Eine Sekunde Rundungsreserve: exakt an der Schwelle gemeldet zählt.
+      OR julianday(done_at) - julianday(vorherige) >= sperre_tage - %[4]g
+)
+`, factor, model.CooldownShare, model.MinCooldown.Hours()/24, 1.0/86400.0)
+}
+
 // Leaderboard aggregiert die Erledigungen im Zeitraum [from, to) je Nutzer,
 // sortiert nach Anzahl, bei Gleichstand nach Litern (dann nach Name).
-func (d *DB) Leaderboard(from, to time.Time) ([]model.LeaderboardEntry, error) {
+func (d *DB) Leaderboard(from, to time.Time, factor float64) ([]model.LeaderboardEntry, error) {
 	// Bare-Column-Regel von SQLite: steht MAX() in der Auswahl, stammen die
 	// nicht aggregierten Spalten (hier user_name) aus genau dieser Zeile —
 	// wir bekommen also den zuletzt gemeldeten Anzeigenamen.
-	rows, err := d.sql.Query(`
-SELECT c.user_sub AS user_sub,
-       c.user_name AS user_name,
+	rows, err := d.sql.Query(gewertetSQL(factor)+`
+SELECT user_sub,
+       user_name,
        COUNT(*) AS n,
-       SUM(CASE WHEN t.kind='giessen'   THEN 1 ELSE 0 END) AS n_giessen,
-       SUM(CASE WHEN t.kind='jaeten'    THEN 1 ELSE 0 END) AS n_jaeten,
-       SUM(CASE WHEN t.kind='sonstiges' THEN 1 ELSE 0 END) AS n_sonstiges,
-       COALESCE(SUM(c.liters), 0) AS liters,
-       MAX(c.done_at) AS last_done
-  FROM completions c
-  JOIN care_tasks t ON t.id = c.task_id
- WHERE c.done_at >= ? AND c.done_at < ?
- GROUP BY c.user_sub, c.user_name
+       SUM(CASE WHEN kind='giessen'   THEN 1 ELSE 0 END) AS n_giessen,
+       SUM(CASE WHEN kind='jaeten'    THEN 1 ELSE 0 END) AS n_jaeten,
+       SUM(CASE WHEN kind='sonstiges' THEN 1 ELSE 0 END) AS n_sonstiges,
+       COALESCE(SUM(liters), 0) AS liters,
+       MAX(done_at) AS last_done
+  FROM gewertet
+ WHERE done_at >= ? AND done_at < ?
+ GROUP BY user_sub, user_name
  ORDER BY n DESC, liters DESC, user_name ASC`, sqlTime(from), sqlTime(to))
 	if err != nil {
 		return nil, err
@@ -73,19 +116,18 @@ SELECT c.user_sub AS user_sub,
 }
 
 // LeaderboardTotals liefert die Gesamtsummen des Dorfes im Zeitraum.
-func (d *DB) LeaderboardTotals(from, to time.Time) (model.LeaderboardTotals, error) {
+func (d *DB) LeaderboardTotals(from, to time.Time, factor float64) (model.LeaderboardTotals, error) {
 	var t model.LeaderboardTotals
 	var giessen, jaeten, sonstiges int
-	err := d.sql.QueryRow(`
+	err := d.sql.QueryRow(gewertetSQL(factor)+`
 SELECT COUNT(*),
-       COALESCE(SUM(CASE WHEN t.kind='giessen'   THEN 1 ELSE 0 END), 0),
-       COALESCE(SUM(CASE WHEN t.kind='jaeten'    THEN 1 ELSE 0 END), 0),
-       COALESCE(SUM(CASE WHEN t.kind='sonstiges' THEN 1 ELSE 0 END), 0),
-       COALESCE(SUM(c.liters), 0),
-       COUNT(DISTINCT c.user_sub || char(10) || c.user_name)
-  FROM completions c
-  JOIN care_tasks t ON t.id = c.task_id
- WHERE c.done_at >= ? AND c.done_at < ?`, sqlTime(from), sqlTime(to)).
+       COALESCE(SUM(CASE WHEN kind='giessen'   THEN 1 ELSE 0 END), 0),
+       COALESCE(SUM(CASE WHEN kind='jaeten'    THEN 1 ELSE 0 END), 0),
+       COALESCE(SUM(CASE WHEN kind='sonstiges' THEN 1 ELSE 0 END), 0),
+       COALESCE(SUM(liters), 0),
+       COUNT(DISTINCT `+personKey+`)
+  FROM gewertet
+ WHERE done_at >= ? AND done_at < ?`, sqlTime(from), sqlTime(to)).
 		Scan(&t.Completions, &giessen, &jaeten, &sonstiges, &t.Liters, &t.Participants)
 	if err != nil {
 		return t, err
@@ -97,7 +139,7 @@ SELECT COUNT(*),
 // Badges leitet die Auszeichnungen je Nutzer ab (Schlüssel: user_sub).
 // Die Regeln stehen bei den Konstanten in model/stats.go; hier steht ihre
 // SQL-Umsetzung. Alles wird gruppiert ausgewertet.
-func (d *DB) Badges(from, to, now time.Time, loc *time.Location) (map[string][]model.Badge, error) {
+func (d *DB) Badges(from, to, now time.Time, loc *time.Location, factor float64) (map[string][]model.Badge, error) {
 	out := map[string][]model.Badge{}
 	award := func(key string, persons []string) {
 		badge, ok := model.BadgeByKey(key)
@@ -115,7 +157,7 @@ func (d *DB) Badges(from, to, now time.Time, loc *time.Location) (map[string][]m
 	if err != nil {
 		return nil, err
 	}
-	champions, err := d.wateringChampions(monthFrom, monthTo)
+	champions, err := d.wateringChampions(monthFrom, monthTo, factor)
 	if err != nil {
 		return nil, err
 	}
@@ -123,9 +165,9 @@ func (d *DB) Badges(from, to, now time.Time, loc *time.Location) (map[string][]m
 
 	offset := localOffsetSQL("done_at", loc, from, to, now)
 	for key, query := range map[string]func() ([]string, error){
-		model.BadgeEarlyBird: func() ([]string, error) { return d.earlyBirds(from, to, offset) },
-		model.BadgeRescuer:   func() ([]string, error) { return d.rescuers(from, to) },
-		model.BadgeEndurance: func() ([]string, error) { return d.enduring(from, to, offset) },
+		model.BadgeEarlyBird: func() ([]string, error) { return d.earlyBirds(from, to, offset, factor) },
+		model.BadgeRescuer:   func() ([]string, error) { return d.rescuers(from, to, factor) },
+		model.BadgeEndurance: func() ([]string, error) { return d.enduring(from, to, offset, factor) },
 	} {
 		persons, err := query()
 		if err != nil {
@@ -138,28 +180,26 @@ func (d *DB) Badges(from, to, now time.Time, loc *time.Location) (map[string][]m
 
 // wateringChampions: wer im Zeitraum am häufigsten gegossen hat.
 // Bei Gleichstand bekommen ihn alle, die vorn liegen.
-func (d *DB) wateringChampions(from, to time.Time) ([]string, error) {
-	return d.queryPersons(`
+func (d *DB) wateringChampions(from, to time.Time, factor float64) ([]string, error) {
+	return d.queryPersons(gewertetSQL(factor)+`
 SELECT person FROM (
-  SELECT c.user_sub || char(10) || c.user_name AS person, COUNT(*) AS n
-    FROM completions c
-    JOIN care_tasks t ON t.id = c.task_id
-   WHERE t.kind = 'giessen' AND c.done_at >= ? AND c.done_at < ?
-   GROUP BY c.user_sub, c.user_name
+  SELECT `+personKey+` AS person, COUNT(*) AS n
+    FROM gewertet
+   WHERE kind = 'giessen' AND done_at >= ? AND done_at < ?
+   GROUP BY user_sub, user_name
 )
 WHERE n = (SELECT MAX(n) FROM (
   SELECT COUNT(*) AS n
-    FROM completions c
-    JOIN care_tasks t ON t.id = c.task_id
-   WHERE t.kind = 'giessen' AND c.done_at >= ? AND c.done_at < ?
-   GROUP BY c.user_sub, c.user_name))`,
+    FROM gewertet
+   WHERE kind = 'giessen' AND done_at >= ? AND done_at < ?
+   GROUP BY user_sub, user_name))`,
 		sqlTime(from), sqlTime(to), sqlTime(from), sqlTime(to))
 }
 
 // earlyBirds: genug Erledigungen vor der Frühaufsteher-Stunde (Ortszeit).
-func (d *DB) earlyBirds(from, to time.Time, offset string) ([]string, error) {
-	q := fmt.Sprintf(`
-SELECT `+personKey+` FROM completions
+func (d *DB) earlyBirds(from, to time.Time, offset string, factor float64) ([]string, error) {
+	q := gewertetSQL(factor) + fmt.Sprintf(`
+SELECT `+personKey+` FROM gewertet
  WHERE done_at >= ? AND done_at < ?
  GROUP BY user_sub, user_name
 HAVING SUM(CASE WHEN CAST(strftime('%%H', done_at, %s) AS INTEGER) < %d THEN 1 ELSE 0 END) >= %d`,
@@ -173,33 +213,28 @@ HAVING SUM(CASE WHEN CAST(strftime('%%H', done_at, %s) AS INTEGER) < %d THEN 1 E
 // gab es keine, zählt das Anlegedatum der Aufgabe. Der Hitzefaktor bleibt
 // hier bewusst außen vor — er ist eine tagesaktuelle Einstellung und für
 // eine rückblickende Auswertung nicht rekonstruierbar.
-func (d *DB) rescuers(from, to time.Time) ([]string, error) {
-	return d.queryPersons(`
+func (d *DB) rescuers(from, to time.Time, factor float64) ([]string, error) {
+	return d.queryPersons(gewertetSQL(factor)+`
 SELECT `+personKey+` FROM (
-  SELECT c.user_sub  AS user_sub,
-         c.user_name AS user_name,
-         c.done_at   AS done_at,
-         LAG(c.done_at) OVER (PARTITION BY c.task_id ORDER BY c.done_at) AS prev_done,
-         t.created_at     AS created_at,
-         t.red_after_days AS red_after_days
-    FROM completions c
-    JOIN care_tasks t ON t.id = c.task_id
+  SELECT user_sub, user_name, done_at, task_created, red_after_days,
+         LAG(done_at) OVER (PARTITION BY task_id ORDER BY done_at) AS prev_done
+    FROM gewertet
 )
 WHERE done_at >= ? AND done_at < ?
-  AND julianday(done_at) - julianday(COALESCE(prev_done, created_at)) >= red_after_days
+  AND julianday(done_at) - julianday(COALESCE(prev_done, task_created)) >= red_after_days
 GROUP BY user_sub, user_name`, sqlTime(from), sqlTime(to))
 }
 
 // enduring: Erledigungen in genügend aufeinanderfolgenden Wochen.
 // Klassisches „gaps and islands": die laufende Nummer der Wochen wird von
 // der Wochennummer abgezogen; gleiche Differenz = lückenlose Serie.
-func (d *DB) enduring(from, to time.Time, offset string) ([]string, error) {
-	q := fmt.Sprintf(`
+func (d *DB) enduring(from, to time.Time, offset string, factor float64) ([]string, error) {
+	q := gewertetSQL(factor) + fmt.Sprintf(`
 SELECT person FROM (
   SELECT person, COUNT(*) AS len FROM (
     SELECT person, wk - ROW_NUMBER() OVER (PARTITION BY person ORDER BY wk) AS grp
       FROM (SELECT DISTINCT `+personKey+` AS person, %s AS wk
-              FROM completions WHERE done_at >= ? AND done_at < ?)
+              FROM gewertet WHERE done_at >= ? AND done_at < ?)
   ) GROUP BY person, grp
 ) GROUP BY person HAVING MAX(len) >= %d`,
 		weekIndexSQL("done_at", offset), model.MinStreakWeeks)

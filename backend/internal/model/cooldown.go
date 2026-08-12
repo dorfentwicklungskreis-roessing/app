@@ -16,8 +16,9 @@ const (
 	CooldownShare = 0.5
 	// MinCooldown: kürzeste Sperre, egal wie eng das Intervall ist.
 	MinCooldown = 12 * time.Hour
-	// MaxBackdate: so weit dürfen Admins eine Meldung zurückdatieren.
-	MaxBackdate = 7 * 24 * time.Hour
+	// MaxBackdate: so weit dürfen Admins eine Meldung zurückdatieren
+	// (telefonisch gemeldeter Vollzug aus dem Urlaub, Zettel vom Sommerfest).
+	MaxBackdate = 14 * 24 * time.Hour
 )
 
 // CooldownFor liefert die Sperrfrist einer Aufgabe. factor ist der

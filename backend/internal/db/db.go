@@ -330,6 +330,44 @@ func (d *DB) LastCompletion(taskID int64) (*model.Completion, error) {
 	return &cs[0], nil
 }
 
+// InsertCompletionIfFree trägt eine Erledigung nur ein, wenn die Aufgabe zum
+// Zeitpunkt c.DoneAt nicht mehr gesperrt ist. Prüfen und Eintragen passieren
+// in einer Transaktion — sonst rutschen bei einem Doppeltipp (oder einer
+// Wiederholung im wackeligen Mobilfunknetz) zwei Meldungen gleichzeitig
+// durch die Prüfung, und die Sperre wäre wirkungslos.
+//
+// ok=false heißt: die Sperre läuft noch, frei nennt ihr Ende.
+func (d *DB) InsertCompletionIfFree(c *model.Completion, sperre time.Duration) (frei time.Time, ok bool, err error) {
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var letzte sql.NullString
+	if err := tx.QueryRow(`SELECT MAX(done_at) FROM completions WHERE task_id=?`, c.TaskID).Scan(&letzte); err != nil {
+		return time.Time{}, false, err
+	}
+	if letzte.Valid {
+		zuletzt, perr := time.Parse(timeFormat, letzte.String)
+		if perr != nil {
+			return time.Time{}, false, perr
+		}
+		if frei := zuletzt.Add(sperre); c.DoneAt.Before(frei) {
+			return frei, false, nil
+		}
+	}
+	res, err := tx.Exec(`INSERT INTO completions(task_id,user_sub,user_name,liters,note,done_at,forced) VALUES(?,?,?,?,?,?,?)`,
+		c.TaskID, c.UserSub, c.UserName, c.Liters, c.Note, c.DoneAt.UTC().Format(timeFormat), boolToInt(c.Forced))
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if c.ID, err = res.LastInsertId(); err != nil {
+		return time.Time{}, false, err
+	}
+	return time.Time{}, true, tx.Commit()
+}
+
 func requireRow(res sql.Result) error {
 	n, _ := res.RowsAffected()
 	if n == 0 {
