@@ -12,6 +12,11 @@ const HARMLOS = [
   /Automatic fallback to software WebGL/i,
   /SwiftShader/i,
   /WebGL: CONTEXT_LOST_WEBGL/i,
+  // Abgewiesene Formulareingaben liefern bewusst HTTP 400 mit der Seite samt
+  // Fehlermeldung. Chromium protokolliert jede Navigation mit Nicht-2xx als
+  // Konsolenfehler — das ist erwartetes Verhalten, kein Skriptfehler.
+  // Alles andere (403, 404, 5xx) bleibt ein Fehler.
+  /Failed to load resource: the server responded with a status of 400 \(Bad Request\)/i,
 ];
 
 // Nur Meldungen aus UNSERER Seite zählen. Die Login-Oberfläche von Zitadel
