@@ -11,7 +11,6 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
 | `android/` | Native Android-App (Kotlin, Jetpack Compose, Material 3, MapLibre) |
 | `backend/` | Go-Backend: REST-API, MCP-Server, Web-Admin. SQLite (WAL) |
 | `deploy/`  | Kustomize-Overlay für den K3S-Cluster (Flux deployt) |
-| `scripts/` | Release-Automatik: nächste Version, Änderungshinweise (+ Tests) |
 | `.github/workflows/` | CI: Tests, E2E auf Emulatoren, Multi-Arch-Images, Releases |
 
 ## Architektur
@@ -217,40 +216,59 @@ Multi-Arch-Image (amd64 + arm64, native Runner), bumpt den Tag in
 
 ## Releases (Android)
 
-**Getaggt wird von Hand.** Eine Automatik dafür gibt es bewusst nicht: Ein
-Tag-Push aus einem Workflow löst wegen der GitHub-Token-Sperre keine weiteren
-Ereignisse aus, sauber ginge das nur mit einer eigenen GitHub-App. Solange die
-fehlt, ist der Weg:
+**Getaggt und veröffentlicht wird von Hand.** Eine Automatik dafür gibt es
+bewusst nicht: Ein Tag-Push aus einem Workflow löst wegen der
+GitHub-Token-Sperre keine weiteren Ereignisse aus — sauber ginge das nur mit
+einer eigenen GitHub-App. Solange die fehlt, wäre die Automatik Overkill.
 
-```sh
-# 1. Stand prüfen: Android- und Backend-Workflow müssen grün sein
-gh run list --limit 5
+### Der Weg
 
-# 2. Tag auf genau diesen Commit setzen
-git tag v0.1.4 && git push origin v0.1.4
+1. **Stand prüfen** — Android- und Backend-Workflow müssen für den Commit grün
+   sein, der veröffentlicht wird:
+   ```sh
+   gh run list --limit 5
+   ```
+2. **Version hochzählen** in `android/app/build.gradle.kts`: `versionCode` um
+   eins erhöhen, `versionName` auf die neue Version setzen.
+3. **Änderungshinweis anlegen**, benannt nach dem neuen `versionCode`, in
+   **beiden** Sprachen, höchstens 500 Zeichen:
+   `store/metadata/android/{de-DE,en-US}/changelogs/<versionCode>.txt`
+4. **Prüfen und committen**:
+   ```sh
+   python3 store/check_metadata.py
+   ```
+5. **Taggen und den Release-Workflow starten**:
+   ```sh
+   git tag v0.1.4 && git push origin v0.1.4
+   gh workflow run release.yml --ref v0.1.4     # der Tag-Push allein genügt nicht
+   gh run watch "$(gh run list --workflow=release.yml --limit 1 \
+     --json databaseId --jq '.[0].databaseId')"
+   ```
 
-# 3. Release-Workflow starten (der Tag-Push allein genügt NICHT)
-gh workflow run release.yml --ref v0.1.4
-```
+Der Release-Workflow signiert APK und AAB, legt das GitHub-Release an, verteilt
+über Firebase App Distribution an die Gruppe `tester` und lädt (nur mit
+hinterlegtem `PLAY_SERVICE_ACCOUNT_JSON`) in den Play-Track „internal".
 
-Der Release-Workflow signiert APK und AAB, legt das GitHub-Release an,
-verteilt über Firebase App Distribution an die Gruppe `tester` und lädt (nur
-mit hinterlegtem `PLAY_SERVICE_ACCOUNT_JSON`) in den Play-Track „internal".
-Die Änderungsnotiz für den Store erzeugt `scripts/aenderungsnotiz.py` im
-Release-Lauf aus den `feat:`/`fix:`-Commits seit dem letzten Tag.
+### Zwei Stolpersteine
 
-**Version:** `versionName` und `versionCode` kommen aus dem Tag, nicht aus der
-CI-Laufnummer. `v0.1.3` → `versionName 0.1.3`, `versionCode 1000103`
-(`1 000 000 + major*10000 + minor*100 + patch`). Lokale Builds ohne Tag heißen
-`0.0.0-dev`. Der Release-Workflow vergleicht den vom Gradle-Build gemeldeten
-Wert mit der Berechnung im Skript, damit beide Stellen nicht auseinanderlaufen.
+* **Der Tag-Push startet den Workflow nicht immer.** Wird der Tag aus einem
+  Workflow heraus mit dem `GITHUB_TOKEN` gepusht, greift `push: tags` nicht —
+  GitHub unterbindet so Endlosketten. Deshalb immer
+  `gh workflow run release.yml --ref <tag>` hinterherschicken; von Hand mit
+  eigenem Token gepusht startet der Workflow dagegen von selbst.
+* **`versionCode` und Änderungshinweis müssen zusammenpassen.**
+  `store/check_metadata.py` verlangt zu dem `versionCode` aus
+  `build.gradle.kts` eine Datei `changelogs/<versionCode>.txt` **in jeder**
+  Sprache — sonst wird der Store-Workflow rot und der Release-Lauf bricht vor
+  dem Play-Upload ab. Play nimmt außerdem jeden `versionCode` nur ein einziges
+  Mal an; er muss bei jedem Upload steigen.
 
-**Verteilung an Tester:** Firebase App Distribution bekommt nur echte Versionen
-— Vorabtags mit Suffix (`v0.2.0-rc1`, `-dev`, `-nightly`) werden nicht verteilt.
-Die Empfängergruppen stehen in der Repository-Variable `FIREBASE_TESTER_GROUPS`
-(Vorgabe `tester`); auf `keine` gesetzt, ruht die Verteilung, ohne dass jemand
-am Workflow schrauben muss. Als Release-Notiz geht der automatisch erzeugte
-Änderungshinweis mit, nicht mehr „Automatischer Build".
+> **Merke für das nächste Release:** `v0.1.3` wurde einmalig mit
+> `versionCode 1000103` gebaut und über Firebase an die Tester verteilt.
+> Android installiert keinen Build mit kleinerem `versionCode` über einen
+> größeren — wer `0.1.3` auf dem Telefon hat, müsste vorher deinstallieren.
+> Beim nächsten Release also entweder einen `versionCode` über `1000103`
+> wählen oder die Tester einmal deinstallieren lassen.
 
 Play-Store-Upload und Firebase-Verteilung aktivieren sich, sobald die Secrets
 existieren (siehe `.github/workflows/release.yml`, Kopfkommentar).
@@ -275,11 +293,9 @@ bash store/assets/render.sh       # Grafiken neu erzeugen (ImageMagick)
 ```
 
 `.github/workflows/store.yml` prüft die Metadaten bei jeder Änderung an
-`store/`, `scripts/` oder am Build; der Release-Workflow prüft sie erneut, bevor
-er baut und das AAB auf den Play-Track **`internal`** lädt. Fehlt das Secret
+`store/` oder am `versionCode`; der Release-Workflow prüft sie erneut, bevor er
+das AAB auf den Play-Track **`internal`** lädt. Fehlt das Secret
 `PLAY_SERVICE_ACCOUNT_JSON`, wird der Upload übersprungen.
 
-Die Änderungshinweise schreibt niemand mehr von Hand: `scripts/aenderungsnotiz.py`
-baut sie beim Release aus den `feat:`- und `fix:`-Commit-Betreffen seit dem
-letzten Tag (auf 500 Zeichen gekürzt, ohne `chore:`/`ci:`-Rauschen). Ein von
-Hand geschriebener Text darf die Datei jederzeit ersetzen.
+Den Änderungshinweis zum jeweiligen `versionCode` schreibt man von Hand — siehe
+„Releases (Android)" oben.

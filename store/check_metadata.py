@@ -8,33 +8,21 @@ Geprüft wird:
   * Zeichenlimits von Titel, Kurz- und Langbeschreibung sowie Änderungshinweisen
   * Vollständigkeit je Sprache
   * Bildformate (Maße, Farbtiefe, Transparenz) von icon.png und featureGraphic.png
-  * dass zum versionCode der aktuellen Version ein Änderungshinweis in jeder
-    Sprache existiert
-
-Die aktuelle Version ist der letzte Release-Tag (oder $APP_VERSION, das der
-Release-Workflow setzt). Der versionCode wird daraus mit derselben Formel
-berechnet wie in android/app/build.gradle.kts — siehe scripts/naechste_version.py.
-Die Änderungshinweise erzeugt scripts/aenderungsnotiz.py automatisch beim
-Release; von Hand geschriebene Texte dürfen sie jederzeit ersetzen.
+  * dass zum versionCode aus android/app/build.gradle.kts ein Änderungshinweis
+    in jeder Sprache existiert
 
 Aufruf: python3 store/check_metadata.py
 """
 from __future__ import annotations
 
-import os
 import re
 import struct
-import subprocess
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 META = REPO / "store" / "metadata" / "android"
 GRADLE = REPO / "android" / "app" / "build.gradle.kts"
-
-sys.path.insert(0, str(REPO / "scripts"))
-from naechste_version import letzter_tag, version_aus_tag  # noqa: E402
-from naechste_version import version_code as code_zu_version  # noqa: E402
 
 # Googles Limits (Play Console, Stand 2026).
 LIMITS = {
@@ -79,48 +67,9 @@ def png_info(path: Path) -> tuple[int, int, int, int]:
     return width, height, depth, color_type
 
 
-def aktuelle_version() -> str | None:
-    """Version, für die ein Änderungshinweis vorliegen muss.
-
-    $APP_VERSION hat Vorrang (setzt der Release-Workflow auf den Tag, der gerade
-    gebaut wird), sonst der letzte Release-Tag im Arbeitsverzeichnis. Ist beides
-    nicht da (flacher Klon ohne Tags), wird die Prüfung übersprungen.
-    """
-    aus_env = os.environ.get("APP_VERSION", "").strip().lstrip("v")
-    if aus_env and version_aus_tag(aus_env):
-        return aus_env
-    try:
-        tags = subprocess.run(
-            ["git", "-C", str(REPO), "tag", "--list"],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.split()
-    except (OSError, subprocess.CalledProcessError):
-        return None
-    tag = letzter_tag(tags)
-    return tag.lstrip("v") if tag else None
-
-
 def version_code() -> int | None:
-    version = aktuelle_version()
-    return code_zu_version(version) if version else None
-
-
-def check_gradle() -> None:
-    """Der versionCode muss aus der Version kommen, nicht fest im Build stehen."""
-    text = GRADLE.read_text(encoding="utf-8")
-    if re.search(r"^\s*versionCode\s*=\s*\d", text, re.M):
-        fail(
-            "android/app/build.gradle.kts: versionCode ist fest verdrahtet — er "
-            "muss aus der Version abgeleitet werden (appVersionCode), sonst "
-            "passen Store-Notizen und Build nicht mehr zusammen"
-        )
-    if not re.search(r"^\s*versionName\s*=\s*appVersion\s*$", text, re.M):
-        fail(
-            "android/app/build.gradle.kts: versionName muss appVersion sein "
-            "(kommt aus dem Git-Tag)"
-        )
+    m = re.search(r"^\s*versionCode\s*=\s*(\d+)", GRADLE.read_text(encoding="utf-8"), re.M)
+    return int(m.group(1)) if m else None
 
 
 def check_locale(locale: str) -> None:
@@ -162,16 +111,11 @@ def check_locale(locale: str) -> None:
 
     vc = version_code()
     if vc is None:
-        print(
-            "::notice::Keine Version ermittelbar (keine Tags, kein APP_VERSION) — "
-            "die Prüfung auf einen Änderungshinweis entfällt.",
-        )
+        fail("android/app/build.gradle.kts: versionCode nicht gefunden")
     elif not (changelogs / f"{vc}.txt").is_file():
         fail(
-            f"{locale}/changelogs/{vc}.txt fehlt — zur Version "
-            f"{aktuelle_version()} (versionCode {vc}) gehört ein Änderungshinweis; "
-            "erzeugen mit: python3 scripts/aenderungsnotiz.py "
-            f"--version {aktuelle_version()} --schreiben"
+            f"{locale}/changelogs/{vc}.txt fehlt — zum versionCode {vc} aus "
+            "build.gradle.kts gehört ein Änderungshinweis"
         )
 
 
@@ -220,7 +164,6 @@ def main() -> int:
     for locale in LOCALES:
         check_locale(locale)
     check_images()
-    check_gradle()
 
     if errors:
         print("Metadaten fehlerhaft:", file=sys.stderr)
@@ -229,10 +172,7 @@ def main() -> int:
         return 1
 
     vc = version_code()
-    print(
-        f"Metadaten in Ordnung (Version {aktuelle_version()}, versionCode {vc}, "
-        f"Sprachen: {', '.join(LOCALES)})."
-    )
+    print(f"Metadaten in Ordnung (versionCode {vc}, Sprachen: {', '.join(LOCALES)}).")
     for locale in LOCALES:
         for name in LIMITS:
             path = META / locale / name

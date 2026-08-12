@@ -1,9 +1,0 @@
-- PUBLIC_URL im Dev-Modus auf localhost vorbelegen
-- Emulator-Standort auf den korrigierten Ortskern setzen
-- Stillgelegte Aufgaben und Orte nehmen keine Meldungen mehr an
-- Kartenmitte auf den Ortskern, Statustexte je Aufgabenart
-- Eimer-Tabelle der Zugriffsbegrenzung deckeln
-- Freitexte der Erledigungs-Meldung begrenzen
-- Sicherheitsreview umsetzen — Rate-Limiting, CSP, Backup, Betriebsfestigkeit
-- Spielschutz dicht machen, Rangliste wertet nur echte Meldungen
-- und weitere Verbesserungen

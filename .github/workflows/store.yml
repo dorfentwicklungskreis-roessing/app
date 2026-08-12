@@ -1,23 +1,20 @@
 name: Store-Metadaten
 
 # Prüft die Play-Store-Eintragung unter store/: Zeichenlimits, Vollständigkeit,
-# Bildmaße und ob zum versionCode der aktuellen Version ein Änderungshinweis
-# existiert. Läuft absichtlich auch bei Änderungen an build.gradle.kts — dort
-# wird der versionCode aus der Version abgeleitet.
-# Dazu die Tests der Release-Automatik unter scripts/.
+# Bildmaße und ob zum versionCode ein Änderungshinweis existiert.
+# Läuft absichtlich auch bei Änderungen an build.gradle.kts — ein neuer
+# versionCode ohne Änderungshinweis soll auffallen, bevor getaggt wird.
 
 on:
   pull_request:
     paths:
       - "store/**"
-      - "scripts/**"
       - "android/app/build.gradle.kts"
       - ".github/workflows/store.yml"
   push:
     branches: [main]
     paths:
       - "store/**"
-      - "scripts/**"
       - "android/app/build.gradle.kts"
       - ".github/workflows/store.yml"
   workflow_dispatch:
@@ -27,24 +24,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Version, Auswahlkriterien und Änderungshinweise haben eigene Tests —
-  # ohne Fremdbibliotheken, laufen in Sekunden.
-  skripte:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Tests der Release-Automatik
-        run: python3 -m unittest discover -s scripts -v
-
   metadaten:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Die aktuelle Version ist der letzte Tag — dafür braucht es die Tags.
-          fetch-depth: 0
       - name: Metadaten prüfen
         run: python3 store/check_metadata.py
 
