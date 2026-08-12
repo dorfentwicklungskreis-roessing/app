@@ -364,9 +364,11 @@ func TestEndToEnd(t *testing.T) {
 		if isErr {
 			t.Fatalf("erledigung_melden: %s", text)
 		}
-		// Der Name des eingeloggten Machine-Users landet in der Meldung.
-		if !strings.Contains(text, "Dorf-Admin") {
-			t.Fatalf("Melder-Name fehlt: %s", text)
+		// Die Meldung trägt die echte User-ID des eingeloggten Admins.
+		// (Machine-User-Tokens haben keinen name-Claim → Anzeigename ist
+		// der Fallback; entscheidend ist die korrekte Zuordnung via sub.)
+		if !strings.Contains(text, adminUser.UserID) {
+			t.Fatalf("Melder-Sub fehlt (erwartet %s): %s", adminUser.UserID, text)
 		}
 	})
 }
