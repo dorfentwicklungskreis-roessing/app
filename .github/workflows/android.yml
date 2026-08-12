@@ -68,7 +68,10 @@ jobs:
       - name: Backend starten (insecure-dev + Seed)
         working-directory: backend
         run: |
+          # PUBLIC_URL muss lokal bleiben: das Backend lehnt AUTH_MODE=insecure-dev
+          # zusammen mit einer öffentlichen https-URL ab (und die ist Vorbelegung).
           DB_PATH=/tmp/e2e.sqlite AUTH_MODE=insecure-dev SEED=1 LISTEN_ADDR=:8099 \
+          PUBLIC_URL=http://localhost:8099 \
             go run ./cmd/server &
           for i in $(seq 1 30); do curl -sf localhost:8099/healthz && break; sleep 1; done
       # Beide Testläufe laufen bewusst im SELBEN Emulator-Schritt:
