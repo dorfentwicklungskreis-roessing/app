@@ -3,11 +3,9 @@ package de.roessing.app
 import de.roessing.app.data.LatLon
 import de.roessing.app.data.NEARBY_METERS
 import de.roessing.app.data.ROESSING
-import de.roessing.app.data.USER_ZOOM
-import de.roessing.app.data.VILLAGE_ZOOM
 import de.roessing.app.data.distanceMeters
 import de.roessing.app.data.formatDistance
-import de.roessing.app.data.startCamera
+import de.roessing.app.data.isNearVillage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -41,38 +39,23 @@ class GeoTest {
     }
 
     @Test
-    fun `ohne Standort zeigt die Karte das Dorf`() {
-        val start = startCamera(null)
-        assertEquals(ROESSING, start.target)
-        assertEquals(VILLAGE_ZOOM, start.zoom, 0.001)
-        assertFalse(start.followsUser)
+    fun `ein Standort im Dorf gilt als nah`() {
+        assertTrue(isNearVillage(noerdlichVon(ROESSING, 300.0)))
     }
 
     @Test
-    fun `Standort im Dorf zentriert auf den Nutzer`() {
-        val ich = noerdlichVon(ROESSING, 300.0)
-        val start = startCamera(ich)
-        assertEquals(ich, start.target)
-        assertEquals(USER_ZOOM, start.zoom, 0.001)
-        assertTrue(start.followsUser)
-    }
-
-    @Test
-    fun `weit entfernter Standort zeigt trotzdem das Dorf`() {
+    fun `ein weit entfernter Standort gilt nicht als nah`() {
         val hamburg = LatLon(53.5511, 9.9937)
-        val start = startCamera(hamburg)
-        assertEquals(ROESSING, start.target)
-        assertEquals(VILLAGE_ZOOM, start.zoom, 0.001)
-        assertFalse(start.followsUser)
+        assertFalse(isNearVillage(hamburg))
     }
 
     @Test
     fun `Grenzfall genau an der Umkreis-Schwelle zaehlt noch als nah`() {
         val genau = noerdlichVon(ROESSING, NEARBY_METERS)
-        assertTrue("genau auf der Schwelle muss noch zählen", startCamera(genau).followsUser)
+        assertTrue("genau auf der Schwelle muss noch zählen", isNearVillage(genau))
 
         val knappDrueber = noerdlichVon(ROESSING, NEARBY_METERS + 100)
-        assertFalse("knapp außerhalb gehört dem Dorf", startCamera(knappDrueber).followsUser)
+        assertFalse("knapp außerhalb gehört dem Dorf", isNearVillage(knappDrueber))
     }
 
     @Test

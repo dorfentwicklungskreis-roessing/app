@@ -10,17 +10,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import de.roessing.app.data.LatLon
 import de.roessing.app.data.PlaceDto
-import de.roessing.app.data.ROESSING
+import de.roessing.app.data.ROESSING_BOUNDS
 import de.roessing.app.data.USER_ZOOM
-import de.roessing.app.data.VILLAGE_ZOOM
-import de.roessing.app.data.startCamera
+import de.roessing.app.data.center
+import de.roessing.app.data.startView
+import de.roessing.app.data.zoomForBounds
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -46,9 +49,11 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
 
-// Startausschnitt der Karte: der Ortskern (eine Quelle für alle, siehe Geo.kt).
-private val ROESSING_CENTER = LatLng(ROESSING.lat, ROESSING.lon)
-private const val START_ZOOM = VILLAGE_ZOOM
+// Erster Ausschnitt, bevor die Kartengröße bekannt ist: ganz Rössing auf einem
+// gedachten kleinen Telefon (360 × 640 dp). Sobald die echte Größe und die Orte
+// da sind, rechnet startView() den richtigen Ausschnitt (siehe Geo.kt).
+private val ROESSING_CENTER = LatLng(ROESSING_BOUNDS.center.lat, ROESSING_BOUNDS.center.lon)
+private val START_ZOOM = zoomForBounds(ROESSING_BOUNDS, widthDp = 360.0, heightDp = 640.0)
 // Freie Vektor-Kacheln ohne API-Key (OpenFreeMap, OSM-Daten).
 private const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 private const val SOURCE_ID = "places"
@@ -73,8 +78,17 @@ fun MapScreen(
     val context = LocalContext.current
     remember { MapLibre.getInstance(context) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val dichte = LocalDensity.current
     val currentPlaces = rememberUpdatedState(places)
     val currentOnTap = rememberUpdatedState(onPlaceTap)
+
+    // Kartengröße in dp — MapLibre rechnet Zoomstufen in genau dieser Einheit.
+    var breiteDp by remember { mutableStateOf(0.0) }
+    var hoeheDp by remember { mutableStateOf(0.0) }
+    // Der Startausschnitt wird genau einmal gesetzt: sobald Orte da sind.
+    var startGesetzt by remember { mutableStateOf(false) }
+    // Sobald der Nutzer selbst schiebt oder zoomt, mischt sich die App nicht mehr ein.
+    var vomNutzerBewegt by remember { mutableStateOf(false) }
 
     val mapView = remember {
         MapView(context).apply {
@@ -99,6 +113,11 @@ fun MapScreen(
                         ),
                     )
                 }
+                map.addOnCameraMoveStartedListener { grund ->
+                    if (grund == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                        vomNutzerBewegt = true
+                    }
+                }
                 map.addOnMapClickListener { point ->
                     val screen = map.projection.toScreenLocation(point)
                     val features = map.queryRenderedFeatures(screen, LAYER_ID)
@@ -110,29 +129,32 @@ fun MapScreen(
         }
     }
 
-    // Beim ersten bekannten Standort einmal auf den Nutzer schwenken —
-    // aber nur, wenn er wirklich in der Nähe des Dorfes ist.
-    var schonZentriert by remember { mutableStateOf(false) }
-    LaunchedEffect(userLocation) {
-        val ich = userLocation
-        if (schonZentriert || ich == null) return@LaunchedEffect
-        val start = startCamera(ich)
-        if (start.followsUser) {
-            mapView.getMapAsync { map ->
-                map.animateCamera(
-                    CameraUpdateFactory.newLatLngZoom(
-                        LatLng(start.target.lat, start.target.lon), start.zoom,
-                    ),
-                )
-            }
+    // Startausschnitt: möglichst alle Orte ins Bild, ein naher Standort kommt
+    // dazu (statt ihn anzuspringen). Solange noch keine Orte geladen sind,
+    // zeigt die Karte ganz Rössing und rückt nach, sobald die Orte eintreffen.
+    // Danach — oder sobald der Nutzer die Karte selbst angefasst hat — bleibt
+    // die Kamera in Ruhe.
+    LaunchedEffect(breiteDp, hoeheDp, places, userLocation) {
+        if (startGesetzt || vomNutzerBewegt) return@LaunchedEffect
+        if (breiteDp <= 0.0 || hoeheDp <= 0.0) return@LaunchedEffect
+        val orte = places.filter { it.active }.map { LatLon(it.lat, it.lon) }
+        val start = startView(orte, userLocation, breiteDp, hoeheDp)
+        mapView.getMapAsync { map ->
+            map.moveCamera(
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(start.center.lat, start.center.lon), start.zoom,
+                ),
+            )
         }
-        schonZentriert = true
+        if (orte.isNotEmpty()) startGesetzt = true
     }
 
-    // „Mein Standort": jeder Druck zentriert erneut.
+    // „Mein Standort": jeder Druck zentriert erneut und zoomt hinein — das ist
+    // die bewusste Nutzeraktion und schlägt den automatischen Startausschnitt.
     LaunchedEffect(focusRequest) {
         val ich = userLocation ?: return@LaunchedEffect
         if (focusRequest <= 0) return@LaunchedEffect
+        vomNutzerBewegt = true
         mapView.getMapAsync { map ->
             map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(ich.lat, ich.lon), USER_ZOOM))
         }
@@ -169,7 +191,15 @@ fun MapScreen(
         }
     }
 
-    AndroidView(factory = { mapView }, modifier = modifier)
+    AndroidView(
+        factory = { mapView },
+        modifier = modifier.onSizeChanged { groesse ->
+            with(dichte) {
+                breiteDp = groesse.width.toDp().value.toDouble()
+                hoeheDp = groesse.height.toDp().value.toDouble()
+            }
+        },
+    )
 }
 
 /**
