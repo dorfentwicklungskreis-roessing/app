@@ -259,3 +259,75 @@ func TestUnknownToolAndValidation(t *testing.T) {
 		t.Fatalf("Erledigung auf unbekannte Aufgabe ohne Fehler: %s", text)
 	}
 }
+
+// Rangliste und Rücknahme einer Erledigung — die beiden neuen Tools.
+func TestLeaderboardAndWithdrawalTools(t *testing.T) {
+	ts := newTestServer(t)
+
+	text, isErr := callTool(t, ts, "ort_anlegen", map[string]any{
+		"name": "Rangliste-Kasten", "lat": 52.2110, "lon": 9.8697,
+	})
+	if isErr {
+		t.Fatalf("ort_anlegen: %s", text)
+	}
+	var place struct {
+		ID int64 `json:"id"`
+	}
+	_ = json.Unmarshal([]byte(text), &place)
+
+	text, isErr = callTool(t, ts, "aufgabe_anlegen", map[string]any{
+		"placeId": place.ID, "kind": "giessen", "liters": 10, "intervalDays": 7, "redAfterDays": 14,
+	})
+	if isErr {
+		t.Fatalf("aufgabe_anlegen: %s", text)
+	}
+	var task struct {
+		ID int64 `json:"id"`
+	}
+	_ = json.Unmarshal([]byte(text), &task)
+
+	// Zwei Meldungen: eine für Erna, eine irrtümliche für Kuno.
+	if text, isErr = callTool(t, ts, "erledigung_melden",
+		map[string]any{"taskId": task.ID, "name": "Erna", "liters": 10}); isErr {
+		t.Fatalf("erledigung_melden: %s", text)
+	}
+	text, isErr = callTool(t, ts, "erledigung_melden", map[string]any{"taskId": task.ID, "name": "Kuno"})
+	if isErr {
+		t.Fatalf("erledigung_melden: %s", text)
+	}
+	var kuno struct {
+		ID int64 `json:"id"`
+	}
+	_ = json.Unmarshal([]byte(text), &kuno)
+
+	// Rangliste: beide tauchen auf (MCP-Tools laufen als Admin).
+	text, isErr = callTool(t, ts, "rangliste", map[string]any{"period": "saison"})
+	if isErr {
+		t.Fatalf("rangliste: %s", text)
+	}
+	if !strings.Contains(text, "Erna") || !strings.Contains(text, "Kuno") {
+		t.Fatalf("rangliste unvollständig: %s", text)
+	}
+
+	// Unbekannter Zeitraum → Fehler.
+	if text, isErr = callTool(t, ts, "rangliste", map[string]any{"period": "jahrzehnt"}); !isErr {
+		t.Fatalf("unbekannter Zeitraum ohne Fehler: %s", text)
+	}
+
+	// Rücknahme der irrtümlichen Meldung.
+	if text, isErr = callTool(t, ts, "erledigung_zuruecknehmen", map[string]any{"id": kuno.ID}); isErr {
+		t.Fatalf("erledigung_zuruecknehmen: %s", text)
+	}
+	text, isErr = callTool(t, ts, "rangliste", map[string]any{"period": "saison"})
+	if isErr {
+		t.Fatalf("rangliste: %s", text)
+	}
+	if strings.Contains(text, "Kuno") {
+		t.Fatalf("Kuno steht nach der Rücknahme noch in der Rangliste: %s", text)
+	}
+
+	// Unbekannte ID → Fehler.
+	if text, isErr = callTool(t, ts, "erledigung_zuruecknehmen", map[string]any{"id": 4711}); !isErr {
+		t.Fatalf("Rücknahme einer unbekannten Meldung ohne Fehler: %s", text)
+	}
+}
