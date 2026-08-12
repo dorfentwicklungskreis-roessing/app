@@ -17,7 +17,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import de.roessing.app.data.LatLon
 import de.roessing.app.data.PlaceDto
+import de.roessing.app.data.ROESSING
 import de.roessing.app.data.USER_ZOOM
+import de.roessing.app.data.VILLAGE_ZOOM
 import de.roessing.app.data.startCamera
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -44,9 +46,9 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
 
-// Rössing (Gemeinde Nordstemmen) — Startausschnitt der Karte.
-private val ROESSING_CENTER = LatLng(52.2110, 9.8700)
-private const val START_ZOOM = 15.2
+// Startausschnitt der Karte: der Ortskern (eine Quelle für alle, siehe Geo.kt).
+private val ROESSING_CENTER = LatLng(ROESSING.lat, ROESSING.lon)
+private const val START_ZOOM = VILLAGE_ZOOM
 // Freie Vektor-Kacheln ohne API-Key (OpenFreeMap, OSM-Daten).
 private const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 private const val SOURCE_ID = "places"

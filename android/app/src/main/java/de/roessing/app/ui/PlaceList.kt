@@ -42,11 +42,35 @@ fun statusColor(status: CareStatus) = when (status) {
     CareStatus.red -> StatusRed
 }
 
+/**
+ * Statustext eines Ortes. Bewusst neutral: an einem Ort können Gieß- und
+ * Jätaufgaben zusammenkommen, „Bitte gießen" wäre dort schlicht falsch.
+ */
 @Composable
 fun statusLabel(status: CareStatus): String = when (status) {
     CareStatus.green -> stringResource(R.string.status_green)
     CareStatus.yellow -> stringResource(R.string.status_yellow)
     CareStatus.red -> stringResource(R.string.status_red)
+}
+
+/** Statustext einer einzelnen Aufgabe — hier passt die Aufgabenart dazu. */
+@Composable
+fun taskStatusLabel(kind: String, status: CareStatus): String = when (status) {
+    CareStatus.green -> stringResource(R.string.status_green)
+    CareStatus.yellow -> stringResource(
+        when (kind) {
+            "giessen" -> R.string.status_yellow_watering
+            "jaeten" -> R.string.status_yellow_weeding
+            else -> R.string.status_yellow
+        },
+    )
+    CareStatus.red -> stringResource(
+        when (kind) {
+            "giessen" -> R.string.status_red_watering
+            "jaeten" -> R.string.status_red_weeding
+            else -> R.string.status_red
+        },
+    )
 }
 
 /** Punkt in Statusfarbe. */

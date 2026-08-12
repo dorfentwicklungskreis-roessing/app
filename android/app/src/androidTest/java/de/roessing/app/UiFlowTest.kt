@@ -87,7 +87,8 @@ class UiFlowTest {
             }
         }
         compose.onNodeWithText("Unter den Eichen — Kasten 1").assertIsDisplayed()
-        compose.onNodeWithText("Dringend gießen!").assertIsDisplayed()
+        // Auf Ortsebene neutral — dort können mehrere Aufgabenarten zusammenkommen.
+        compose.onNodeWithText("Dringend!").assertIsDisplayed()
         compose.onNodeWithTag("place-card-1").performClick()
         assertEquals(1L, tapped)
     }
@@ -160,6 +161,25 @@ class UiFlowTest {
             }
         }
         compose.onNodeWithText("Ich habe gejätet 🌿").assertIsDisplayed()
+        // An der Aufgabe selbst passt der Text zur Aufgabenart.
+        compose.onNodeWithText("Bitte gießen").assertDoesNotExist()
+    }
+
+    @Test
+    fun detail_jaetenZeigtPassendenStatustext() {
+        val faellig = places[1].copy(tasks = listOf(task(21, "jaeten", "yellow")))
+        compose.setContent {
+            DorfAppTheme {
+                PlaceDetail(
+                    place = faellig,
+                    pendingTasks = emptySet(),
+                    history = emptyMap(),
+                    onComplete = { _, _ -> },
+                    onLoadHistory = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Bitte jäten").assertIsDisplayed()
     }
 
     // --- Rangliste ---------------------------------------------------------

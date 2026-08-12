@@ -19,11 +19,15 @@ import kotlin.math.sqrt
  */
 data class LatLon(val lat: Double, val lon: Double)
 
-/** Dorfmitte Rössing (Unter den Eichen). */
-val ROESSING = LatLon(52.2110, 9.8700)
+/**
+ * Ortskern von Rössing. Die realen Blumenkästen „Unter den Eichen" stehen
+ * bei 52.183159, 9.816763 — der Startausschnitt muss sie zeigen, sonst
+ * startet die App auf freiem Feld.
+ */
+val ROESSING = LatLon(52.1843, 9.8162)
 
 /** Zoomstufen: Dorfüberblick bzw. „ich sehe meine Umgebung". */
-const val VILLAGE_ZOOM = 14.0
+const val VILLAGE_ZOOM = 15.2
 const val USER_ZOOM = 16.0
 
 /**

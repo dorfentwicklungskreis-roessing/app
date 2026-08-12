@@ -166,7 +166,7 @@ private fun TaskCard(
                 Text(task.displayName, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.weight(1f))
                 Text(
-                    statusLabel(task.careStatus),
+                    taskStatusLabel(task.kind, task.careStatus),
                     style = MaterialTheme.typography.labelLarge,
                     color = statusColor(task.careStatus),
                 )

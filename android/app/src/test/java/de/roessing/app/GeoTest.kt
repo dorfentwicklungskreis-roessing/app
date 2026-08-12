@@ -33,6 +33,14 @@ class GeoTest {
     }
 
     @Test
+    fun `die Dorfmitte liegt beim Ortskern und nicht auf freiem Feld`() {
+        // Die realen Blumenkästen „Unter den Eichen".
+        val kaesten = LatLon(52.183159, 9.816763)
+        val entfernung = distanceMeters(ROESSING, kaesten)
+        assertTrue("Kartenmitte liegt $entfernung m von den Kästen entfernt", entfernung < 500)
+    }
+
+    @Test
     fun `ohne Standort zeigt die Karte das Dorf`() {
         val start = startCamera(null)
         assertEquals(ROESSING, start.target)
