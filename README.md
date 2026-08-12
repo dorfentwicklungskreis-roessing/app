@@ -134,7 +134,7 @@ Rollen-Gating — und ein kompletter Durchlauf **mit abgeschaltetem JavaScript**
 | `DB_PATH` | Standard `/data/dorfapp.sqlite` |
 | `AUTH_ISSUER` | Rössing-ID, Standard `https://id.xn--rssing-wxa.de` |
 | `AUTH_MODE` | `oidc` (Standard) oder `insecure-dev` (nur lokal/E2E) |
-| `PUBLIC_URL` | öffentliche Basis-URL; daraus entsteht die OIDC-Redirect-URI `{PUBLIC_URL}/admin/` |
+| `PUBLIC_URL` | öffentliche Basis-URL; daraus entsteht die OIDC-Redirect-URI `{PUBLIC_URL}/admin/`. Ohne Angabe die Produktions-URL — mit `AUTH_MODE=insecure-dev` stattdessen `http://localhost:<Port aus LISTEN_ADDR>` |
 | `ADMIN_CLIENT_ID` | Client-ID der Verwaltung (leer = nur Startseite) |
 | `SESSION_KEY` | Schlüssel für die signierten Session-Cookies; leer = zufällig beim Start (Sessions überleben dann keinen Neustart) |
 | `MCP_CLIENT_ID` | PKCE-Client für die MCP-Anbindung |

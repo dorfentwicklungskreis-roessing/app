@@ -29,7 +29,7 @@ Textlängen), zu gesprächige Fehlermeldungen und fehlende Schutz-Kopfzeilen.
 | 11 | MCP-Discovery: `http.Get` ohne Timeout, und ein einmaliger Fehler wurde per `sync.Once` bis zum Neustart festgeschrieben (der MCP-Login blieb dauerhaft tot). | niedrig | behoben — 15-s-Timeout, Fehler werden nicht mehr zwischengespeichert. | — |
 | 12 | Cross-Site-Request-Forgery war allein durch `SameSite=Lax` abgedeckt. | niedrig | gehärtet — zusätzlich Herkunftsprüfung (`Origin`) für alle schreibenden Zugriffe unter `/admin`. | `internal/httpx/security_test.go: TestHerkunftsPruefung` |
 | 13 | Keine Sicherung der Datenbank. Kein Angriff, aber das größte reale Verlustrisiko. | mittel | behoben — täglicher `VACUUM INTO` ins PVC, 14 Kopien. | `internal/backup/backup_test.go` |
-| 14 | `AUTH_MODE=insecure-dev` war auch mit öffentlicher https-URL startbar. | niedrig | behoben — der Server verweigert diese Kombination. | — (Startprüfung) |
+| 14 | `AUTH_MODE=insecure-dev` war auch mit öffentlicher https-URL startbar. | niedrig | behoben — der Server verweigert diese Kombination. Ohne ausdrückliche `PUBLIC_URL` steht im Dev-Modus ohnehin `http://localhost:<Port>`, damit lokale Läufe und der Android-E2E nicht in die Prüfung laufen. | `cmd/server/main_test.go` |
 
 ## Geprüft und in Ordnung
 

@@ -8,7 +8,9 @@
 //	AUTH_MODE     "oidc" (Standard) oder "insecure-dev" (nur lokal/E2E!)
 //	AUTH_AUDIENCE optionale, kommaseparierte Liste erlaubter Audiences
 //	PUBLIC_URL    öffentliche Basis-URL (MCP-OAuth-Metadata und OIDC-Redirect
-//	              der Verwaltung: {PUBLIC_URL}/admin/)
+//	              der Verwaltung: {PUBLIC_URL}/admin/). Ohne Angabe die
+//	              Produktions-URL — bei AUTH_MODE=insecure-dev dagegen
+//	              http://localhost:<Port aus LISTEN_ADDR>.
 //	ADMIN_CLIENT_ID  OIDC-Client-ID der Verwaltung (leer = nur Startseite)
 //	SESSION_KEY   Schlüssel für die signierten Session-Cookies der Verwaltung.
 //	              Leer = zufällig beim Start (Sessions überleben keinen Neustart).
@@ -26,6 +28,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -63,7 +66,8 @@ func main() {
 
 	addr := envOr("LISTEN_ADDR", ":8080")
 	dbPath := envOr("DB_PATH", "/data/dorfapp.sqlite")
-	publicURL := envOr("PUBLIC_URL", "https://app.xn--rssing-wxa.de")
+	authMode := envOr("AUTH_MODE", "oidc")
+	publicURL := publicURL(authMode, addr)
 
 	database, err := db.Open(dbPath)
 	if err != nil {
@@ -81,9 +85,11 @@ func main() {
 
 	var verifier auth.Verifier
 	issuer := envOr("AUTH_ISSUER", "https://id.xn--rssing-wxa.de")
-	switch envOr("AUTH_MODE", "oidc") {
+	switch authMode {
 	case "insecure-dev":
-		// Doppelter Boden: Dieser Modus darf niemals öffentlich laufen.
+		// Doppelter Boden: Dieser Modus darf niemals öffentlich laufen. Ohne
+		// ausdrückliche PUBLIC_URL steht hier ohnehin localhost (siehe
+		// publicURL) — abgewiesen wird also nur, wer beides bewusst kombiniert.
 		if strings.HasPrefix(publicURL, "https://") {
 			slog.Error("AUTH_MODE=insecure-dev ist mit einer öffentlichen https-URL nicht zulässig",
 				"public_url", publicURL)
@@ -184,6 +190,29 @@ func main() {
 		}
 	}
 	slog.Info("Server gestoppt")
+}
+
+// publicURL liefert die öffentliche Basis-URL. Ist PUBLIC_URL gesetzt, gilt
+// sie unverändert. Ohne Angabe hängt die Vorbelegung am Auth-Modus: Wer
+// insecure-dev fährt (lokale Entwicklung, Android-E2E), meint localhost und
+// nicht die Produktions-URL — sonst liefe er ohne Zutun in die Prüfung, die
+// genau diese Kombination verbietet.
+func publicURL(authMode, addr string) string {
+	if v := strings.TrimSpace(os.Getenv("PUBLIC_URL")); v != "" {
+		return v
+	}
+	if authMode == "insecure-dev" {
+		return "http://localhost:" + portVon(addr)
+	}
+	return "https://app.xn--rssing-wxa.de"
+}
+
+// portVon liest den Port aus einer Lausch-Adresse (":8099", "127.0.0.1:9000").
+func portVon(addr string) string {
+	if _, port, err := net.SplitHostPort(strings.TrimSpace(addr)); err == nil && port != "" {
+		return port
+	}
+	return "8080"
 }
 
 // logEinrichten stellt strukturierte Logs ein. In Containern ist JSON die
