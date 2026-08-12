@@ -128,7 +128,7 @@ jobs:
   # 1) Pro Architektur ein natives Image bauen (nur auf main).
   build:
     if: github.event_name != 'pull_request'
-    needs: [test, e2e, web-e2e]
+    needs: [test, css, e2e, web-e2e]
     strategy:
       fail-fast: true
       matrix:
