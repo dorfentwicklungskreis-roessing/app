@@ -92,9 +92,17 @@ class RealLoginE2eTest {
         }
 
         // Die Orte-Liste beweist zusätzlich, dass das Access-Token vom Backend
-        // akzeptiert wird (echter API-Aufruf, keine Mocks).
-        device.findObject(By.text("Liste"))?.click()
-        check(device.wait(Until.hasObject(By.textContains("Kasten")), 30_000)) {
+        // akzeptiert wird (echter API-Aufruf, keine Mocks). Direkt nach dem Login
+        // läuft der erste Abruf noch, deshalb großzügig warten.
+        val listeTab = device.wait(Until.findObject(By.text("Liste")), 30_000)
+        requireNotNull(listeTab) { "Tab „Liste\" nach dem Login nicht gefunden" }
+        listeTab.click()
+        // Bewusst kein konkreter Ortsname: geprüft wird der Status-Text, den jeder
+        // geladene Ort trägt. So hängt der Test nicht am Inhalt der Produktionsdaten.
+        val ortStatus = By.text(
+            Pattern.compile("alles gut|bitte gießen|dringend gießen", Pattern.CASE_INSENSITIVE),
+        )
+        check(device.wait(Until.hasObject(ortStatus), 60_000)) {
             "Orte-Liste wurde nach dem Login nicht geladen"
         }
     }
