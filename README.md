@@ -21,8 +21,9 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
     Dorfbewohner darf Erledigungen melden; nur `admin` darf verwalten.
 - **Backend** (`api.xn--rssing-wxa.de`):
   - `GET/POST/PUT/DELETE /api/v1/…` — REST-API (JWT-geprüft via JWKS)
-  - `/mcp` — MCP-Server (Streamable HTTP) für Admin aus Claude heraus,
-    Auth per Bearer-Token (`MCP_TOKEN`) oder Pfadsegment `/mcp/<token>`
+  - `/mcp` — MCP-Server (Streamable HTTP) für Admin aus Claude heraus.
+    Auth: OAuth gegen die Rössing-ID (RFC 9728 Protected Resource),
+    admin-Rolle erforderlich — kein statisches Token
   - `/admin` — Web-Admin (OIDC-PKCE-Login, Karte, CRUD)
   - SQLite im WAL-Modus auf einem PVC (`/data/dorfapp.sqlite`)
 - **Domänenmodell**: Orte (`blumenkasten`, `beet`, `sonstiges`) haben
@@ -35,9 +36,9 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
 ```sh
 # Backend lokal (ohne echte Auth, mit Beispieldaten)
 cd backend
-DB_PATH=/tmp/dorf.sqlite AUTH_MODE=insecure-dev SEED=1 MCP_TOKEN=dev \
+DB_PATH=/tmp/dorf.sqlite AUTH_MODE=insecure-dev SEED=1 \
   ADMIN_CLIENT_ID=385942875872952515 go run ./cmd/server
-# → http://localhost:8080/admin/ (Web-Admin), /mcp/dev (MCP)
+# → http://localhost:8080/admin/ (Web-Admin); MCP lokal: Bearer "sub:Name:admin"
 
 # Android (Dev-Login + lokales Backend)
 cd android
@@ -51,11 +52,15 @@ und funktioniert nur gegen ein Backend mit `AUTH_MODE=insecure-dev`.
 
 ## MCP für Admins
 
-In Claude (claude.ai Connector oder Claude Code) einbinden:
+In claude.ai einbinden (Einstellungen → Connectors → Custom Connector):
 
 ```
-URL: https://api.xn--rssing-wxa.de/mcp/<MCP_TOKEN>
+URL:             https://api.xn--rssing-wxa.de/mcp
+OAuth-Client-ID: 385946294599876803   (kein Secret, PKCE)
 ```
+
+Beim Verbinden loggt man sich mit der Rössing-ID ein; nur Nutzer mit der
+Projektrolle `admin` kommen durch.
 
 Tools: `orte_liste`, `ort_anlegen/aendern/loeschen`,
 `aufgabe_anlegen/aendern/loeschen`, `erledigung_melden`, `hitzefaktor_setzen`.
@@ -66,8 +71,6 @@ Push auf `main` mit Backend-Änderungen → GitHub Actions baut ein
 Multi-Arch-Image (amd64 + arm64, native Runner), bumpt den Tag in
 `deploy/overlays/production/kustomization.yaml`, Flux rollt aus
 (GitRepository/Kustomization im `server-config`-Repo).
-
-Secrets: siehe `deploy/secrets.template.yaml` (kubeseal-Muster wie bei Zitadel).
 
 ## Releases (Android)
 

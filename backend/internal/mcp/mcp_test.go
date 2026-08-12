@@ -2,8 +2,9 @@ package mcp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -11,8 +12,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 )
+
+// stubVerifier simuliert die Rössing-ID: "admin-jwt" → Admin Levin,
+// "member-jwt" → Mitglied ohne Rollen, alles andere → ungültig.
+// (Die echte JWT/JWKS-Prüfung ist in internal/auth getestet.)
+type stubVerifier struct{}
+
+func (stubVerifier) Verify(_ context.Context, raw string) (auth.User, error) {
+	switch raw {
+	case "admin-jwt":
+		return auth.User{Sub: "levin", Name: "Levin", Roles: map[string]bool{"admin": true}}, nil
+	case "member-jwt":
+		return auth.User{Sub: "erna", Name: "Erna", Roles: map[string]bool{}}, nil
+	}
+	return auth.User{}, errors.New("ungültiges Token")
+}
+
+const issuer = "https://id.example"
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -21,7 +40,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	s := New(d, "geheim")
+	s := New(d, stubVerifier{}, issuer, "https://api.example")
 	s.Now = func() time.Time { return time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC) }
 	mux := http.NewServeMux()
 	s.Register(mux)
@@ -30,11 +49,11 @@ func newTestServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
-// rpc schickt einen JSON-RPC-Call an den MCP-Endpoint.
-func rpc(t *testing.T, ts *httptest.Server, path, token, method string, params any) map[string]any {
+// rpc schickt einen JSON-RPC-Call mit Bearer-Token an den MCP-Endpoint.
+func rpcRaw(t *testing.T, ts *httptest.Server, token, method string, params any) *http.Response {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
-	req, _ := http.NewRequest("POST", ts.URL+path, bytes.NewReader(body))
+	req, _ := http.NewRequest("POST", ts.URL+"/mcp", bytes.NewReader(body))
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -43,6 +62,12 @@ func rpc(t *testing.T, ts *httptest.Server, path, token, method string, params a
 	if err != nil {
 		t.Fatal(err)
 	}
+	return resp
+}
+
+func rpc(t *testing.T, ts *httptest.Server, token, method string, params any) map[string]any {
+	t.Helper()
+	resp := rpcRaw(t, ts, token, method, params)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("%s: HTTP %d", method, resp.StatusCode)
@@ -54,46 +79,71 @@ func rpc(t *testing.T, ts *httptest.Server, path, token, method string, params a
 	return out
 }
 
-// callTool ruft ein Tool auf und liefert den Text-Inhalt zurück.
+// callTool ruft ein Tool als Admin auf und liefert den Text-Inhalt zurück.
 func callTool(t *testing.T, ts *httptest.Server, name string, args any) (string, bool) {
 	t.Helper()
-	out := rpc(t, ts, "/mcp", "geheim", "tools/call", map[string]any{"name": name, "arguments": args})
+	out := rpc(t, ts, "admin-jwt", "tools/call", map[string]any{"name": name, "arguments": args})
 	result := out["result"].(map[string]any)
 	content := result["content"].([]any)[0].(map[string]any)
 	return content["text"].(string), result["isError"].(bool)
 }
 
-func TestAuthRejected(t *testing.T) {
+func TestOAuthGating(t *testing.T) {
 	ts := newTestServer(t)
-	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
-	// Ohne Token
-	resp, _ := http.Post(ts.URL+"/mcp", "application/json", strings.NewReader(body))
+
+	// Ohne Token: 401 mit WWW-Authenticate → Client startet OAuth-Flow.
+	resp := rpcRaw(t, ts, "", "tools/list", nil)
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("ohne Token: HTTP %d, erwartet 401", resp.StatusCode)
 	}
-	// Falsches Token im Pfad
-	resp, _ = http.Post(ts.URL+"/mcp/falsch", "application/json", strings.NewReader(body))
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("falsches Token: HTTP %d, erwartet 401", resp.StatusCode)
+	if h := resp.Header.Get("WWW-Authenticate"); !strings.Contains(h, "oauth-protected-resource") {
+		t.Fatalf("WWW-Authenticate fehlt/falsch: %q", h)
 	}
-	// Richtiges Token im Pfad funktioniert
-	resp, _ = http.Post(ts.URL+"/mcp/geheim", "application/json", strings.NewReader(body))
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Token im Pfad: HTTP %d, erwartet 200", resp.StatusCode)
+
+	// Ungültiges Token: 401.
+	if resp := rpcRaw(t, ts, "kaputt", "tools/list", nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("ungültiges Token: HTTP %d, erwartet 401", resp.StatusCode)
+	}
+
+	// Gültig, aber keine admin-Rolle: 403.
+	if resp := rpcRaw(t, ts, "member-jwt", "tools/list", nil); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("member: HTTP %d, erwartet 403", resp.StatusCode)
+	}
+
+	// Admin darf.
+	out := rpc(t, ts, "admin-jwt", "tools/list", nil)
+	if len(out["result"].(map[string]any)["tools"].([]any)) < 9 {
+		t.Fatal("zu wenige Tools registriert")
 	}
 }
 
-func TestInitializeAndToolsList(t *testing.T) {
+func TestProtectedResourceMetadata(t *testing.T) {
 	ts := newTestServer(t)
-	out := rpc(t, ts, "/mcp", "geheim", "initialize", map[string]any{"protocolVersion": "2025-03-26"})
+	for _, path := range []string{"/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"} {
+		resp, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var meta struct {
+			Resource             string   `json:"resource"`
+			AuthorizationServers []string `json:"authorization_servers"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		resp.Body.Close()
+		if meta.Resource != "https://api.example" || len(meta.AuthorizationServers) != 1 || meta.AuthorizationServers[0] != issuer {
+			t.Fatalf("%s: unerwartete Metadata: %+v", path, meta)
+		}
+	}
+}
+
+func TestInitialize(t *testing.T) {
+	ts := newTestServer(t)
+	out := rpc(t, ts, "admin-jwt", "initialize", map[string]any{"protocolVersion": "2025-03-26"})
 	result := out["result"].(map[string]any)
 	if result["serverInfo"].(map[string]any)["name"] != "dorf-app" {
 		t.Fatalf("unerwartete serverInfo: %v", result)
-	}
-	out = rpc(t, ts, "/mcp", "geheim", "tools/list", nil)
-	tools := out["result"].(map[string]any)["tools"].([]any)
-	if len(tools) < 9 {
-		t.Fatalf("nur %d Tools registriert", len(tools))
 	}
 }
 
@@ -112,7 +162,7 @@ func TestFullAdminFlow(t *testing.T) {
 	}
 	_ = json.Unmarshal([]byte(text), &place)
 
-	// Gießplan anlegen: 5 l pro Woche
+	// Gießplan: 5 l pro Woche
 	text, isErr = callTool(t, ts, "aufgabe_anlegen", map[string]any{
 		"placeId": place.ID, "kind": "giessen", "liters": 5, "intervalDays": 7, "redAfterDays": 14,
 	})
@@ -131,35 +181,25 @@ func TestFullAdminFlow(t *testing.T) {
 		t.Fatalf("jäten anlegen: %s", text)
 	}
 
-	// Liste enthält Ort mit 2 Aufgaben und Status
+	// Liste enthält Ort mit 2 Aufgaben
 	text, _ = callTool(t, ts, "orte_liste", map[string]any{})
 	if !strings.Contains(text, "Unter den Eichen") || !strings.Contains(text, "jaeten") {
 		t.Fatalf("orte_liste unvollständig: %s", text)
 	}
 
-	// Erledigung melden
-	if text, isErr = callTool(t, ts, "erledigung_melden", map[string]any{
-		"taskId": task.ID, "name": "Levin", "liters": 5,
-	}); isErr {
-		t.Fatalf("erledigung_melden: %s", text)
+	// Erledigung ohne Namen → Name des eingeloggten Admins (Levin)
+	text, isErr = callTool(t, ts, "erledigung_melden", map[string]any{"taskId": task.ID, "liters": 5})
+	if isErr || !strings.Contains(text, "Levin") {
+		t.Fatalf("erledigung_melden: isErr=%v, text=%s", isErr, text)
 	}
 
-	// Hitzefaktor setzen
+	// Hitzefaktor + Aufgabe ändern + Ort löschen
 	if text, isErr = callTool(t, ts, "hitzefaktor_setzen", map[string]any{"factor": 0.5}); isErr {
 		t.Fatalf("hitzefaktor_setzen: %s", text)
 	}
-
-	// Aufgabe ändern (Gießmenge auf 10 l)
-	if text, isErr = callTool(t, ts, "aufgabe_aendern", map[string]any{
-		"id": task.ID, "liters": 10,
-	}); isErr {
+	if text, isErr = callTool(t, ts, "aufgabe_aendern", map[string]any{"id": task.ID, "liters": 10}); isErr || !strings.Contains(text, "10") {
 		t.Fatalf("aufgabe_aendern: %s", text)
 	}
-	if !strings.Contains(text, "10") {
-		t.Fatalf("Liter nicht geändert: %s", text)
-	}
-
-	// Ort löschen
 	if text, isErr = callTool(t, ts, "ort_loeschen", map[string]any{"id": place.ID}); isErr {
 		t.Fatalf("ort_loeschen: %s", text)
 	}
@@ -179,5 +219,4 @@ func TestUnknownToolAndValidation(t *testing.T) {
 	if text, isErr := callTool(t, ts, "erledigung_melden", map[string]any{"taskId": 4711}); !isErr {
 		t.Fatalf("Erledigung auf unbekannte Aufgabe ohne Fehler: %s", text)
 	}
-	_ = fmt.Sprint() // fmt bleibt genutzt
 }

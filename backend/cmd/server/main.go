@@ -6,7 +6,7 @@
 //	DB_PATH       Standard "/data/dorfapp.sqlite"
 //	AUTH_ISSUER   z.B. https://id.xn--rssing-wxa.de — Pflicht in Produktion
 //	AUTH_MODE     "oidc" (Standard) oder "insecure-dev" (nur lokal/E2E!)
-//	MCP_TOKEN     Token für den MCP-Admin-Zugang (leer = MCP deaktiviert)
+//	PUBLIC_URL    öffentliche Basis-URL (für MCP-OAuth-Metadata)
 //	ADMIN_CLIENT_ID  OIDC-Client-ID des Web-Admin (leer = Web-Admin deaktiviert)
 //	SEED          "1" → Beispieldaten anlegen, falls DB leer ist
 package main
@@ -63,10 +63,10 @@ func main() {
 
 	srv := &api.Server{DB: database}
 	handler := srv.Handler(auth.Middleware(verifier), func(mux *http.ServeMux) {
-		if token := os.Getenv("MCP_TOKEN"); token != "" {
-			mcp.New(database, token).Register(mux)
-			slog.Info("MCP-Server aktiv unter /mcp")
-		}
+		// MCP: OAuth gegen die Rössing-ID, admin-Rolle erforderlich.
+		publicURL := envOr("PUBLIC_URL", "https://api.xn--rssing-wxa.de")
+		mcp.New(database, verifier, issuer, publicURL).Register(mux)
+		slog.Info("MCP-Server aktiv unter /mcp (OAuth)", "issuer", issuer)
 		if clientID := os.Getenv("ADMIN_CLIENT_ID"); clientID != "" {
 			admin.Register(mux, issuer, clientID)
 			slog.Info("Web-Admin aktiv unter /admin")

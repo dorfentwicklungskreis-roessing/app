@@ -3,7 +3,8 @@
 //
 // Unterstützt werden initialize, ping, tools/list und tools/call — das ist
 // alles, was Claude (claude.ai Connectors und Claude Code) zum Arbeiten
-// braucht. Auth: Bearer-Token oder Token als Pfadsegment (/mcp/<token>).
+// braucht. Auth: OAuth gegen die Rössing-ID (siehe auth.go), admin-Rolle
+// erforderlich.
 package mcp
 
 import (
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
@@ -20,21 +22,26 @@ import (
 const protocolVersion = "2025-03-26"
 
 type Server struct {
-	DB    *db.DB
-	Token string
-	Now   func() time.Time
-	tools []tool
+	DB *db.DB
+	// Verifier prüft OAuth-JWTs der Rössing-ID; MCP verlangt die admin-Rolle.
+	Verifier auth.Verifier
+	// Issuer: Authorization Server (z.B. https://id.xn--rssing-wxa.de).
+	Issuer string
+	// Resource: öffentliche Basis-URL dieses Servers (für RFC-9728-Metadata).
+	Resource string
+	Now      func() time.Time
+	tools    []tool
 }
 
 type tool struct {
 	Name        string
 	Description string
 	Schema      map[string]any
-	Handler     func(args json.RawMessage) (any, error)
+	Handler     func(args json.RawMessage, u auth.User) (any, error)
 }
 
-func New(database *db.DB, token string) *Server {
-	s := &Server{DB: database, Token: token}
+func New(database *db.DB, verifier auth.Verifier, issuer, resource string) *Server {
+	s := &Server{DB: database, Verifier: verifier, Issuer: issuer, Resource: resource}
 	s.registerTools()
 	return s
 }
@@ -46,39 +53,17 @@ func (s *Server) now() time.Time {
 	return time.Now()
 }
 
-// Register hängt den MCP-Endpoint an den Mux.
+// Register hängt den MCP-Endpoint samt OAuth-Metadata an den Mux.
 func (s *Server) Register(mux *http.ServeMux) {
-	mux.HandleFunc("POST /mcp", s.withAuth(s.handlePost, false))
-	mux.HandleFunc("POST /mcp/{token}", s.withAuth(s.handlePost, true))
+	mux.HandleFunc("POST /mcp", s.withAuth(s.handlePost))
+	s.registerWellKnown(mux)
 	// GET (SSE-Stream) wird nicht unterstützt — sauber ablehnen.
-	reject := func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /mcp", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
-	mux.HandleFunc("GET /mcp", reject)
-	mux.HandleFunc("GET /mcp/{token}", reject)
+	})
 	mux.HandleFunc("DELETE /mcp", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-}
-
-func (s *Server) withAuth(h http.HandlerFunc, fromPath bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if s.Token == "" {
-			http.Error(w, "MCP ist nicht konfiguriert (MCP_TOKEN fehlt)", http.StatusServiceUnavailable)
-			return
-		}
-		got := ""
-		if fromPath {
-			got = r.PathValue("token")
-		} else if ah := r.Header.Get("Authorization"); len(ah) > 7 && ah[:7] == "Bearer " {
-			got = ah[7:]
-		}
-		if got != s.Token {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		h(w, r)
-	}
 }
 
 // --- JSON-RPC ---------------------------------------------------------------
@@ -102,7 +87,7 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
-func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePost(w http.ResponseWriter, r *http.Request, u auth.User) {
 	var req rpcRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeRPC(w, rpcResponse{JSONRPC: "2.0", Error: &rpcError{Code: -32700, Message: "parse error"}})
@@ -136,7 +121,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	case "tools/list":
 		resp.Result = s.toolsList()
 	case "tools/call":
-		resp.Result = s.toolsCall(req.Params)
+		resp.Result = s.toolsCall(req.Params, u)
 	default:
 		resp.Error = &rpcError{Code: -32601, Message: "method not found: " + req.Method}
 	}
@@ -160,7 +145,7 @@ func (s *Server) toolsList() map[string]any {
 	return map[string]any{"tools": list}
 }
 
-func (s *Server) toolsCall(params json.RawMessage) map[string]any {
+func (s *Server) toolsCall(params json.RawMessage, u auth.User) map[string]any {
 	var p struct {
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
@@ -172,7 +157,7 @@ func (s *Server) toolsCall(params json.RawMessage) map[string]any {
 		if t.Name != p.Name {
 			continue
 		}
-		result, err := t.Handler(p.Arguments)
+		result, err := t.Handler(p.Arguments, u)
 		if err != nil {
 			return toolError(err.Error())
 		}
@@ -301,7 +286,7 @@ func (s *Server) registerTools() {
 				"z.B. wenn jemand telefonisch Vollzug meldet.",
 			Schema: obj([]string{"taskId"}, map[string]any{
 				"taskId": integer("ID der Aufgabe"),
-				"name":   str("Wer hat's gemacht? (Standard: 'Admin via Claude')"),
+				"name":   str("Wer hat's gemacht? (Standard: der eingeloggte Admin)"),
 				"liters": num("Tatsächlich gegossene Liter (optional)"),
 				"note":   str("Optionale Notiz"),
 			}),
@@ -317,7 +302,7 @@ func (s *Server) registerTools() {
 	}
 }
 
-func (s *Server) toolListPlaces(json.RawMessage) (any, error) {
+func (s *Server) toolListPlaces(json.RawMessage, auth.User) (any, error) {
 	places, factor, err := api.AssemblePlaces(s.DB, s.now())
 	if err != nil {
 		return nil, err
@@ -325,7 +310,7 @@ func (s *Server) toolListPlaces(json.RawMessage) (any, error) {
 	return map[string]any{"places": places, "wateringFactor": factor}, nil
 }
 
-func (s *Server) toolCreatePlace(args json.RawMessage) (any, error) {
+func (s *Server) toolCreatePlace(args json.RawMessage, u auth.User) (any, error) {
 	var in api.PlaceInput
 	if err := json.Unmarshal(args, &in); err != nil {
 		return nil, err
@@ -341,7 +326,7 @@ func (s *Server) toolCreatePlace(args json.RawMessage) (any, error) {
 	return p, nil
 }
 
-func (s *Server) toolUpdatePlace(args json.RawMessage) (any, error) {
+func (s *Server) toolUpdatePlace(args json.RawMessage, u auth.User) (any, error) {
 	var in struct {
 		ID          int64    `json:"id"`
 		Name        *string  `json:"name"`
@@ -375,7 +360,7 @@ func (s *Server) toolUpdatePlace(args json.RawMessage) (any, error) {
 	return p, nil
 }
 
-func (s *Server) toolDeletePlace(args json.RawMessage) (any, error) {
+func (s *Server) toolDeletePlace(args json.RawMessage, u auth.User) (any, error) {
 	var in struct {
 		ID int64 `json:"id"`
 	}
@@ -388,7 +373,7 @@ func (s *Server) toolDeletePlace(args json.RawMessage) (any, error) {
 	return map[string]any{"deleted": in.ID}, nil
 }
 
-func (s *Server) toolCreateTask(args json.RawMessage) (any, error) {
+func (s *Server) toolCreateTask(args json.RawMessage, u auth.User) (any, error) {
 	var in struct {
 		PlaceID int64 `json:"placeId"`
 		api.TaskInput
@@ -410,7 +395,7 @@ func (s *Server) toolCreateTask(args json.RawMessage) (any, error) {
 	return t, nil
 }
 
-func (s *Server) toolUpdateTask(args json.RawMessage) (any, error) {
+func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) {
 	var in struct {
 		ID           int64    `json:"id"`
 		Kind         *string  `json:"kind"`
@@ -449,7 +434,7 @@ func (s *Server) toolUpdateTask(args json.RawMessage) (any, error) {
 	return t, nil
 }
 
-func (s *Server) toolDeleteTask(args json.RawMessage) (any, error) {
+func (s *Server) toolDeleteTask(args json.RawMessage, u auth.User) (any, error) {
 	var in struct {
 		ID int64 `json:"id"`
 	}
@@ -462,7 +447,7 @@ func (s *Server) toolDeleteTask(args json.RawMessage) (any, error) {
 	return map[string]any{"deleted": in.ID}, nil
 }
 
-func (s *Server) toolCreateCompletion(args json.RawMessage) (any, error) {
+func (s *Server) toolCreateCompletion(args json.RawMessage, u auth.User) (any, error) {
 	var in struct {
 		TaskID int64    `json:"taskId"`
 		Name   string   `json:"name"`
@@ -477,9 +462,12 @@ func (s *Server) toolCreateCompletion(args json.RawMessage) (any, error) {
 		return nil, fmt.Errorf("Aufgabe %d nicht gefunden", in.TaskID)
 	}
 	if in.Name == "" {
+		in.Name = u.Name
+	}
+	if in.Name == "" {
 		in.Name = "Admin via Claude"
 	}
-	c := model.Completion{TaskID: task.ID, UserSub: "mcp-admin", UserName: in.Name,
+	c := model.Completion{TaskID: task.ID, UserSub: u.Sub, UserName: in.Name,
 		Liters: in.Liters, Note: in.Note, DoneAt: s.now()}
 	if err := s.DB.InsertCompletion(&c); err != nil {
 		return nil, err
@@ -487,7 +475,7 @@ func (s *Server) toolCreateCompletion(args json.RawMessage) (any, error) {
 	return c, nil
 }
 
-func (s *Server) toolSetFactor(args json.RawMessage) (any, error) {
+func (s *Server) toolSetFactor(args json.RawMessage, u auth.User) (any, error) {
 	var in struct {
 		Factor float64 `json:"factor"`
 	}

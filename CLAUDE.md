@@ -21,8 +21,8 @@ Details: siehe `README.md`.
   QEMU — siehe Workflow-Muster in `.github/workflows/backend.yml`.
 - **SQLite**: eine Schreibverbindung (`SetMaxOpenConns(1)`), WAL-Modus wird
   in `internal/db` gesetzt. Deployment-Strategie bleibt `Recreate`.
-- **Keine Secrets committen.** MCP-Token & Co. laufen über Sealed Secrets
-  (`deploy/secrets.template.yaml`).
+- **Keine Secrets committen.** Der MCP-Endpoint nutzt OAuth (Rössing-ID,
+  admin-Rolle) — es gibt bewusst kein statisches Token.
 
 ## Identität (Rössing-ID / Zitadel)
 
@@ -30,4 +30,5 @@ Details: siehe `README.md`.
 - Rollen: `admin` (verwalten), `member` (melden). Rollen kommen als
   Claim `urn:zitadel:iam:org:project:roles` im JWT-Access-Token.
 - Client-IDs: Android-App `385941807986376899` (nativ, PKCE),
-  Web-Admin `385942875872952515` (User-Agent, PKCE).
+  Web-Admin `385942875872952515` (User-Agent, PKCE),
+  Claude-MCP-Connector `385946294599876803` (Web, PKCE, kein Secret).

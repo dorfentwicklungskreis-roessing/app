@@ -35,13 +35,8 @@ spec:
             # Seed legt nur bei leerer DB die Beispiel-Kästen an.
             - name: SEED
               value: "1"
-            - name: MCP_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: dorf-app-secrets
-                  key: mcp-token
-                  # Ohne Secret startet der Server trotzdem — MCP ist dann aus.
-                  optional: true
+            - name: PUBLIC_URL
+              value: https://api.xn--rssing-wxa.de
           volumeMounts:
             - name: data
               mountPath: /data
