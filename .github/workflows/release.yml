@@ -75,7 +75,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json firebase appdistribution:distribute \
             android/app/build/outputs/apk/release/app-release.apk \
             --app "$FIREBASE_APP_ID" \
-            --groups dorf-tester \
+            --groups tester \
             --release-notes "Automatischer Build ${{ github.ref_name }}"
 
       - name: Play-Store-Upload (falls Secret vorhanden)
