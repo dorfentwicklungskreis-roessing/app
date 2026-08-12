@@ -4,6 +4,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Standort nur im Vordergrund: für Kartenausschnitt und Entfernungen.
+         Er bleibt auf dem Gerät und wird nie ans Backend geschickt. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
     <application
         android:name=".DorfApp"
         android:label="@string/app_name"

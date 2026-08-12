@@ -1,18 +1,30 @@
 package de.roessing.app.ui
 
+import android.annotation.SuppressLint
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import de.roessing.app.data.LatLon
 import de.roessing.app.data.PlaceDto
+import de.roessing.app.data.USER_ZOOM
+import de.roessing.app.data.startCamera
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.location.LocationComponentActivationOptions
+import org.maplibre.android.location.modes.CameraMode
+import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
@@ -40,11 +52,20 @@ private const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 private const val SOURCE_ID = "places"
 private const val LAYER_ID = "places-layer"
 
-/** Dorfkarte mit farbigen Status-Markern für alle Pflege-Orte. */
+/**
+ * Dorfkarte mit farbigen Status-Markern für alle Pflege-Orte.
+ *
+ * userLocation kommt vom Gerät und bleibt dort — die Karte nutzt ihn nur für
+ * den Startausschnitt und den eigenen Standortpunkt.
+ * focusRequest steigt bei jedem Druck auf „Mein Standort".
+ */
 @Composable
 fun MapScreen(
     places: List<PlaceDto>,
     modifier: Modifier = Modifier,
+    userLocation: LatLon? = null,
+    showUserLocation: Boolean = false,
+    focusRequest: Int = 0,
     onPlaceTap: (Long) -> Unit,
 ) {
     val context = LocalContext.current
@@ -87,6 +108,42 @@ fun MapScreen(
         }
     }
 
+    // Beim ersten bekannten Standort einmal auf den Nutzer schwenken —
+    // aber nur, wenn er wirklich in der Nähe des Dorfes ist.
+    var schonZentriert by remember { mutableStateOf(false) }
+    LaunchedEffect(userLocation) {
+        val ich = userLocation
+        if (schonZentriert || ich == null) return@LaunchedEffect
+        val start = startCamera(ich)
+        if (start.followsUser) {
+            mapView.getMapAsync { map ->
+                map.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(
+                        LatLng(start.target.lat, start.target.lon), start.zoom,
+                    ),
+                )
+            }
+        }
+        schonZentriert = true
+    }
+
+    // „Mein Standort": jeder Druck zentriert erneut.
+    LaunchedEffect(focusRequest) {
+        val ich = userLocation ?: return@LaunchedEffect
+        if (focusRequest <= 0) return@LaunchedEffect
+        mapView.getMapAsync { map ->
+            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(ich.lat, ich.lon), USER_ZOOM))
+        }
+    }
+
+    // Eigener Standortpunkt, sobald die Berechtigung da ist.
+    LaunchedEffect(showUserLocation) {
+        if (!showUserLocation) return@LaunchedEffect
+        mapView.getMapAsync { map ->
+            map.style?.let { style -> zeigeStandortpunkt(context, map, style) }
+        }
+    }
+
     // Marker aktualisieren, wenn sich die Daten ändern.
     mapView.getMapAsync { map: MapLibreMap ->
         map.style?.getSourceAs<GeoJsonSource>(SOURCE_ID)?.setGeoJson(toGeoJson(places))
@@ -111,6 +168,30 @@ fun MapScreen(
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
+}
+
+/**
+ * Schaltet den blauen Standortpunkt (inkl. Blickrichtung) ein. Die
+ * Berechtigung ist an dieser Stelle bereits erteilt — sonst wird nicht
+ * aufgerufen; die Kamera bleibt in der Hand des Nutzers.
+ */
+@SuppressLint("MissingPermission")
+private fun zeigeStandortpunkt(
+    context: android.content.Context,
+    map: MapLibreMap,
+    style: Style,
+) {
+    runCatching {
+        val komponente = map.locationComponent
+        if (!komponente.isLocationComponentActivated) {
+            komponente.activateLocationComponent(
+                LocationComponentActivationOptions.builder(context, style).build(),
+            )
+        }
+        komponente.isLocationComponentEnabled = true
+        komponente.cameraMode = CameraMode.NONE
+        komponente.renderMode = RenderMode.COMPASS
+    }
 }
 
 private fun toGeoJson(places: List<PlaceDto>): FeatureCollection =

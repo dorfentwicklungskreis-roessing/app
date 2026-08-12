@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,8 +27,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import de.roessing.app.R
 import de.roessing.app.data.CareStatus
+import de.roessing.app.data.LatLon
 import de.roessing.app.data.PlaceDto
 import de.roessing.app.data.PlaceSort
+import de.roessing.app.data.distanceMeters
+import de.roessing.app.data.formatDistance
 import de.roessing.app.ui.theme.StatusGreen
 import de.roessing.app.ui.theme.StatusRed
 import de.roessing.app.ui.theme.StatusYellow
@@ -64,19 +68,50 @@ fun PlaceListScreen(
     onPlaceTap: (Long) -> Unit,
     onSortChange: (PlaceSort) -> Unit = {},
 ) {
-    LazyColumn(
-        modifier = modifier.testTag("place-list"),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        items(state.places, key = { it.id }) { place ->
-            PlaceCard(place, onTap = { onPlaceTap(place.id) })
+    Column(modifier) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = state.sort == PlaceSort.URGENCY,
+                onClick = { onSortChange(PlaceSort.URGENCY) },
+                label = { Text(stringResource(R.string.sort_urgency)) },
+                modifier = Modifier.testTag("sort-urgency"),
+            )
+            // Ohne Standort gibt es nichts zu sortieren.
+            FilterChip(
+                selected = state.sort == PlaceSort.DISTANCE,
+                onClick = { onSortChange(PlaceSort.DISTANCE) },
+                enabled = state.userLocation != null,
+                label = { Text(stringResource(R.string.sort_distance)) },
+                modifier = Modifier.testTag("sort-distance"),
+            )
+        }
+        LazyColumn(
+            modifier = Modifier.testTag("place-list"),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 16.dp, end = 16.dp, bottom = 16.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(state.places, key = { it.id }) { place ->
+                PlaceCard(
+                    place = place,
+                    entfernung = state.userLocation?.let { ich ->
+                        formatDistance(distanceMeters(ich, LatLon(place.lat, place.lon)))
+                    },
+                    onTap = { onPlaceTap(place.id) },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun PlaceCard(place: PlaceDto, onTap: () -> Unit) {
+private fun PlaceCard(place: PlaceDto, entfernung: String?, onTap: () -> Unit) {
     Card(
         onClick = onTap,
         modifier = Modifier
@@ -100,11 +135,21 @@ private fun PlaceCard(place: PlaceDto, onTap: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
-                statusLabel(place.careStatus),
-                style = MaterialTheme.typography.labelLarge,
-                color = statusColor(place.careStatus),
-            )
+            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                Text(
+                    statusLabel(place.careStatus),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = statusColor(place.careStatus),
+                )
+                if (entfernung != null) {
+                    Text(
+                        entfernung,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("distance-${place.id}"),
+                    )
+                }
+            }
         }
     }
 }

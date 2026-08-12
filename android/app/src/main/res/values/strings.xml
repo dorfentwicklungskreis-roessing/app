@@ -44,4 +44,16 @@
     <string name="leaderboard_my_rank">Dein Platz: %1$d</string>
     <string name="leaderboard_my_none">Du hast in diesem Zeitraum noch nichts gemeldet.</string>
     <string name="leaderboard_you">Du</string>
+    <!-- Standort (bleibt auf dem Gerät) -->
+    <string name="location_hint_title">Deine Umgebung sehen</string>
+    <string name="location_hint_text">Mit Standortfreigabe startet die Karte bei dir und die Liste zeigt Entfernungen. Der Standort bleibt auf dem Gerät.</string>
+    <string name="location_hint_button">Standort freigeben</string>
+    <string name="location_denied">Ohne Standort zeigt die Karte das Dorf. Freigeben geht jederzeit in den App-Einstellungen.</string>
+    <string name="my_location">Mein Standort</string>
+    <string name="sort_urgency">Dringlichkeit</string>
+    <string name="sort_distance">Entfernung</string>
+
+    <!-- Spielschutz -->
+    <string name="task_locked">Wieder ab %1$s</string>
+    <string name="completion_locked">Schon erledigt — wieder ab %1$s</string>
 </resources>

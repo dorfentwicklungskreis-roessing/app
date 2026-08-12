@@ -11,6 +11,10 @@
 #   REAL_LOGIN_USER, REAL_LOGIN_PASSWORD Zugangsdaten für den echten Rössing-ID-Login
 set -euo pipefail
 
+# 0) Emulator-Standort auf Rössing setzen — davon lebt der Standort-Test.
+#    (Ohne Fix liefert der Emulator gar keine Position, der Test überspringt dann.)
+adb emu geo fix 9.8700 52.2110 || true
+
 # 1) Instrumented- und E2E-Tests gegen das lokale Backend (Dev-Login).
 ./gradlew connectedDebugAndroidTest \
   -PapiBaseUrl=http://10.0.2.2:8099 \

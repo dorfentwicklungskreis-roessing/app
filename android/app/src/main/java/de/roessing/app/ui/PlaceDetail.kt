@@ -36,7 +36,7 @@ import java.time.format.DateTimeFormatter
 
 private val dateFormat = DateTimeFormatter.ofPattern("d.M.yyyy HH:mm").withZone(ZoneId.systemDefault())
 
-private fun formatTime(iso: String): String =
+internal fun formatTime(iso: String): String =
     runCatching { dateFormat.format(Instant.parse(iso)) }.getOrDefault(iso)
 
 /** Detailansicht eines Ortes im BottomSheet: Aufgaben, Pläne, Historie, Melden. */
@@ -154,6 +154,10 @@ private fun TaskCard(
     history: List<CompletionDto>,
     onComplete: () -> Unit,
 ) {
+    // Spielschutz: nach einer Erledigung bleibt die Aufgabe eine Weile
+    // gesperrt. Der Knopf sagt das, statt erst in einen Fehler zu laufen.
+    val gesperrtBis = task.lockedUntilInstant
+    val gesperrt = gesperrtBis != null && gesperrtBis.isAfter(Instant.now())
     OutlinedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -184,9 +188,17 @@ private fun TaskCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
+            if (gesperrt) {
+                Text(
+                    stringResource(R.string.task_locked, formatTime(task.lockedUntil!!)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(6.dp))
+            }
             Button(
                 onClick = onComplete,
-                enabled = !pending,
+                enabled = !pending && !gesperrt,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("complete-task-${task.id}"),

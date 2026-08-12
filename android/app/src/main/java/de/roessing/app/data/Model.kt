@@ -41,6 +41,10 @@ data class TaskDto(
 ) {
     val careStatus: CareStatus get() = parseStatus(status)
 
+    /** Zeitpunkt, bis zu dem der Spielschutz greift (oder null). */
+    val lockedUntilInstant: java.time.Instant?
+        get() = lockedUntil?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+
     /** Menschenlesbarer Name der Aufgabe. */
     val displayName: String
         get() = title.ifEmpty {
