@@ -301,6 +301,29 @@ func (s *Server) registerTools() {
 			Handler: s.toolCreateCompletion,
 		},
 		{
+			Name: "erledigung_zuruecknehmen",
+			Description: "Nimmt eine irrtümlich gemeldete Erledigung zurück (z.B. versehentlich " +
+				"angetippt). Die Ampel rechnet danach automatisch neu. Die IDs stehen in der " +
+				"Historie einer Aufgabe.",
+			Schema: obj([]string{"id"}, map[string]any{
+				"id": integer("ID der Erledigungs-Meldung"),
+			}),
+			Handler: s.toolDeleteCompletion,
+		},
+		{
+			Name: "rangliste",
+			Description: "Rangliste der Dorfpflege: wer hat im Zeitraum wie viele Erledigungen " +
+				"(je Aufgabenart) und wie viele Liter geschafft, samt Gesamtsummen des Dorfes " +
+				"und Auszeichnungen. Damit lassen sich Fragen wie „wer hat diesen Monat am " +
+				"meisten gegossen?“ beantworten.",
+			Schema: obj(nil, map[string]any{
+				"period": enum("Zeitraum (Standard: saison = 1. März bis 31. Oktober)",
+					"woche", "monat", "saison", "jahr", "gesamt"),
+				"limit": integer("Wie viele Plätze ausgeben (Standard 25)"),
+			}),
+			Handler: s.toolLeaderboard,
+		},
+		{
 			Name: "hitzefaktor_setzen",
 			Description: "Setzt den globalen Hitze-Faktor für Gieß-Aufgaben. 1.0 = normal, " +
 				"0.5 = Hitzewelle (Kästen werden doppelt so schnell gelb/rot). Bereich 0–4.",
@@ -481,6 +504,39 @@ func (s *Server) toolCreateCompletion(args json.RawMessage, u auth.User) (any, e
 		return nil, err
 	}
 	return c, nil
+}
+
+// toolDeleteCompletion nimmt eine irrtümliche Meldung zurück. Über MCP ist
+// das ohnehin nur Admins möglich (siehe auth.go), deshalb keine weitere
+// Prüfung des Melders.
+func (s *Server) toolDeleteCompletion(args json.RawMessage, _ auth.User) (any, error) {
+	var in struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return nil, err
+	}
+	if err := s.DB.DeleteCompletion(in.ID); err != nil {
+		return nil, fmt.Errorf("Meldung %d nicht gefunden", in.ID)
+	}
+	return map[string]any{"deleted": in.ID}, nil
+}
+
+func (s *Server) toolLeaderboard(args json.RawMessage, u auth.User) (any, error) {
+	var in struct {
+		Period string `json:"period"`
+		Limit  int    `json:"limit"`
+	}
+	if len(args) > 0 {
+		if err := json.Unmarshal(args, &in); err != nil {
+			return nil, err
+		}
+	}
+	period, err := model.ParsePeriod(in.Period)
+	if err != nil {
+		return nil, err
+	}
+	return api.AssembleLeaderboard(s.DB, s.now(), period, in.Limit, u)
 }
 
 func (s *Server) toolSetFactor(args json.RawMessage, u auth.User) (any, error) {

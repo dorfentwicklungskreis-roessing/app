@@ -41,6 +41,8 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 	api.HandleFunc("DELETE /api/v1/tasks/{id}", s.adminOnly(s.handleDeleteTask))
 	api.HandleFunc("GET /api/v1/tasks/{id}/completions", s.handleListCompletions)
 	api.HandleFunc("POST /api/v1/tasks/{id}/completions", s.handleCreateCompletion)
+	api.HandleFunc("DELETE /api/v1/completions/{id}", s.handleDeleteCompletion)
+	api.HandleFunc("GET /api/v1/stats/leaderboard", s.handleLeaderboard)
 	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
 	api.HandleFunc("PUT /api/v1/settings", s.adminOnly(s.handlePutSettings))
 
@@ -412,6 +414,36 @@ func (s *Server) handleCreateCompletion(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusCreated, c)
+}
+
+// handleDeleteCompletion nimmt eine irrtümliche Meldung zurück. Erlaubt ist
+// das dem Melder selbst und Admins; die Ampel rechnet sich danach von allein
+// neu, weil sie immer aus der letzten vorhandenen Erledigung folgt.
+func (s *Server) handleDeleteCompletion(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "ungültige ID")
+		return
+	}
+	c, err := s.DB.GetCompletion(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "Meldung nicht gefunden")
+		return
+	}
+	u, _ := auth.FromContext(r.Context())
+	if c.UserSub != u.Sub && !u.IsAdmin() {
+		writeErr(w, http.StatusForbidden, "nur eigene Meldungen können zurückgenommen werden")
+		return
+	}
+	if err := s.DB.DeleteCompletion(id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "Meldung nicht gefunden")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {

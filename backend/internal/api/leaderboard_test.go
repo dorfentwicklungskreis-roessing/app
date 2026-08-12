@@ -181,10 +181,10 @@ func TestLeaderboardPeriodBoundaries(t *testing.T) {
 
 	at := func(m time.Month, d, h, min int) time.Time { return time.Date(2026, m, d, h, min, 0, 0, loc) }
 	// Vier Meldungen rund um die Saisongrenzen.
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.February, 28, 12, 0), 0)  // vor der Saison
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.March, 1, 0, 30), 0)      // Saisonbeginn
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.October, 31, 23, 0), 0)   // Saisonende
-	reportAt(t, ts, srv, taskID, ernaToken, at(time.November, 1, 0, 30), 0)   // nach der Saison
+	reportAt(t, ts, srv, taskID, ernaToken, at(time.February, 28, 12, 0), 0) // vor der Saison
+	reportAt(t, ts, srv, taskID, ernaToken, at(time.March, 1, 0, 30), 0)     // Saisonbeginn
+	reportAt(t, ts, srv, taskID, ernaToken, at(time.October, 31, 23, 0), 0)  // Saisonende
+	reportAt(t, ts, srv, taskID, ernaToken, at(time.November, 1, 0, 30), 0)  // nach der Saison
 
 	stand := at(time.December, 15, 12, 0)
 	for query, wantCount := range map[string]int{
