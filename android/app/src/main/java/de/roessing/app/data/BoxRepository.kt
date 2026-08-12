@@ -20,3 +20,12 @@ class ApiPlacesRepository(private val api: DorfApi) : PlacesRepository {
     override suspend fun completions(taskId: Long): List<CompletionDto> =
         api.completions(taskId).completions
 }
+
+/** Zugriff auf die Auswertungen (Rangliste). */
+interface StatsRepository {
+    suspend fun leaderboard(period: String): LeaderboardDto
+}
+
+class ApiStatsRepository(private val api: DorfApi) : StatsRepository {
+    override suspend fun leaderboard(period: String): LeaderboardDto = api.leaderboard(period)
+}

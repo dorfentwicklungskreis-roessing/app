@@ -10,6 +10,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
 
 interface DorfApi {
@@ -24,6 +25,9 @@ interface DorfApi {
 
     @POST("api/v1/tasks/{id}/completions")
     suspend fun complete(@Path("id") taskId: Long, @Body input: CompletionInput): CompletionDto
+
+    @GET("api/v1/stats/leaderboard")
+    suspend fun leaderboard(@Query("period") period: String): LeaderboardDto
 
     companion object {
         private val json = Json {

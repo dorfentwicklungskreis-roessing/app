@@ -5,15 +5,23 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import de.roessing.app.data.BadgeDto
+import de.roessing.app.data.LeaderboardEntryDto
+import de.roessing.app.data.LeaderboardTotalsDto
 import de.roessing.app.data.PlaceDto
 import de.roessing.app.data.TaskDto
+import de.roessing.app.ui.LeaderboardPeriod
+import de.roessing.app.ui.LeaderboardScreen
+import de.roessing.app.ui.LeaderboardUiState
 import de.roessing.app.ui.LoginScreen
 import de.roessing.app.ui.PlaceDetail
 import de.roessing.app.ui.PlaceListScreen
 import de.roessing.app.ui.PlacesUiState
 import de.roessing.app.ui.theme.DorfAppTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -78,7 +86,7 @@ class UiFlowTest {
     }
 
     @Test
-    fun detail_meldetErledigung() {
+    fun detail_meldetErledigungErstNachBestaetigung() {
         var completed: Pair<Long, Double?>? = null
         compose.setContent {
             DorfAppTheme {
@@ -92,8 +100,43 @@ class UiFlowTest {
             }
         }
         compose.onNodeWithText("10 Liter, alle 7 Tage").assertIsDisplayed()
+
+        // Ein Klick fragt erst nach — gemeldet wird noch nichts.
         compose.onNodeWithTag("complete-task-11").performClick()
+        compose.onNodeWithTag("confirm-completion").assertIsDisplayed()
+        compose.onNodeWithText("Hast du wirklich gegossen?").assertIsDisplayed()
+        compose.onNodeWithText("Unter den Eichen — Kasten 1").assertIsDisplayed()
+        compose.onNodeWithText("Menge: 10 Liter").assertIsDisplayed()
+        assertNull("Ohne Bestätigung darf nichts gemeldet werden", completed)
+
+        // Abbrechen schließt den Dialog, ohne zu melden.
+        compose.onNodeWithTag("confirm-completion-no").performClick()
+        compose.onNodeWithTag("confirm-completion").assertDoesNotExist()
+        assertNull("Nach Abbrechen darf nichts gemeldet sein", completed)
+
+        // Erst die Bestätigung meldet.
+        compose.onNodeWithTag("complete-task-11").performClick()
+        compose.onNodeWithTag("confirm-completion-yes").performClick()
         assertEquals(11L to 10.0, completed)
+        compose.onNodeWithTag("confirm-completion").assertDoesNotExist()
+    }
+
+    @Test
+    fun detail_bestaetigungFragtBeimJaetenNachDemJaeten() {
+        compose.setContent {
+            DorfAppTheme {
+                PlaceDetail(
+                    place = places[1],
+                    pendingTasks = emptySet(),
+                    history = emptyMap(),
+                    onComplete = { _, _ -> },
+                    onLoadHistory = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("complete-task-21").performClick()
+        compose.onNodeWithText("Hast du wirklich gejätet?").assertIsDisplayed()
+        compose.onNodeWithText("Dorfbeet").assertIsDisplayed()
     }
 
     @Test
@@ -110,5 +153,67 @@ class UiFlowTest {
             }
         }
         compose.onNodeWithText("Ich habe gejätet 🌿").assertIsDisplayed()
+    }
+
+    // --- Rangliste ---------------------------------------------------------
+
+    private fun rangEintrag(rang: Int, sub: String, name: String, anzahl: Int, liter: Double = 0.0) =
+        LeaderboardEntryDto(
+            rank = rang, userSub = sub, userName = name, completions = anzahl,
+            byKind = mapOf("giessen" to anzahl, "jaeten" to 0, "sonstiges" to 0), liters = liter,
+        )
+
+    private val rangliste = LeaderboardUiState(
+        period = LeaderboardPeriod.SAISON,
+        entries = listOf(
+            rangEintrag(1, "erna", "Erna", 12, 120.0).copy(
+                badges = listOf(BadgeDto("giesskanne", "Gießkanne des Monats", "Die meisten Gießungen.")),
+            ),
+            rangEintrag(2, "karl", "Karl", 8, 40.0),
+            rangEintrag(3, "berta", "Berta", 5),
+            rangEintrag(4, "udo", "Udo", 2),
+        ),
+        totals = LeaderboardTotalsDto(completions = 27, liters = 160.0, participants = 4),
+        me = rangEintrag(4, "udo", "Udo", 2),
+    )
+
+    @Test
+    fun rangliste_zeigtPodestListeUndAuszeichnungen() {
+        compose.setContent {
+            DorfAppTheme { LeaderboardScreen(state = rangliste, onSelectPeriod = {}) }
+        }
+        compose.onNodeWithTag("podium-1").assertIsDisplayed()
+        compose.onNodeWithTag("podium-3").assertIsDisplayed()
+        compose.onNodeWithText("Erna").assertIsDisplayed()
+        compose.onNodeWithText("Gießkanne des Monats").assertIsDisplayed()
+
+        // Der eigene Platz ist hervorgehoben — auch außerhalb des Podests.
+        compose.onNodeWithTag("leaderboard-row-udo").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("leaderboard-me").assertIsDisplayed()
+        compose.onNodeWithText("Dein Platz: 4").assertIsDisplayed()
+    }
+
+    @Test
+    fun rangliste_schaltetDenZeitraumUm() {
+        var gewaehlt: LeaderboardPeriod? = null
+        compose.setContent {
+            DorfAppTheme { LeaderboardScreen(state = rangliste, onSelectPeriod = { gewaehlt = it }) }
+        }
+        compose.onNodeWithTag("period-woche").performClick()
+        assertEquals(LeaderboardPeriod.WOCHE, gewaehlt)
+    }
+
+    @Test
+    fun rangliste_zeigtLeereListeFreundlich() {
+        compose.setContent {
+            DorfAppTheme {
+                LeaderboardScreen(
+                    state = LeaderboardUiState(period = LeaderboardPeriod.WOCHE),
+                    onSelectPeriod = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("leaderboard-empty").assertIsDisplayed()
+        compose.onNodeWithTag("podium-1").assertDoesNotExist()
     }
 }

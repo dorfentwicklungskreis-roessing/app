@@ -82,3 +82,44 @@ data class MeDto(
 
 @Serializable
 data class CompletionInput(val liters: Double? = null, val note: String = "")
+
+/** Eine Auszeichnung („Gießkanne des Monats" …) — Regeln stehen im Backend. */
+@Serializable
+data class BadgeDto(
+    val key: String = "",
+    val label: String = "",
+    val description: String = "",
+)
+
+/** Eine Zeile der Rangliste. rank 0 heißt: im Zeitraum noch nichts gemeldet. */
+@Serializable
+data class LeaderboardEntryDto(
+    val rank: Int = 0,
+    val userSub: String = "",
+    val userName: String = "",
+    val completions: Int = 0,
+    val byKind: Map<String, Int> = emptyMap(),
+    val liters: Double = 0.0,
+    val lastCompletion: String? = null,
+    val badges: List<BadgeDto> = emptyList(),
+)
+
+/** Gesamtsummen des Dorfes im Zeitraum. */
+@Serializable
+data class LeaderboardTotalsDto(
+    val completions: Int = 0,
+    val byKind: Map<String, Int> = emptyMap(),
+    val liters: Double = 0.0,
+    val participants: Int = 0,
+)
+
+@Serializable
+data class LeaderboardDto(
+    val period: String = "saison",
+    val from: String = "",
+    val to: String = "",
+    val entries: List<LeaderboardEntryDto> = emptyList(),
+    val totals: LeaderboardTotalsDto = LeaderboardTotalsDto(),
+    /** Der eigene Eintrag — auch, wenn er nicht in entries steht. */
+    val me: LeaderboardEntryDto? = null,
+)
