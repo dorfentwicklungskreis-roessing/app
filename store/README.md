@@ -69,7 +69,7 @@ allein reichen **nicht** mehr, seit die Karte die eigene Position zeigt — die
 beiden Standortberechtigungen sind für diese Funktion nötig und in der
 Store-Beschreibung sowie in `data-safety.md` begründet.
 
-## versionCode und Änderungshinweise (erledigt, automatisch)
+## versionCode und Änderungshinweise (automatisch)
 
 `versionCode` und `versionName` kommen aus dem Git-Tag, nicht mehr aus der
 CI-Laufnummer oder aus einer von Hand gepflegten Zahl:
