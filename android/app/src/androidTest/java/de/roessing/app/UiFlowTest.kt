@@ -21,6 +21,7 @@ import de.roessing.app.data.formatDistance
 import de.roessing.app.ui.LeaderboardPeriod
 import de.roessing.app.ui.LeaderboardScreen
 import de.roessing.app.ui.LeaderboardUiState
+import de.roessing.app.ui.LocationHint
 import de.roessing.app.ui.LoginScreen
 import de.roessing.app.ui.PlaceDetail
 import de.roessing.app.ui.PlaceListScreen

@@ -186,7 +186,8 @@ class PlacesViewModelTest {
     fun `Standort ueberlebt einen Refresh`() = runTest(dispatcher) {
         val vm = PlacesViewModel(FakeRepo())
         dispatcher.scheduler.advanceUntilIdle()
-        vm.setUserLocation(LatLon(52.2115, 9.8700))
+        // Näher an „Kasten Grün" (52.2120) als an „Kasten Gelb" (52.2110).
+        vm.setUserLocation(LatLon(52.2118, 9.8700))
         vm.setSort(PlaceSort.DISTANCE)
 
         vm.refresh()

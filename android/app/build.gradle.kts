@@ -17,7 +17,10 @@ android {
         applicationId = "de.roessing.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
+        // Der Play Store verlangt bei jedem Upload einen höheren versionCode.
+        // Die CI-Laufnummer wächst monoton; der Offset hält Abstand zu dem,
+        // was schon hochgeladen wurde. Lokale Builds bekommen 101.
+        versionCode = 100 + (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionName = "0.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
