@@ -154,3 +154,22 @@ func TestRateLimitConfigAusUmgebung(t *testing.T) {
 		t.Fatalf("Env nicht übernommen: %+v", cfg)
 	}
 }
+
+// Der Schlüssel enthält das Bearer-Token — also etwas, das ein Angreifer bei
+// jeder Anfrage neu erfinden kann. Ohne Deckel wüchse die Eimer-Tabelle
+// unbegrenzt und der Speicher des Pods wäre das eigentliche Ziel.
+func TestRateLimitDeckeltDieAnzahlEimer(t *testing.T) {
+	jetzt := time.Now()
+	rl := NewRateLimiter(RateLimitConfig{Burst: 2, PerMinute: 60, Now: func() time.Time { return jetzt }})
+	h := rl.Middleware(dummy())
+
+	for i := 0; i < MaxEimer*2; i++ {
+		r := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		r.RemoteAddr = "10.0.0.1:1234"
+		r.Header.Set("Authorization", "Bearer erfunden-"+strconv.Itoa(i))
+		h.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	if n := rl.Size(); n > MaxEimer {
+		t.Fatalf("Eimer-Tabelle wuchs auf %d (Deckel %d)", n, MaxEimer)
+	}
+}

@@ -38,6 +38,12 @@ const (
 	DefaultPerMinute = 120
 	// eimerTTL: wie lange ein unbenutzter Eimer aufbewahrt wird.
 	eimerTTL = time.Hour
+	// MaxEimer deckelt die Tabelle. Der Schlüssel enthält das Bearer-Token,
+	// und das kann ein Angreifer bei jeder Anfrage neu erfinden — ohne Deckel
+	// wäre die Begrenzung selbst der Weg, den Speicher des Pods zu füllen.
+	// 20.000 Einträge sind für ein Dorf unerreichbar viel und kosten nur
+	// wenige Megabyte.
+	MaxEimer = 20000
 )
 
 // RateLimitFromEnv liest die Konfiguration aus der Umgebung:
@@ -155,6 +161,9 @@ func (l *RateLimiter) erlaube(key string) (bool, time.Duration) {
 
 	b, ok := l.eimer[key]
 	if !ok {
+		if len(l.eimer) >= MaxEimer {
+			l.platzSchaffen(jetzt)
+		}
 		b = &eimer{tokens: l.burst, letzter: jetzt}
 		l.eimer[key] = b
 	}
@@ -172,6 +181,21 @@ func (l *RateLimiter) erlaube(key string) (bool, time.Duration) {
 	}
 	b.tokens--
 	return true, 0
+}
+
+// platzSchaffen greift, wenn die Tabelle voll ist: erst die länger
+// unbenutzten Eimer, und wenn das nicht reicht, alles auf Anfang. Ein
+// zurückgesetzter Eimer verschenkt höchstens einen Burst — das ist
+// allemal besser, als den Speicher volllaufen zu lassen.
+func (l *RateLimiter) platzSchaffen(jetzt time.Time) {
+	for k, b := range l.eimer {
+		if jetzt.Sub(b.letzter) > time.Minute {
+			delete(l.eimer, k)
+		}
+	}
+	if len(l.eimer) >= MaxEimer {
+		l.eimer = make(map[string]*eimer, MaxEimer)
+	}
 }
 
 // aufraeumen wirft alte Eimer weg, damit der Speicher nicht wächst.
