@@ -40,7 +40,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	s := New(d, stubVerifier{}, issuer, "https://api.example")
+	s := New(d, stubVerifier{}, issuer, "https://api.example", "client-123")
 	s.Now = func() time.Time { return time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC) }
 	mux := http.NewServeMux()
 	s.Register(mux)
@@ -132,9 +132,48 @@ func TestProtectedResourceMetadata(t *testing.T) {
 			t.Fatalf("%s: %v", path, err)
 		}
 		resp.Body.Close()
-		if meta.Resource != "https://api.example" || len(meta.AuthorizationServers) != 1 || meta.AuthorizationServers[0] != issuer {
+		// authorization_servers zeigt auf UNS (wir spiegeln die AS-Metadata
+		// und ergänzen den DCR-Endpoint, den Zitadel nicht hat).
+		if meta.Resource != "https://api.example" || len(meta.AuthorizationServers) != 1 || meta.AuthorizationServers[0] != "https://api.example" {
 			t.Fatalf("%s: unerwartete Metadata: %+v", path, meta)
 		}
+	}
+}
+
+func TestDynamicClientRegistration(t *testing.T) {
+	ts := newTestServer(t)
+
+	register := func(uris []string) (*http.Response, map[string]any) {
+		body, _ := json.Marshal(map[string]any{"redirect_uris": uris, "client_name": "Claude"})
+		resp, err := http.Post(ts.URL+"/oauth/register", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var out map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&out)
+		return resp, out
+	}
+
+	// claude.ai-Callback → feste Client-ID zurück.
+	resp, out := register([]string{"https://claude.ai/api/mcp/auth_callback"})
+	if resp.StatusCode != http.StatusCreated || out["client_id"] != "client-123" {
+		t.Fatalf("DCR fehlgeschlagen: HTTP %d, %v", resp.StatusCode, out)
+	}
+	if out["token_endpoint_auth_method"] != "none" {
+		t.Fatalf("erwartet public client: %v", out)
+	}
+
+	// Fremde Redirect-URI → abgelehnt.
+	resp, out = register([]string{"https://boese-seite.example/callback"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("fremde Redirect-URI nicht abgelehnt: HTTP %d, %v", resp.StatusCode, out)
+	}
+
+	// Ohne Redirect-URIs → abgelehnt.
+	resp, _ = register(nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("leere Registrierung nicht abgelehnt: HTTP %d", resp.StatusCode)
 	}
 }
 

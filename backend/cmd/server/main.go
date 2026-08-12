@@ -64,9 +64,12 @@ func main() {
 	srv := &api.Server{DB: database}
 	handler := srv.Handler(auth.Middleware(verifier), func(mux *http.ServeMux) {
 		// MCP: OAuth gegen die Rössing-ID, admin-Rolle erforderlich.
-		publicURL := envOr("PUBLIC_URL", "https://api.xn--rssing-wxa.de")
-		mcp.New(database, verifier, issuer, publicURL).Register(mux)
-		slog.Info("MCP-Server aktiv unter /mcp (OAuth)", "issuer", issuer)
+		// MCP_CLIENT_ID: PKCE-Client, den Dynamic Client Registration
+		// (claude.ai) zurückbekommt.
+		publicURL := envOr("PUBLIC_URL", "https://app.xn--rssing-wxa.de")
+		mcpClientID := envOr("MCP_CLIENT_ID", "385946294599876803")
+		mcp.New(database, verifier, issuer, publicURL, mcpClientID).Register(mux)
+		slog.Info("MCP-Server aktiv unter /mcp (OAuth + DCR)", "issuer", issuer)
 		if clientID := os.Getenv("ADMIN_CLIENT_ID"); clientID != "" {
 			admin.Register(mux, issuer, clientID)
 			slog.Info("Web-Admin aktiv unter /admin")

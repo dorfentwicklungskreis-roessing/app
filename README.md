@@ -55,12 +55,13 @@ und funktioniert nur gegen ein Backend mit `AUTH_MODE=insecure-dev`.
 In claude.ai einbinden (Einstellungen → Connectors → Custom Connector):
 
 ```
-URL:             https://app.xn--rssing-wxa.de/mcp
-OAuth-Client-ID: 385946294599876803   (kein Secret, PKCE)
+URL: https://app.xn--rssing-wxa.de/mcp
 ```
 
-Beim Verbinden loggt man sich mit der Rössing-ID ein; nur Nutzer mit der
-Projektrolle `admin` kommen durch.
+Mehr nicht — claude.ai registriert sich per Dynamic Client Registration
+(das Backend spiegelt dafür die AS-Metadata von Zitadel und beantwortet
+DCR mit der festen PKCE-Client-ID). Beim Verbinden loggt man sich mit der
+Rössing-ID ein; nur Nutzer mit der Projektrolle `admin` kommen durch.
 
 Tools: `orte_liste`, `ort_anlegen/aendern/loeschen`,
 `aufgabe_anlegen/aendern/loeschen`, `erledigung_melden`, `hitzefaktor_setzen`.

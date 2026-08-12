@@ -31,4 +31,4 @@ Details: siehe `README.md`.
   Claim `urn:zitadel:iam:org:project:roles` im JWT-Access-Token.
 - Client-IDs: Android-App `385941807986376899` (nativ, PKCE),
   Web-Admin `385942875872952515` (User-Agent, PKCE),
-  Claude-MCP-Connector `385946294599876803` (Web, PKCE, kein Secret).
+  Claude-MCP-Connector `385946294599876803` (Web, PKCE, kein Secret; wird via DCR-Endpoint /oauth/register an claude.ai ausgegeben).

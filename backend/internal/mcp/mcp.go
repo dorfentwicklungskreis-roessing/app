@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
@@ -29,8 +30,15 @@ type Server struct {
 	Issuer string
 	// Resource: öffentliche Basis-URL dieses Servers (für RFC-9728-Metadata).
 	Resource string
+	// ClientID: feste PKCE-Client-ID, die Dynamic Client Registration
+	// (claude.ai) zurückbekommt.
+	ClientID string
 	Now      func() time.Time
 	tools    []tool
+
+	discoveryOnce sync.Once
+	discovery     *upstreamDiscovery
+	discoveryErr  error
 }
 
 type tool struct {
@@ -40,8 +48,8 @@ type tool struct {
 	Handler     func(args json.RawMessage, u auth.User) (any, error)
 }
 
-func New(database *db.DB, verifier auth.Verifier, issuer, resource string) *Server {
-	s := &Server{DB: database, Verifier: verifier, Issuer: issuer, Resource: resource}
+func New(database *db.DB, verifier auth.Verifier, issuer, resource, clientID string) *Server {
+	s := &Server{DB: database, Verifier: verifier, Issuer: issuer, Resource: resource, ClientID: clientID}
 	s.registerTools()
 	return s
 }
