@@ -4,8 +4,14 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
 // NaN und Unendlich rutschten bisher durch jede Prüfung: Vergleiche mit NaN
@@ -105,5 +111,41 @@ func TestInterneFehlerBleibenInnen(t *testing.T) {
 				t.Errorf("%s verrät Interna (%q): %s", pfad, verraten, roh)
 			}
 		}
+	}
+}
+
+// Auch die Freitexte einer Meldung brauchen eine Grenze — sie landen
+// unverändert in der Datenbank und auf jeder Ortsseite.
+func TestMeldungBegrenztTextlaenge(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ort := model.Place{Name: "Kasten", Kind: model.PlaceFlowerbox, Lat: 52.2, Lon: 9.87, Active: true, CreatedAt: time.Now()}
+	if err := d.InsertPlace(&ort); err != nil {
+		t.Fatal(err)
+	}
+	// Je Fall eine eigene Aufgabe: der Spielschutz sperrt sonst die Folgemeldung.
+	neueAufgabe := func() int64 {
+		a := model.CareTask{PlaceID: ort.ID, Kind: model.TaskWatering, IntervalDays: 7, RedAfterDays: 14,
+			Active: true, CreatedAt: time.Now()}
+		if err := d.InsertTask(&a); err != nil {
+			t.Fatal(err)
+		}
+		return a.ID
+	}
+
+	admin := auth.User{Sub: "u1", Name: "Erna", Roles: map[string]bool{"admin": true}}
+	lang := strings.Repeat("ä", MaxTextLen+1)
+
+	if _, err := CreateCompletion(d, time.Now(), neueAufgabe(), CompletionInput{Note: lang}, admin); err == nil {
+		t.Error("überlange Notiz wurde angenommen")
+	}
+	if _, err := CreateCompletion(d, time.Now(), neueAufgabe(), CompletionInput{Name: lang}, admin); err == nil {
+		t.Error("überlanger Meldername wurde angenommen")
+	}
+	if _, err := CreateCompletion(d, time.Now(), neueAufgabe(), CompletionInput{Note: "10 Liter gegossen"}, admin); err != nil {
+		t.Fatalf("normale Meldung abgelehnt: %v", err)
 	}
 }

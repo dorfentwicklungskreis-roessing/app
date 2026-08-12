@@ -45,6 +45,14 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 	if err != nil {
 		return nil, completionErr(http.StatusNotFound, "Aufgabe %d nicht gefunden", taskID)
 	}
+	// Freitexte begrenzen: sie landen unverändert in der Datenbank und auf
+	// jeder Ortsseite.
+	if err := pruefeText("note", in.Note); err != nil {
+		return nil, completionErr(http.StatusBadRequest, "%s", err.Error())
+	}
+	if err := pruefeText("name", in.Name); err != nil {
+		return nil, completionErr(http.StatusBadRequest, "%s", err.Error())
+	}
 	if (in.Force || in.DoneAt != "" || in.Name != "") && !u.IsAdmin() {
 		return nil, completionErr(http.StatusForbidden,
 			"nur Admins dürfen Meldungen nachtragen oder die Sperrfrist übergehen")
