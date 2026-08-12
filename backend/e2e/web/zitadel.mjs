@@ -65,12 +65,32 @@ export async function bootstrap({ issuer, keyPath, redirectUri }) {
   for (const f of ['SECOND_FACTOR_TYPE_OTP', 'SECOND_FACTOR_TYPE_U2F', 'SECOND_FACTOR_TYPE_OTP_EMAIL', 'SECOND_FACTOR_TYPE_OTP_SMS']) {
     await zapiSoft(issuer, token, 'DELETE', `/admin/v1/policies/login/second_factors/${f}`);
   }
+  // Achtung: das PUT überschreibt ALLE Felder der Policy. Fehlt z.B.
+  // passwordCheckLifetime, steht es danach auf 0 — die Passwortprüfung
+  // verfällt dann sofort und die Login-UI fragt endlos erneut nach dem
+  // Passwort (ohne Fehlermeldung). Deshalb erst lesen, dann gezielt ändern.
+  const vorhanden = await zapiSoft(issuer, token, 'GET', '/admin/v1/policies/login');
+  const policy = vorhanden?.policy ?? {};
+  for (const nurLesbar of ['details', 'isDefault', 'secondFactors', 'multiFactors', 'idps']) {
+    delete policy[nurLesbar];
+  }
   await zapiSoft(issuer, token, 'PUT', '/admin/v1/policies/login', {
-    allowUsernamePassword: true, allowRegister: false, allowExternalIdp: false,
-    forceMfa: false, forceMfaLocalOnly: false, passwordlessType: 'PASSWORDLESS_TYPE_NOT_ALLOWED',
-    hidePasswordReset: true, ignoreUnknownUsernames: false, disableLoginWithEmail: false,
-    disableLoginWithPhone: true,
+    passwordCheckLifetime: '864000s',
+    externalLoginCheckLifetime: '864000s',
+    mfaInitSkipLifetime: '2592000s',
+    secondFactorCheckLifetime: '64800s',
+    multiFactorCheckLifetime: '43200s',
+    ...policy,
+    // Nur diese Punkte wollen wir wirklich erzwingen:
+    allowUsernamePassword: true,
+    allowRegister: false,
+    forceMfa: false,
+    forceMfaLocalOnly: false,
+    passwordlessType: 'PASSWORDLESS_TYPE_NOT_ALLOWED',
   });
+
+  const kontrolle = await zapiSoft(issuer, token, 'GET', '/admin/v1/policies/login');
+  console.log('   Login-Policy:', JSON.stringify(kontrolle?.policy ?? {}));
 
   const project = await zapi(issuer, token, 'POST', '/management/v1/projects', {
     name: `dorf-app-web-e2e-${stamp}`,

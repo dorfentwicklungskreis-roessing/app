@@ -67,10 +67,17 @@ export async function anmelden(page, user, passwort) {
   await passwortfeld.fill(passwort);
   await absenden(page);
 
-  // Falls Zitadel doch eine „Zwei-Faktor einrichten"-Seite dazwischenschiebt.
-  await ueberspringenFallsNoetig(page);
-
-  await page.waitForURL(/\/admin\//, { timeout: 60_000 });
+  // Zitadel schiebt je nach Version „Zwei-Faktor einrichten" oder
+  // „Passkey einrichten" dazwischen — solche Seiten überspringen wir.
+  const frist = Date.now() + 45_000;
+  while (!/\/admin\//.test(page.url()) && Date.now() < frist) {
+    if (!(await ueberspringenFallsNoetig(page))) await page.waitForTimeout(500);
+  }
+  if (!/\/admin\//.test(page.url())) {
+    const text = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 400);
+    throw new Error(`Login blieb bei der Rössing-ID hängen.\nURL: ${page.url()}\nSeite: ${text}`);
+  }
+  await page.waitForURL(/\/admin\//, { timeout: 30_000 });
 }
 
 // Zitadel Login v1 hat auf der Benutzernamen-Seite mehrere Submit-Buttons
@@ -91,12 +98,23 @@ async function absenden(page) {
   throw new Error('Kein Submit-Button auf der Login-Seite gefunden');
 }
 
+/** Klickt einen „Überspringen"-Knopf, falls einer da ist. */
 async function ueberspringenFallsNoetig(page) {
-  const skip = page.getByRole('button', { name: /überspringen|skip|später/i }).first();
-  try {
-    await skip.waitFor({ state: 'visible', timeout: 3_000 });
-    await skip.click();
-  } catch {
-    // Normalfall: keine Zwischenseite.
+  const kandidaten = [
+    page.locator('#skip-button'),
+    page.getByRole('button', { name: /überspringen|skip|später|nicht jetzt|not now/i }),
+    page.getByRole('link', { name: /überspringen|skip|später|nicht jetzt|not now/i }),
+  ];
+  for (const kandidat of kandidaten) {
+    const knopf = kandidat.first();
+    try {
+      if (await knopf.count() && await knopf.isVisible()) {
+        await knopf.click();
+        return true;
+      }
+    } catch {
+      // Seite hat mitten im Wechsel navigiert — nächster Versuch.
+    }
   }
+  return false;
 }
