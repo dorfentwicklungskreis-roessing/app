@@ -1,0 +1,13 @@
+{
+  "name": "dorf-app-admin-css",
+  "private": true,
+  "description": "Baut das ausgelieferte CSS des Web-Admin (Tailwind v4 + DaisyUI v5). Ergebnis wird committet und per go:embed ausgeliefert.",
+  "scripts": {
+    "build:css": "tailwindcss -i tailwind.css -o static/app.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.11",
+    "daisyui": "^5.0.43",
+    "tailwindcss": "^4.1.11"
+  }
+}

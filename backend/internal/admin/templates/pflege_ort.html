@@ -1,0 +1,117 @@
+{{define "kopf"}}
+<link href="/admin/vendor/maplibre-gl.css" rel="stylesheet">
+<script src="/admin/vendor/maplibre-gl.js" defer></script>
+<script src="/admin/static/karte.js" defer></script>
+{{end}}
+
+{{define "seite"}}
+<div class="breadcrumbs text-sm">
+  <ul><li><a href="/admin/dorfpflege/">Dorfpflege</a></li><li>{{.Data.Ort.Name}}</li></ul>
+</div>
+
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <h1 class="text-2xl font-bold" id="seitentitel">{{.Data.Ort.Name}}</h1>
+  <span class="badge badge-lg {{statusBadge .Data.Ort.Status}}" id="ort-status"
+        data-status="{{.Data.Ort.Status}}">{{statusText .Data.Ort.Status}}</span>
+</div>
+
+<div class="mt-4 grid gap-4 lg:grid-cols-2">
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body">
+      <h2 class="font-semibold">Ort bearbeiten</h2>
+      <form method="post" action="{{.Data.Formular.Ziel}}" id="ort-formular">
+        {{template "ortFelder" .Data.Formular}}
+        <div class="mt-2 flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-primary" id="ort-speichern">Speichern</button>
+          <a class="btn btn-error btn-outline" id="ort-loeschen"
+             href="/admin/dorfpflege/orte/{{.Data.Ort.ID}}/loeschen">Ort löschen</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body p-4">
+      <h2 class="font-semibold">Lage</h2>
+      <div id="karte" class="h-64 w-full overflow-hidden rounded-box bg-base-200 md:h-80"
+           data-karte="{{.Data.Formular.KarteJSON}}" data-anzahl="1" data-waehlbar="1"></div>
+      <p class="text-sm text-base-content/60">Klick auf die Karte verschiebt den Ort (danach speichern).</p>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-4 bg-base-100 shadow-sm">
+  <div class="card-body">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-xl font-semibold">Aufgaben</h2>
+      <a class="btn btn-primary btn-sm" id="neue-aufgabe"
+         href="/admin/dorfpflege/orte/{{.Data.Ort.ID}}/aufgaben/neu">Neue Aufgabe</a>
+    </div>
+
+    <div class="mt-2 flex flex-col gap-3" id="aufgaben" data-anzahl="{{len .Data.Ort.Tasks}}">
+      {{range .Data.Ort.Tasks}}
+      <div class="rounded-box border border-base-300 p-3" data-aufgabe-id="{{.ID}}" data-status="{{.Status}}">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="badge {{statusBadge .Status}}" data-aufgabe-status="{{.Status}}">{{statusText .Status}}</span>
+          <span class="font-medium">{{if .Title}}{{.Title}}{{else}}{{aufgabenart .Kind}}{{end}}</span>
+          <span class="text-sm text-base-content/60">
+            alle {{zahl .IntervalDays}} Tage{{if .Liters}}, {{liter .Liters}}{{end}} · rot nach {{zahl .RedAfterDays}} Tagen
+          </span>
+          {{if not .Active}}<span class="badge badge-ghost badge-sm">inaktiv</span>{{end}}
+        </div>
+        <div class="mt-1 text-sm text-base-content/70" data-letzte>
+          {{if .LastCompletion}}
+            zuletzt {{datumZeit .LastCompletion.DoneAt}} durch {{.LastCompletion.UserName}}
+          {{else}}
+            noch nie erledigt
+          {{end}}
+          · fällig ab {{datum .DueAt}}
+        </div>
+        <form method="post" action="/admin/dorfpflege/aufgaben/{{.ID}}/erledigt"
+              class="mt-2 flex flex-wrap items-end gap-2">
+          <label class="form-control">
+            <span class="label py-0"><span class="label-text text-xs">Liter (optional)</span></span>
+            <input type="text" inputmode="decimal" name="liter" class="input input-bordered input-sm w-24"
+                   value="{{zahlOpt .Liters}}">
+          </label>
+          <label class="form-control grow">
+            <span class="label py-0"><span class="label-text text-xs">Notiz (optional)</span></span>
+            <input type="text" name="notiz" class="input input-bordered input-sm w-full">
+          </label>
+          <button type="submit" class="btn btn-success btn-sm erledigt-melden">Erledigt melden</button>
+          <a class="btn btn-ghost btn-sm aufgabe-bearbeiten" href="/admin/dorfpflege/aufgaben/{{.ID}}">Bearbeiten</a>
+          <a class="btn btn-ghost btn-sm text-error aufgabe-loeschen"
+             href="/admin/dorfpflege/aufgaben/{{.ID}}/loeschen">Löschen</a>
+        </form>
+      </div>
+      {{else}}
+      <p class="text-base-content/60" id="keine-aufgaben">Für diesen Ort ist noch keine Aufgabe angelegt.</p>
+      {{end}}
+    </div>
+  </div>
+</div>
+
+<div class="card mt-4 bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="text-xl font-semibold">Historie der Erledigungen</h2>
+    <div class="overflow-x-auto">
+      <table class="table table-sm" id="historie">
+        <thead><tr><th>Wann</th><th>Aufgabe</th><th>Wer</th><th>Menge</th><th>Notiz</th></tr></thead>
+        <tbody>
+          {{range .Data.Historie}}
+          <tr>
+            <td>{{datumZeit .Erledigung.DoneAt}}</td>
+            <td>{{.Aufgabe}}</td>
+            <td>{{.Erledigung.UserName}}</td>
+            <td>{{liter .Erledigung.Liters}}</td>
+            <td>{{.Erledigung.Note}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="text-center text-base-content/60" id="keine-historie">Noch nichts gemeldet.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{{end}}

@@ -6,8 +6,11 @@
 //	DB_PATH       Standard "/data/dorfapp.sqlite"
 //	AUTH_ISSUER   z.B. https://id.xn--rssing-wxa.de — Pflicht in Produktion
 //	AUTH_MODE     "oidc" (Standard) oder "insecure-dev" (nur lokal/E2E!)
-//	PUBLIC_URL    öffentliche Basis-URL (für MCP-OAuth-Metadata)
-//	ADMIN_CLIENT_ID  OIDC-Client-ID des Web-Admin (leer = Web-Admin deaktiviert)
+//	PUBLIC_URL    öffentliche Basis-URL (MCP-OAuth-Metadata und OIDC-Redirect
+//	              der Verwaltung: {PUBLIC_URL}/admin/)
+//	ADMIN_CLIENT_ID  OIDC-Client-ID der Verwaltung (leer = nur Startseite)
+//	SESSION_KEY   Schlüssel für die signierten Session-Cookies der Verwaltung.
+//	              Leer = zufällig beim Start (Sessions überleben keinen Neustart).
 //	SEED          "1" → Beispieldaten anlegen, falls DB leer ist
 package main
 
@@ -70,9 +73,18 @@ func main() {
 		mcpClientID := envOr("MCP_CLIENT_ID", "385946294599876803")
 		mcp.New(database, verifier, issuer, publicURL, mcpClientID).Register(mux)
 		slog.Info("MCP-Server aktiv unter /mcp (OAuth + DCR)", "issuer", issuer)
-		if clientID := os.Getenv("ADMIN_CLIENT_ID"); clientID != "" {
-			admin.Register(mux, issuer, clientID)
-			slog.Info("Web-Admin aktiv unter /admin")
+		// Startseite und Verwaltung. Ohne ADMIN_CLIENT_ID bleibt es bei der
+		// Startseite; die Verwaltungsseiten werden dann nicht registriert.
+		clientID := os.Getenv("ADMIN_CLIENT_ID")
+		admin.Register(mux, admin.Config{
+			DB: database, Verifier: verifier, Issuer: issuer,
+			ClientID: clientID, PublicURL: publicURL,
+			SessionKey: []byte(os.Getenv("SESSION_KEY")),
+		})
+		if clientID != "" {
+			slog.Info("Web-Admin aktiv unter /admin", "redirect_uri", publicURL+"/admin/")
+		} else {
+			slog.Warn("ADMIN_CLIENT_ID fehlt — Verwaltung deaktiviert, nur Startseite")
 		}
 	})
 

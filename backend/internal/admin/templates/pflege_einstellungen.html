@@ -1,0 +1,29 @@
+{{define "seite"}}
+<div class="breadcrumbs text-sm">
+  <ul><li><a href="/admin/dorfpflege/">Dorfpflege</a></li><li>Einstellungen</li></ul>
+</div>
+<h1 class="text-2xl font-bold" id="seitentitel">Einstellungen der Dorfpflege</h1>
+
+<div class="card mt-4 max-w-xl bg-base-100 shadow-sm">
+  <div class="card-body">
+    {{if .Data.Fehler}}
+      <div role="alert" class="alert alert-error" id="formularfehler"><span>{{.Data.Fehler}}</span></div>
+    {{end}}
+    <h2 class="font-semibold">Hitzefaktor</h2>
+    <p class="text-sm text-base-content/70">
+      Skaliert die Gieß-Schwellen. 1 = normal, 0,5 = Hitzewelle (doppelt so schnell fällig).
+      Jäten und andere Aufgaben bleiben unberührt.
+    </p>
+    <form method="post" action="/admin/dorfpflege/einstellungen" class="mt-2 flex flex-wrap items-end gap-2"
+          id="einstellungen-formular">
+      <label class="form-control">
+        <span class="label"><span class="label-text">Faktor</span></span>
+        <input type="text" inputmode="decimal" name="hitzefaktor" id="feld-hitzefaktor" required
+               value="{{.Data.Hitzefaktor}}" class="input input-bordered w-32">
+      </label>
+      <button type="submit" class="btn btn-primary" id="hitzefaktor-speichern">Speichern</button>
+      <a class="btn btn-ghost" href="/admin/dorfpflege/">Zurück</a>
+    </form>
+  </div>
+</div>
+{{end}}

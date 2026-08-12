@@ -24,7 +24,13 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
   - `/mcp` — MCP-Server (Streamable HTTP) für Admin aus Claude heraus.
     Auth: OAuth gegen die Rössing-ID (RFC 9728 Protected Resource),
     admin-Rolle erforderlich — kein statisches Token
-  - `/admin` — Web-Admin (OIDC-PKCE-Login, Karte, CRUD)
+  - `/admin` — Web-Verwaltung: server-gerendertes Multi-Page-Interface
+    (Go `html/template`, Tailwind v4 + DaisyUI v5). Echte Seitennavigation,
+    Formulare per Post/Redirect/Get, keine Modals, ohne JavaScript bedienbar
+    (JS nur für die Karte). Anmeldung: OIDC Authorization Code + PKCE
+    **serverseitig** — im Browser liegt nur ein signiertes, HttpOnly-Cookie.
+    Aufbau nach Bereichen: `/admin/` listet die Bereiche der Dorf-App,
+    die Dorfpflege liegt unter `/admin/dorfpflege/…`
   - SQLite im WAL-Modus auf einem PVC (`/data/dorfapp.sqlite`)
 - **Domänenmodell**: Orte (`blumenkasten`, `beet`, `sonstiges`) haben
   Pflegeaufgaben (`giessen` mit Litern, `jaeten`, `sonstiges`), je mit
@@ -50,6 +56,18 @@ cd android
 Der „Entwickler-Login" erscheint nur in Debug-Builds mit `-PdevAuth=true`
 und funktioniert nur gegen ein Backend mit `AUTH_MODE=insecure-dev`.
 
+### CSS der Verwaltung
+
+Das ausgelieferte CSS wird gebaut und **committet** (`go:embed`), damit zur
+Laufzeit nichts von einem CDN kommt:
+
+```sh
+cd backend/internal/admin
+npm ci && npm run build:css   # schreibt static/app.css
+```
+
+Die CI baut das CSS neu und schlägt fehl, wenn es vom committeten abweicht.
+
 ### End-to-End-Tests (echtes Zitadel, keine Mocks)
 
 Beide E2E-Suiten brauchen die Compose-Umgebung mit echtem Zitadel:
@@ -69,6 +87,23 @@ cd e2e/web && npm ci && npx playwright install --with-deps chromium && npx playw
 Der Browser-E2E bootstrappt Projekt, Rollen, eine PKCE-App und zwei Nutzer
 mit Passwort in Zitadel, startet das echte Backend-Binary und lässt den Test
 scheitern, sobald im Browser eine Konsolen- oder Skriptfehlermeldung auftritt.
+Geprüft werden echte Seitenwechsel (URL-Vergleich), das Anlegen von Ort und
+Aufgabe, Erledigungen, Hitzefaktor, Löschen über die Bestätigungsseite, das
+Rollen-Gating — und ein kompletter Durchlauf **mit abgeschaltetem JavaScript**.
+
+### Konfiguration des Backends (Env)
+
+| Variable | Bedeutung |
+|---|---|
+| `LISTEN_ADDR` | Standard `:8080` |
+| `DB_PATH` | Standard `/data/dorfapp.sqlite` |
+| `AUTH_ISSUER` | Rössing-ID, Standard `https://id.xn--rssing-wxa.de` |
+| `AUTH_MODE` | `oidc` (Standard) oder `insecure-dev` (nur lokal/E2E) |
+| `PUBLIC_URL` | öffentliche Basis-URL; daraus entsteht die OIDC-Redirect-URI `{PUBLIC_URL}/admin/` |
+| `ADMIN_CLIENT_ID` | Client-ID der Verwaltung (leer = nur Startseite) |
+| `SESSION_KEY` | Schlüssel für die signierten Session-Cookies; leer = zufällig beim Start (Sessions überleben dann keinen Neustart) |
+| `MCP_CLIENT_ID` | PKCE-Client für die MCP-Anbindung |
+| `SEED` | `1` → Beispieldaten anlegen, falls die DB leer ist |
 
 ## MCP für Admins
 

@@ -1,0 +1,37 @@
+{{define "kopf"}}
+<link href="/admin/vendor/maplibre-gl.css" rel="stylesheet">
+<script src="/admin/vendor/maplibre-gl.js" defer></script>
+<script src="/admin/static/karte.js" defer></script>
+{{end}}
+
+{{define "seite"}}
+<div class="breadcrumbs text-sm">
+  <ul><li><a href="/admin/dorfpflege/">Dorfpflege</a></li><li>Neuer Ort</li></ul>
+</div>
+<h1 class="text-2xl font-bold" id="seitentitel">Neuer Ort</h1>
+
+<div class="mt-4 grid gap-4 lg:grid-cols-2">
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body">
+      <form method="post" action="{{.Data.Ziel}}" id="ort-formular">
+        {{template "ortFelder" .Data}}
+        <div class="mt-2 flex gap-2">
+          <button type="submit" class="btn btn-primary" id="ort-speichern">Ort anlegen</button>
+          <a class="btn btn-ghost" href="/admin/dorfpflege/">Abbrechen</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body p-4">
+      <h2 class="font-semibold">Lage wählen</h2>
+      <p class="text-sm text-base-content/60">
+        Koordinaten links eintippen oder hier auf die Karte klicken — beides führt zum Ziel.
+      </p>
+      <div id="karte" class="h-72 w-full overflow-hidden rounded-box bg-base-200 md:h-96"
+           data-karte='{"type":"FeatureCollection","features":[]}' data-waehlbar="1"></div>
+    </div>
+  </div>
+</div>
+{{end}}

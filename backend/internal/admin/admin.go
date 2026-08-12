@@ -1,57 +1,307 @@
-// Package admin liefert das Web-Admin-Interface der Dorf-App aus:
-// eine einzelne HTML-Seite mit OIDC-PKCE-Login (Rössing-ID) und Karte,
-// die direkt gegen die REST-API arbeitet.
+// Package admin liefert die Web-Verwaltung der Dorf-App aus.
+//
+// Aufbau: server-gerendertes Multi-Page-Interface (html/template) mit echter
+// Seitennavigation und Post/Redirect/Get. Keine Modals, keine Overlays, kein
+// clientseitiger Zustand — JavaScript wird ausschließlich für die Karte
+// verwendet, die Verwaltung ist ohne JavaScript vollständig bedienbar.
+//
+// Die Anmeldung läuft komplett serverseitig (Authorization Code + PKCE gegen
+// die Rössing-ID); es landet kein Token im Browser, sondern nur ein signiertes,
+// HttpOnly-Session-Cookie.
+//
+// Die Verwaltung ist in Bereiche gegliedert: /admin/ zeigt die Bereiche,
+// der Bereich Dorfpflege liegt unter /admin/dorfpflege/. Weitere Bereiche
+// (z.B. Dorfladen ERNA) lassen sich danebensetzen, ohne URLs umzubauen.
 package admin
 
 import (
 	"embed"
-	_ "embed"
+	"html/template"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
-//go:embed index.html
-var indexHTML string
+//go:embed templates/*.html
+var templatesFS embed.FS
 
-//go:embed index_root.html
-var rootHTML string
+// static enthält das gebaute Tailwind/DaisyUI-CSS (siehe package.json,
+// `npm run build:css`) und das Karten-Skript. Beides wird committet, damit
+// zur Laufzeit nichts von einem CDN nachgeladen wird.
+//
+//go:embed static
+var staticFS embed.FS
 
 // MapLibre GL liegt lokal im Repo statt auf einem CDN: keine Drittanbieter-
-// Requests aus dem Browser der Nutzer, keine Abhängigkeit von unpkg-Verfügbarkeit
-// und ein reproduzierbarer Browser-E2E in der CI.
+// Requests aus dem Browser der Nutzer und ein reproduzierbarer Browser-E2E.
 //
 //go:embed vendor/maplibre-gl.js vendor/maplibre-gl.css
 var vendorFS embed.FS
 
-// Register hängt das Web-Admin an den Mux. Issuer und Client-ID werden in
-// die Seite injiziert, damit sie pro Umgebung konfigurierbar bleiben.
-func Register(mux *http.ServeMux, issuer, clientID string) {
-	page := strings.NewReplacer(
-		"__OIDC_ISSUER__", issuer,
-		"__OIDC_CLIENT_ID__", clientID,
-	).Replace(indexHTML)
+// Config bündelt alles, was die Verwaltung braucht.
+type Config struct {
+	DB       *db.DB
+	Verifier auth.Verifier
+	// Issuer der Rössing-ID, z.B. https://id.xn--rssing-wxa.de
+	Issuer string
+	// ClientID der Web-Admin-App (User-Agent-App mit PKCE, ohne Secret).
+	ClientID string
+	// PublicURL ist die öffentliche Basis-URL; daraus entsteht die Redirect-URI.
+	PublicURL string
+	// SessionKey signiert die Cookies. Leer = zufälliger Schlüssel beim Start
+	// (dann sind Sessions nach einem Neustart ungültig).
+	SessionKey []byte
+	Now        func() time.Time
+}
 
-	// Startseite: kurze Erklärung + Links zu App-Download und Verwaltung.
-	// Muss hier liegen, weil "/" als Catch-all sonst jeden unbekannten Pfad fängt.
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(rootHTML))
-	})
+// App hält den Zustand der Verwaltung.
+type App struct {
+	db            *db.DB
+	verifier      auth.Verifier
+	clientID      string
+	redirectURI   string
+	secureCookies bool
+	signer        *signer
+	discovery     *discoverer
+	now           func() time.Time
+	pages         map[string]*template.Template
+}
+
+// Register hängt Startseite und Verwaltung an den Mux.
+func Register(mux *http.ServeMux, cfg Config) {
+	newApp(cfg).register(mux)
+}
+
+func newApp(cfg Config) *App {
+	base := strings.TrimSuffix(cfg.PublicURL, "/")
+	a := &App{
+		db:            cfg.DB,
+		verifier:      cfg.Verifier,
+		clientID:      cfg.ClientID,
+		redirectURI:   base + "/admin/",
+		secureCookies: strings.HasPrefix(base, "https://"),
+		signer:        newSigner(cfg.SessionKey),
+		discovery:     &discoverer{issuer: cfg.Issuer},
+		now:           cfg.Now,
+		pages:         parsePages(),
+	}
+	if a.now == nil {
+		a.now = time.Now
+	}
+	return a
+}
+
+func (a *App) register(mux *http.ServeMux) {
+	// Startseite. Muss hier liegen, weil "/" sonst als Catch-all jeden
+	// unbekannten Pfad fangen würde.
+	mux.HandleFunc("GET /{$}", a.handleRoot)
+	mux.Handle("GET /admin/static/", cacheAssets(http.StripPrefix("/admin/", http.FileServerFS(staticFS))))
+
+	// Ohne Client-ID gibt es keine Anmeldung — dann bleibt es bei der Startseite.
+	if a.clientID == "" {
+		return
+	}
+
 	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
 	})
-	// Konkreter als "GET /admin/" — Go's Mux wählt das speziellere Muster.
-	mux.Handle("GET /admin/vendor/", cacheForever(http.StripPrefix("/admin/", http.FileServerFS(vendorFS))))
-	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(page))
-	})
+	mux.Handle("GET /admin/vendor/", cacheAssets(http.StripPrefix("/admin/", http.FileServerFS(vendorFS))))
+
+	mux.HandleFunc("GET /admin/{$}", a.handleAdminHome)
+	mux.HandleFunc("GET /admin/login", a.handleLogin)
+	mux.HandleFunc("POST /admin/logout", a.handleLogout)
+
+	a.registerDorfpflege(mux)
 }
 
-// cacheForever markiert die versionierten Vendor-Assets als lange cachebar.
-func cacheForever(next http.Handler) http.Handler {
+// cacheAssets markiert die mitgelieferten Assets als cachebar.
+func cacheAssets(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// --- Seiten-Grundgerüst -----------------------------------------------------
+
+// view ist das Datenpaket jeder Seite: Rahmen (Titel, Navigation, Nutzer,
+// Meldung) plus die seitenspezifischen Daten unter .Data.
+type view struct {
+	Title string
+	// Nav markiert den aktiven Navigationspunkt ("uebersicht", "dorfpflege", …).
+	Nav   string
+	User  *session
+	Flash *flash
+	Data  any
+}
+
+var funcs = template.FuncMap{
+	"statusText":  statusText,
+	"statusBadge": statusBadge,
+	"ortsart":     ortsart,
+	"aufgabenart": aufgabenart,
+	"datum":       func(t time.Time) string { return t.Local().Format("02.01.2006") },
+	"datumZeit":   func(t time.Time) string { return t.Local().Format("02.01.2006, 15:04") },
+	"zahl":        zahl,
+	// zahlOpt formatiert eine optionale Zahl (leer statt 0) — für Formularfelder.
+	"zahlOpt": func(v *float64) string {
+		if v == nil {
+			return ""
+		}
+		return zahl(*v)
+	},
+	"liter": func(v *float64) string {
+		if v == nil {
+			return ""
+		}
+		return zahl(*v) + " l"
+	},
+}
+
+// parsePages baut je Seitenvorlage ein eigenes Template-Set aus Rahmen + Seite.
+func parsePages() map[string]*template.Template {
+	entries, err := templatesFS.ReadDir("templates")
+	if err != nil {
+		panic("admin: Templates nicht lesbar: " + err.Error())
+	}
+	out := map[string]*template.Template{}
+	for _, e := range entries {
+		name := e.Name()
+		if name == "layout.html" {
+			continue
+		}
+		t := template.Must(template.New(name).Funcs(funcs).
+			ParseFS(templatesFS, "templates/layout.html", "templates/"+name))
+		out[strings.TrimSuffix(name, ".html")] = t
+	}
+	return out
+}
+
+// render schreibt eine Seite. Meldungen (Flash) werden dabei eingesammelt.
+func (a *App) render(w http.ResponseWriter, r *http.Request, status int, page string, v view) {
+	t, ok := a.pages[page]
+	if !ok {
+		a.fail(w, r, http.StatusInternalServerError, errUnbekannteSeite(page))
+		return
+	}
+	v.Flash = a.takeFlash(w, r)
+	if s, ok := a.sessionOf(r); ok {
+		v.User = &s
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	if err := t.ExecuteTemplate(w, "layout", v); err != nil {
+		slog.Error("admin: Template-Fehler", "seite", page, "err", err)
+	}
+}
+
+type errUnbekannteSeite string
+
+func (e errUnbekannteSeite) Error() string { return "unbekannte Seite: " + string(e) }
+
+// fail meldet einen technischen Fehler als schlichte Textantwort.
+func (a *App) fail(w http.ResponseWriter, _ *http.Request, status int, err error) {
+	slog.Error("admin: Fehler", "status", status, "err", err)
+	http.Error(w, "Fehler: "+err.Error(), status)
+}
+
+// requireAdmin schützt alle Verwaltungsseiten. Ohne Session geht es zurück
+// auf die Anmeldeseite.
+func (a *App) requireAdmin(h func(http.ResponseWriter, *http.Request, session)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s, ok := a.sessionOf(r)
+		if !ok || !s.Admin {
+			a.setFlash(w, "error", "Bitte zuerst mit der Rössing-ID anmelden.")
+			http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+			return
+		}
+		h(w, r, s)
+	}
+}
+
+// --- Allgemeine Seiten ------------------------------------------------------
+
+func (a *App) handleRoot(w http.ResponseWriter, r *http.Request) {
+	a.render(w, r, http.StatusOK, "start", view{Title: "Dorf-App Rössing"})
+}
+
+// handleAdminHome ist gleichzeitig OIDC-Callback: die Rössing-ID schickt den
+// Code an genau diese, bereits registrierte Redirect-URI zurück.
+func (a *App) handleAdminHome(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	if q.Get("code") != "" || q.Get("error") != "" {
+		a.handleCallback(w, r)
+		return
+	}
+	s, ok := a.sessionOf(r)
+	if !ok || !s.Admin {
+		a.render(w, r, http.StatusOK, "anmelden", view{Title: "Anmelden"})
+		return
+	}
+	a.render(w, r, http.StatusOK, "verwaltung", view{Title: "Verwaltung", Nav: "verwaltung"})
+}
+
+// --- Anzeige-Helfer ---------------------------------------------------------
+
+func statusText(s model.Status) string {
+	switch s {
+	case model.StatusYellow:
+		return "fällig"
+	case model.StatusRed:
+		return "überfällig"
+	default:
+		return "in Ordnung"
+	}
+}
+
+// statusBadge liefert die passende DaisyUI-Badge-Klasse.
+func statusBadge(s model.Status) string {
+	switch s {
+	case model.StatusYellow:
+		return "badge-warning"
+	case model.StatusRed:
+		return "badge-error"
+	default:
+		return "badge-success"
+	}
+}
+
+func ortsart(k model.PlaceKind) string {
+	switch k {
+	case model.PlaceFlowerbox:
+		return "Blumenkasten"
+	case model.PlaceBed:
+		return "Beet"
+	default:
+		return "Sonstiges"
+	}
+}
+
+func aufgabenart(k model.TaskKind) string {
+	switch k {
+	case model.TaskWatering:
+		return "Gießen"
+	case model.TaskWeeding:
+		return "Jäten"
+	default:
+		return "Sonstiges"
+	}
+}
+
+// zahl formatiert Kommazahlen kurz (10 statt 10.000000).
+func zahl(f float64) string {
+	return strconv.FormatFloat(f, 'g', -1, 64)
+}
+
+func anzeigeName(s session) string {
+	if s.Name != "" {
+		return s.Name
+	}
+	return s.Sub
 }

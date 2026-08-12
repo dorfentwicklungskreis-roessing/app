@@ -1,0 +1,28 @@
+{{/* Startseite der Verwaltung: die Bereiche der Dorf-App als Kacheln.
+     Aktuell nur „Dorfpflege“; weitere Bereiche kommen einfach daneben. */}}
+{{define "seite"}}
+<h1 class="text-2xl font-bold" id="seitentitel">Verwaltung</h1>
+<p class="mt-1 text-base-content/70">Wähle einen Bereich der Dorf-App.</p>
+
+<div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+  <div class="card bg-base-100 shadow-sm" id="bereich-dorfpflege">
+    <div class="card-body">
+      <h2 class="card-title">🌻 Dorfpflege</h2>
+      <p class="text-base-content/70">Blumenkästen und Beete, Gieß- und Jätpläne, Ampel-Status und Erledigungen.</p>
+      <div class="card-actions justify-end">
+        <a class="btn btn-primary btn-sm" href="/admin/dorfpflege/">Öffnen</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border border-dashed border-base-300 bg-base-100 shadow-none">
+    <div class="card-body">
+      <h2 class="card-title text-base-content/60">🛒 Dorfladen ERNA</h2>
+      <p class="text-base-content/60">Mitgliedschaften und Anteile — in Vorbereitung.</p>
+      <div class="card-actions justify-end">
+        <span class="badge badge-ghost">geplant</span>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}

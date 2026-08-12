@@ -1,0 +1,112 @@
+{{define "layout"}}<!doctype html>
+<html lang="de" data-theme="garden">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Dorf-App Rössing</title>
+<link rel="stylesheet" href="/admin/static/app.css">
+{{block "kopf" .}}{{end}}
+</head>
+<body class="min-h-screen bg-base-200">
+<div class="drawer lg:drawer-open">
+  <input id="navigation" type="checkbox" class="drawer-toggle" />
+
+  <div class="drawer-content flex min-h-screen flex-col">
+    <div class="navbar bg-primary text-primary-content shadow-sm">
+      <div class="flex-none lg:hidden">
+        <label for="navigation" class="btn btn-square btn-ghost" aria-label="Navigation">☰</label>
+      </div>
+      <div class="flex-1">
+        <a href="/admin/" class="btn btn-ghost text-lg normal-case">🌻 Dorf-App Rössing</a>
+      </div>
+      <div class="flex-none items-center gap-2">
+        {{if .User}}
+          <span class="hidden text-sm opacity-90 sm:inline" id="angemeldet-als">{{.User.Name}}</span>
+          <form method="post" action="/admin/logout">
+            <button type="submit" class="btn btn-sm btn-ghost" id="abmelden">Abmelden</button>
+          </form>
+        {{end}}
+      </div>
+    </div>
+
+    <main class="flex-1 p-4 md:p-6" id="inhalt">
+      {{if .Flash}}
+        <div role="alert" id="meldung" data-art="{{.Flash.Kind}}"
+             class="alert mb-4 {{if eq .Flash.Kind "error"}}alert-error{{else}}alert-success{{end}}">
+          <span>{{.Flash.Text}}</span>
+        </div>
+      {{end}}
+      {{block "seite" .}}{{end}}
+    </main>
+
+    <footer class="footer footer-center bg-base-300 p-4 text-sm text-base-content">
+      <p>Dorf-App Rössing · Dorfentwicklungskreis Rössing</p>
+    </footer>
+  </div>
+
+  <div class="drawer-side z-20">
+    <label for="navigation" class="drawer-overlay" aria-label="Navigation schließen"></label>
+    <nav class="menu min-h-full w-64 bg-base-100 p-4">
+      <p class="menu-title">Bereiche</p>
+      <ul>
+        <li><a href="/admin/" {{if eq .Nav "verwaltung"}}class="menu-active"{{end}}>Übersicht</a></li>
+        <li>
+          <a href="/admin/dorfpflege/" {{if eq .Nav "dorfpflege"}}class="menu-active"{{end}}>Dorfpflege</a>
+          {{if eq .Nav "dorfpflege"}}
+          <ul>
+            <li><a href="/admin/dorfpflege/">Orte</a></li>
+            <li><a href="/admin/dorfpflege/orte/neu">Neuer Ort</a></li>
+            <li><a href="/admin/dorfpflege/einstellungen">Einstellungen</a></li>
+          </ul>
+          {{end}}
+        </li>
+        <li><span class="opacity-50">Dorfladen ERNA (in Vorbereitung)</span></li>
+      </ul>
+    </nav>
+  </div>
+</div>
+</body>
+</html>
+{{end}}
+
+{{/* Formularfelder eines Ortes — von „Neuer Ort“ und der Detailseite genutzt.
+     Erwartet ortFormularDaten. */}}
+{{define "ortFelder"}}
+  {{if .Fehler}}
+    <div role="alert" class="alert alert-error mb-4" id="formularfehler"><span>{{.Fehler}}</span></div>
+  {{end}}
+  <label class="form-control w-full">
+    <span class="label"><span class="label-text">Name</span></span>
+    <input type="text" name="name" id="feld-name" required value="{{.Ort.Name}}"
+           class="input input-bordered w-full" placeholder="z.B. Unter den Eichen — Kasten 3">
+  </label>
+  <label class="form-control w-full">
+    <span class="label"><span class="label-text">Art</span></span>
+    <select name="art" id="feld-art" class="select select-bordered w-full">
+      <option value="blumenkasten" {{if eq (printf "%s" .Ort.Kind) "blumenkasten"}}selected{{end}}>Blumenkasten</option>
+      <option value="beet" {{if eq (printf "%s" .Ort.Kind) "beet"}}selected{{end}}>Beet</option>
+      <option value="sonstiges" {{if eq (printf "%s" .Ort.Kind) "sonstiges"}}selected{{end}}>Sonstiges</option>
+    </select>
+  </label>
+  <label class="form-control w-full">
+    <span class="label"><span class="label-text">Beschreibung</span></span>
+    <input type="text" name="beschreibung" id="feld-beschreibung" value="{{.Ort.Description}}"
+           class="input input-bordered w-full">
+  </label>
+  <div class="grid grid-cols-2 gap-3">
+    <label class="form-control w-full">
+      <span class="label"><span class="label-text">Breitengrad</span></span>
+      <input type="text" inputmode="decimal" name="lat" id="feld-lat" required value="{{zahl .Ort.Lat}}"
+             class="input input-bordered w-full">
+    </label>
+    <label class="form-control w-full">
+      <span class="label"><span class="label-text">Längengrad</span></span>
+      <input type="text" inputmode="decimal" name="lon" id="feld-lon" required value="{{zahl .Ort.Lon}}"
+             class="input input-bordered w-full">
+    </label>
+  </div>
+  <label class="label cursor-pointer justify-start gap-3 py-3">
+    <input type="checkbox" name="aktiv" id="feld-aktiv" value="1" class="checkbox checkbox-primary" {{if .Ort.Active}}checked{{end}}>
+    <span class="label-text">Ort ist aktiv</span>
+  </label>
+{{end}}

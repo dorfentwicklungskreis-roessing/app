@@ -1,0 +1,8 @@
+/* Quelle des ausgelieferten CSS. Bauen mit: npm run build:css
+   Ergebnis (static/app.css) ist committet — zur Laufzeit wird nichts geladen. */
+@import "tailwindcss";
+@source "./templates/**/*.html";
+
+@plugin "daisyui" {
+  themes: garden --default, forest --prefersdark;
+}

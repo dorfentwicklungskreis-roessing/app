@@ -1,0 +1,81 @@
+{{define "kopf"}}
+<link href="/admin/vendor/maplibre-gl.css" rel="stylesheet">
+<script src="/admin/vendor/maplibre-gl.js" defer></script>
+<script src="/admin/static/karte.js" defer></script>
+{{end}}
+
+{{define "seite"}}
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold" id="seitentitel">Dorfpflege</h1>
+    <p class="text-base-content/70">Alle gepflegten Orte im Dorf mit ihrem Ampel-Status.</p>
+  </div>
+  <div class="flex gap-2">
+    <a class="btn btn-primary" href="/admin/dorfpflege/orte/neu" id="neuer-ort">Neuer Ort</a>
+    <a class="btn btn-outline" href="/admin/dorfpflege/einstellungen" id="zu-einstellungen">Einstellungen</a>
+  </div>
+</div>
+
+<div class="stats mt-4 bg-base-100 shadow-sm">
+  <div class="stat">
+    <div class="stat-title">Orte</div>
+    <div class="stat-value text-2xl" id="anzahl-orte">{{len .Data.Orte}}</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Hitzefaktor</div>
+    <div class="stat-value text-2xl" id="anzeige-hitzefaktor">{{zahl .Data.Hitzefaktor}}</div>
+    <div class="stat-desc">kleiner = früher gießen</div>
+  </div>
+</div>
+
+<div class="card mt-4 bg-base-100 shadow-sm">
+  <div class="card-body p-4">
+    <div id="karte" class="h-72 w-full overflow-hidden rounded-box bg-base-200 md:h-96"
+         data-karte="{{.Data.KarteJSON}}" data-anzahl="{{len .Data.Orte}}"></div>
+    <p id="karte-hinweis" class="text-sm text-base-content/60">
+      Die Karte ist nur eine Ansicht — die Verwaltung funktioniert auch ohne sie.
+    </p>
+  </div>
+</div>
+
+<div class="card mt-4 bg-base-100 shadow-sm">
+  <div class="card-body p-0">
+    <div class="overflow-x-auto">
+      <table class="table" id="orte-tabelle">
+        <thead>
+          <tr><th>Ort</th><th>Art</th><th>Status</th><th>Aufgaben</th><th></th></tr>
+        </thead>
+        <tbody>
+          {{range .Data.Orte}}
+          <tr data-ort-id="{{.ID}}" data-status="{{.Status}}">
+            <td>
+              <a class="link link-hover font-medium" href="/admin/dorfpflege/orte/{{.ID}}">{{.Name}}</a>
+              {{if .Description}}<div class="text-sm text-base-content/60">{{.Description}}</div>{{end}}
+              {{if not .Active}}<span class="badge badge-ghost badge-sm">inaktiv</span>{{end}}
+            </td>
+            <td>{{ortsart .Kind}}</td>
+            <td><span class="badge {{statusBadge .Status}}">{{statusText .Status}}</span></td>
+            <td>
+              {{if .Tasks}}
+                <div class="flex flex-wrap gap-1">
+                  {{range .Tasks}}
+                    <span class="badge badge-outline badge-sm {{statusBadge .Status}}">{{aufgabenart .Kind}}</span>
+                  {{end}}
+                </div>
+              {{else}}
+                <span class="text-sm text-base-content/50">keine</span>
+              {{end}}
+            </td>
+            <td class="text-right">
+              <a class="btn btn-ghost btn-sm" href="/admin/dorfpflege/orte/{{.ID}}">Öffnen</a>
+            </td>
+          </tr>
+          {{else}}
+          <tr><td colspan="5" class="text-center text-base-content/60">Noch keine Orte angelegt.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{{end}}

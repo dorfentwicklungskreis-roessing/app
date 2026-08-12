@@ -1,0 +1,36 @@
+{{/* Anmeldeseite: bewusst ohne Navigation und ohne Overlay — eine eigene,
+     vollwertige Seite unter /admin/. Der Knopf ist ein Link, funktioniert
+     also auch ohne JavaScript. */}}
+{{define "layout"}}<!doctype html>
+<html lang="de" data-theme="garden">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anmelden · Dorf-App Rössing</title>
+<link rel="stylesheet" href="/admin/static/app.css">
+</head>
+<body class="min-h-screen bg-base-200">
+<div class="hero min-h-screen">
+  <div class="hero-content w-full max-w-md flex-col">
+    {{if .Flash}}
+      <div role="alert" id="meldung" data-art="{{.Flash.Kind}}"
+           class="alert w-full {{if eq .Flash.Kind "error"}}alert-error{{else}}alert-success{{end}}">
+        <span>{{.Flash.Text}}</span>
+      </div>
+    {{end}}
+    <div class="card w-full bg-base-100 shadow-xl">
+      <div class="card-body items-center text-center">
+        <p class="text-5xl">🌻</p>
+        <h1 class="card-title" id="anmelde-titel">Verwaltung der Dorf-App</h1>
+        <p class="text-base-content/70">Bitte mit der Rössing-ID anmelden. Für die Verwaltung wird die Rolle „admin“ benötigt.</p>
+        <div class="card-actions mt-2">
+          <a class="btn btn-primary" id="anmelden" href="/admin/login">Mit Rössing-ID anmelden</a>
+        </div>
+        <a class="link link-hover mt-4 text-sm" href="/">Zurück zur Startseite</a>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,17 @@
+{{/* Eigene Bestätigungsseite statt eines confirm()-Popups — funktioniert
+     damit auch ohne JavaScript. */}}
+{{define "seite"}}
+<div class="card mx-auto max-w-xl bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h1 class="card-title text-error" id="seitentitel">{{.Data.Ueberschrift}}</h1>
+    <p id="bestaetigen-text">{{.Data.Text}}</p>
+    <p class="text-sm text-base-content/60">Das lässt sich nicht rückgängig machen.</p>
+    <div class="card-actions mt-2">
+      <form method="post" action="{{.Data.Aktion}}">
+        <button type="submit" class="btn btn-error" id="loeschen-bestaetigen">{{.Data.Knopf}}</button>
+      </form>
+      <a class="btn btn-ghost" id="loeschen-abbrechen" href="{{.Data.Zurueck}}">Abbrechen</a>
+    </div>
+  </div>
+</div>
+{{end}}

@@ -1,6 +1,6 @@
 // Test-Fixture: sammelt ALLE Browser-Meldungen und lässt den Test scheitern,
 // sobald eine echte Konsolen-Fehlermeldung oder eine unbehandelte Exception
-// auftritt. Genau dieser Wächter hätte den kaputten Kartenstart gefangen.
+// auftritt.
 import { test as base, expect } from '@playwright/test';
 import fs from 'node:fs';
 import { BASE_URL, STATE_FILE } from './config.mjs';
@@ -21,27 +21,31 @@ const eigeneSeite = (url) => !url || url.startsWith(BASE_URL);
 
 export const state = () => JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
 
+/** Hängt den Fehler-Wächter an eine Seite und liefert Prüf-/Protokollhilfen. */
+export function ueberwachen(page) {
+  const alle = [];
+  const fehler = [];
+  page.on('console', (m) => {
+    const quelle = m.location()?.url || page.url();
+    const zeile = `[${m.type()}] ${m.text()}   (${quelle})`;
+    alle.push(zeile);
+    if (m.type() === 'error' && eigeneSeite(quelle) && !HARMLOS.some((r) => r.test(m.text()))) {
+      fehler.push(zeile);
+    }
+  });
+  page.on('pageerror', (e) => {
+    const quelle = page.url();
+    const zeile = `[pageerror] ${e.message}   (${quelle})\n${e.stack || ''}`;
+    alle.push(zeile);
+    if (eigeneSeite(quelle)) fehler.push(zeile);
+  });
+  return { alle, fehler };
+}
+
 export const test = base.extend({
   page: async ({ page }, use, testInfo) => {
-    const alle = [];
-    const fehler = [];
-    page.on('console', (m) => {
-      const quelle = m.location()?.url || page.url();
-      const zeile = `[${m.type()}] ${m.text()}   (${quelle})`;
-      alle.push(zeile);
-      if (m.type() === 'error' && eigeneSeite(quelle) && !HARMLOS.some((r) => r.test(m.text()))) {
-        fehler.push(zeile);
-      }
-    });
-    page.on('pageerror', (e) => {
-      const quelle = page.url();
-      const zeile = `[pageerror] ${e.message}   (${quelle})\n${e.stack || ''}`;
-      alle.push(zeile);
-      if (eigeneSeite(quelle)) fehler.push(zeile);
-    });
-
+    const { alle, fehler } = ueberwachen(page);
     await use(page);
-
     await testInfo.attach('browser-console.log', { body: alle.join('\n'), contentType: 'text/plain' });
     expect(fehler, `Browser-Fehler während „${testInfo.title}":\n${fehler.join('\n')}`).toEqual([]);
   },
@@ -49,10 +53,14 @@ export const test = base.extend({
 
 export { expect };
 
-/** Fährt den ECHTEN Zitadel-Login durch (Login v1 und v2 werden unterstützt). */
+/**
+ * Fährt den ECHTEN Zitadel-Login durch. Der Code-Tausch passiert danach im
+ * Backend; im Browser landet nur ein HttpOnly-Session-Cookie.
+ * Funktioniert auch in Kontexten ohne JavaScript.
+ */
 export async function anmelden(page, user, passwort) {
   await page.goto('/admin/');
-  await page.locator('#login-button').click();
+  await page.locator('#anmelden').click();
   await page.waitForURL(/\/ui\//, { timeout: 60_000 });
 
   const benutzerfeld = page

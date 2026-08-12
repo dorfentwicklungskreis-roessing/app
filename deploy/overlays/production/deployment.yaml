@@ -40,6 +40,10 @@ spec:
               value: "1"
             - name: PUBLIC_URL
               value: https://app.xn--rssing-wxa.de
+            # SESSION_KEY (optional): signiert die Cookies der Verwaltung.
+            # Ohne ihn erzeugt der Server beim Start einen zufälligen Schlüssel
+            # — Anmeldungen überleben dann kein Rollout. Für dauerhafte
+            # Sitzungen ein Secret anlegen und hier per secretKeyRef einhängen.
           volumeMounts:
             - name: data
               mountPath: /data

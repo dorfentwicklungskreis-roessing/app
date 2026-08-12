@@ -24,6 +24,10 @@ backend/e2e/web/blob-report/
 backend/e2e/web/.e2e-state.json
 backend/e2e/web/backend.log
 
+# Web-Admin: Abhängigkeiten des CSS-Builds
+# (das Ergebnis static/app.css wird bewusst committet)
+backend/internal/admin/node_modules/
+
 # IDE
 .idea/
 *.iml

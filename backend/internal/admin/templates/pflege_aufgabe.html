@@ -1,0 +1,68 @@
+{{define "seite"}}
+<div class="breadcrumbs text-sm">
+  <ul>
+    <li><a href="/admin/dorfpflege/">Dorfpflege</a></li>
+    <li><a href="/admin/dorfpflege/orte/{{.Data.Ort.ID}}">{{.Data.Ort.Name}}</a></li>
+    <li>{{if .Data.Neu}}Neue Aufgabe{{else}}Aufgabe bearbeiten{{end}}</li>
+  </ul>
+</div>
+<h1 class="text-2xl font-bold" id="seitentitel">
+  {{if .Data.Neu}}Neue Aufgabe{{else}}Aufgabe bearbeiten{{end}}
+</h1>
+<p class="text-base-content/70">für „{{.Data.Ort.Name}}“</p>
+
+<div class="card mt-4 max-w-xl bg-base-100 shadow-sm">
+  <div class="card-body">
+    {{if .Data.Fehler}}
+      <div role="alert" class="alert alert-error" id="formularfehler"><span>{{.Data.Fehler}}</span></div>
+    {{end}}
+    <form method="post" action="{{.Data.Ziel}}" id="aufgabe-formular">
+      <label class="form-control w-full">
+        <span class="label"><span class="label-text">Art</span></span>
+        <select name="art" id="feld-art" class="select select-bordered w-full">
+          <option value="giessen" {{if eq (printf "%s" .Data.Aufgabe.Kind) "giessen"}}selected{{end}}>Gießen</option>
+          <option value="jaeten" {{if eq (printf "%s" .Data.Aufgabe.Kind) "jaeten"}}selected{{end}}>Jäten</option>
+          <option value="sonstiges" {{if eq (printf "%s" .Data.Aufgabe.Kind) "sonstiges"}}selected{{end}}>Sonstiges</option>
+        </select>
+      </label>
+      <label class="form-control w-full">
+        <span class="label"><span class="label-text">Bezeichnung (optional)</span></span>
+        <input type="text" name="titel" id="feld-titel" value="{{.Data.Aufgabe.Title}}"
+               class="input input-bordered w-full" placeholder="z.B. Unkraut am Rand">
+      </label>
+      <label class="form-control w-full">
+        <span class="label"><span class="label-text">Liter je Durchgang (nur beim Gießen)</span></span>
+        <input type="text" inputmode="decimal" name="liter" id="feld-liter" value="{{.Data.LiterText}}"
+               class="input input-bordered w-full">
+      </label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="form-control w-full">
+          <span class="label"><span class="label-text">Intervall (Tage)</span></span>
+          <input type="text" inputmode="decimal" name="intervall" id="feld-intervall" required
+                 value="{{zahl .Data.Aufgabe.IntervalDays}}" class="input input-bordered w-full">
+        </label>
+        <label class="form-control w-full">
+          <span class="label"><span class="label-text">Rot nach (Tage)</span></span>
+          <input type="text" inputmode="decimal" name="rot" id="feld-rot" required
+                 value="{{zahl .Data.Aufgabe.RedAfterDays}}" class="input input-bordered w-full">
+        </label>
+      </div>
+      <label class="label cursor-pointer justify-start gap-3 py-3">
+        <input type="checkbox" name="aktiv" id="feld-aktiv" value="1" class="checkbox checkbox-primary"
+               {{if .Data.Aufgabe.Active}}checked{{end}}>
+        <span class="label-text">Aufgabe ist aktiv</span>
+      </label>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-primary" id="aufgabe-speichern">
+          {{if .Data.Neu}}Aufgabe anlegen{{else}}Speichern{{end}}
+        </button>
+        <a class="btn btn-ghost" href="/admin/dorfpflege/orte/{{.Data.Ort.ID}}">Abbrechen</a>
+        {{if not .Data.Neu}}
+          <a class="btn btn-error btn-outline" id="aufgabe-loeschen"
+             href="/admin/dorfpflege/aufgaben/{{.Data.Aufgabe.ID}}/loeschen">Aufgabe löschen</a>
+        {{end}}
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}

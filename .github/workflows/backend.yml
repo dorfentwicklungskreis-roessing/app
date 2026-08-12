@@ -35,6 +35,29 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
 
+  # Das ausgelieferte CSS der Verwaltung liegt gebaut im Repo (go:embed).
+  # Hier wird es neu gebaut; weicht es ab, ist der Commit unvollständig.
+  css:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/internal/admin/package-lock.json
+      - name: Tailwind + DaisyUI bauen
+        working-directory: backend/internal/admin
+        run: |
+          npm ci
+          npm run build:css
+      - name: Kein Drift zwischen Quelle und committetem CSS
+        run: |
+          if ! git diff --exit-code -- backend/internal/admin/static/app.css; then
+            echo "::error::static/app.css ist veraltet — 'npm run build:css' in backend/internal/admin ausführen und committen."
+            exit 1
+          fi
+
   # Voller E2E: echtes Zitadel (compose) + echtes Backend-Binary, keine Mocks.
   e2e:
     runs-on: ubuntu-latest
