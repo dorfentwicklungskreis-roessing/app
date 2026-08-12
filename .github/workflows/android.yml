@@ -71,41 +71,41 @@ jobs:
           DB_PATH=/tmp/e2e.sqlite AUTH_MODE=insecure-dev SEED=1 LISTEN_ADDR=:8099 \
             go run ./cmd/server &
           for i in $(seq 1 30); do curl -sf localhost:8099/healthz && break; sleep 1; done
+      # Beide Testläufe laufen bewusst im SELBEN Emulator-Schritt:
+      # android-emulator-runner lässt sich pro Job nur einmal verwenden, ein
+      # zweiter Aufruf findet den bereits laufenden Emulator nicht mehr.
       - name: Instrumented- und E2E-Tests auf Emulator (API ${{ matrix.api-level }})
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          REAL_LOGIN_USER: ${{ secrets.TEST_USER_LOGIN }}
+          REAL_LOGIN_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+          API_LEVEL: ${{ matrix.api-level }}
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           target: ${{ matrix.api-level >= 30 && 'google_apis' || 'default' }}
           disable-animations: true
           working-directory: android
-          script: ./gradlew connectedDebugAndroidTest -PapiBaseUrl=http://10.0.2.2:8099 -PdevAuth=true -Pandroid.testInstrumentationRunnerArguments.e2e=true
-
-      # Echter Rössing-ID-Login gegen die Produktion — bewusst OHNE devAuth und
-      # ohne apiBaseUrl-Override. Deckt den Weg ab, der zuvor kaputt war:
-      # Browser-Login → Rücksprung über AppAuth → Token-Tausch → angemeldete Ansicht.
-      # Läuft nur auf API 35 (das google_apis-Image bringt Chrome mit); ohne die
-      # Secrets überspringt der Test sich selbst per Assume.
-      - name: Echter Login gegen Produktion (API 35)
-        if: matrix.api-level == 35
-        uses: reactivecircus/android-emulator-runner@v2
-        env:
-          REAL_LOGIN_USER: ${{ secrets.TEST_USER_LOGIN }}
-          REAL_LOGIN_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
-        with:
-          api-level: ${{ matrix.api-level }}
-          arch: x86_64
-          target: google_apis
-          disable-animations: true
-          working-directory: android
           script: |
-            # Chrome-Erststart-Dialoge unterdrücken, damit der Custom Tab direkt
-            # die Zitadel-Anmeldung zeigt.
-            adb shell 'echo "chrome --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line' || true
-            ./gradlew connectedDebugAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.class=de.roessing.app.RealLoginE2eTest \
-              -Pandroid.testInstrumentationRunnerArguments.realLoginUser="$REAL_LOGIN_USER" \
-              -Pandroid.testInstrumentationRunnerArguments.realLoginPassword="$REAL_LOGIN_PASSWORD"
+            set -e
+            ./gradlew connectedDebugAndroidTest -PapiBaseUrl=http://10.0.2.2:8099 -PdevAuth=true -Pandroid.testInstrumentationRunnerArguments.e2e=true
+
+            # Echter Rössing-ID-Login gegen die Produktion — bewusst OHNE devAuth
+            # und ohne apiBaseUrl-Override. Deckt den Weg ab, der zuvor kaputt war:
+            # Browser-Login → Rücksprung über AppAuth → Token-Tausch → angemeldete
+            # Ansicht. Nur auf API 35, weil erst das google_apis-Image Chrome (und
+            # damit Custom Tabs) mitbringt; ohne Secrets wird der Block übersprungen.
+            if [ "$API_LEVEL" = "35" ] && [ -n "$REAL_LOGIN_USER" ] && [ -n "$REAL_LOGIN_PASSWORD" ]; then
+              # Chrome-Erststart-Dialoge unterdrücken, damit der Custom Tab direkt
+              # die Zitadel-Anmeldung zeigt.
+              adb shell 'echo "chrome --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line' || true
+              ./gradlew connectedDebugAndroidTest \
+                -Pandroid.testInstrumentationRunnerArguments.class=de.roessing.app.RealLoginE2eTest \
+                -Pandroid.testInstrumentationRunnerArguments.realLoginUser="$REAL_LOGIN_USER" \
+                -Pandroid.testInstrumentationRunnerArguments.realLoginPassword="$REAL_LOGIN_PASSWORD"
+            else
+              echo "Echter Login-Test übersprungen (API $API_LEVEL bzw. keine Secrets)."
+            fi
 
       - name: E2E-Berichte hochladen
         if: failure()
