@@ -106,3 +106,13 @@ jobs:
         with:
           name: e2e-reports-api${{ matrix.api-level }}
           path: android/app/build/reports/androidTests/
+
+      # Immer, nicht nur bei Fehlschlag: der Speicherverlauf eines grünen Laufs
+      # ist der Vergleichsmaßstab, an dem ein Leck überhaupt erst auffällt.
+      - name: E2E-Diagnose hochladen (logcat + Speicherverlauf)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnose-api${{ matrix.api-level }}-${{ github.run_attempt }}
+          path: android/app/build/reports/e2e-diagnose/
+          if-no-files-found: warn

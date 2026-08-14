@@ -11,6 +11,63 @@
 #   REAL_LOGIN_USER, REAL_LOGIN_PASSWORD Zugangsdaten für den echten Rössing-ID-Login
 set -euo pipefail
 
+# --- Beweisaufnahme ---------------------------------------------------------
+# „Instrumentation run failed due to Process crashed" sagt für sich genommen
+# nichts: Gradle merkt nur, dass der App-Prozess weg ist. Was ihn umgebracht
+# hat, steht ausschließlich im logcat des Emulators — und der war bisher nach
+# dem Job weg. Deshalb läuft ab hier ein Mitschnitt, und daneben ein Takt, der
+# Speicher und Threadzahl des App-Prozesses über die Testfolge protokolliert.
+# Beides landet als Artefakt im Lauf und wird bei einem Absturz zusätzlich
+# direkt ins Job-Protokoll geschrieben.
+DIAG="${DIAG_DIR:-app/build/reports/e2e-diagnose}"
+mkdir -p "$DIAG"
+
+adb logcat -c || true
+adb logcat -G 32M || true
+adb logcat -v time > "$DIAG/logcat.txt" 2>&1 &
+LOGCAT_PID=$!
+
+# Alle 3 Sekunden: RSS und Threadzahl des App-Prozesses, dazu der freie
+# Speicher des Emulators. Wächst der Wert über die Testfolge monoton, ist der
+# Absturz ein Leck und kein einzelner schuldiger Test.
+speichertakt() {
+  echo "zeit_s rss_kb threads memavailable_kb" > "$DIAG/speicher.txt"
+  START=$(date +%s)
+  while true; do
+    ZEILE=$(adb shell "pid=\$(pidof de.roessing.app); \
+      test -n \"\$pid\" && awk '/VmRSS/{r=\$2} /^Threads/{t=\$2} END{print r, t}' /proc/\$pid/status; \
+      awk '/MemAvailable/{print \$2}' /proc/meminfo" 2>/dev/null | tr -d '\r' | tr '\n' ' ')
+    echo "$(( $(date +%s) - START )) $ZEILE" >> "$DIAG/speicher.txt"
+    sleep 3
+  done
+}
+speichertakt &
+TAKT_PID=$!
+
+# Beim Verlassen: Takt und Mitschnitt beenden. Ist der Lauf gescheitert, die
+# aussagekräftigen Zeilen sichtbar ins Job-Protokoll heben, statt sie im
+# Artefakt zu verstecken.
+aufraeumen() {
+  CODE=$?
+  kill "$TAKT_PID" "$LOGCAT_PID" 2>/dev/null || true
+  sleep 1
+  if [ "$CODE" != "0" ]; then
+    echo "=============================================================="
+    echo "E2E gescheitert (Code $CODE) — Diagnose aus dem Emulator:"
+    echo "--- Speicherverlauf des App-Prozesses (letzte 40 Messpunkte) ---"
+    tail -40 "$DIAG/speicher.txt" || true
+    echo "--- Absturzspuren im logcat ---"
+    grep -nE "FATAL|DEBUG *:|signal [0-9]+|lowmemorykiller|am_kill|Out of memory|OutOfMemoryError|Abort message|tombstone|GL_OUT_OF_MEMORY|eglCreateContext|Failed to create|too many|EMFILE|pthread_create" \
+      "$DIAG/logcat.txt" | tail -80 || true
+    echo "--- letzte 120 Zeilen logcat ---"
+    tail -120 "$DIAG/logcat.txt" || true
+    echo "--- Tombstones ---"
+    adb shell ls -l /data/tombstones 2>/dev/null || true
+    echo "=============================================================="
+  fi
+}
+trap aufraeumen EXIT
+
 # 0) Emulator-Standort auf Rössing setzen — davon lebt der Standort-Test.
 #    (Ohne Fix liefert der Emulator gar keine Position, der Test überspringt dann.)
 adb emu geo fix 9.8162 52.1843 || true
