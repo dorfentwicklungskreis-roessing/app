@@ -251,9 +251,12 @@ class RealLoginE2eTest {
     private fun klickeRobust(auswahl: BySelector, fehler: () -> String) {
         val ende = System.currentTimeMillis() + 30_000
         while (System.currentTimeMillis() < ende) {
+            // Bewusst NUR suchen und klicken: Wer hier zwischendurch Dialoge
+            // wegklickt, trifft schnell etwas anderes und leert das gerade
+            // ausgefüllte Feld — die Anmeldung endet dann mit
+            // „User not found in the system".
             val objekt = device.findObject(auswahl)
             if (objekt == null) {
-                schliesseChromeDialoge()
                 device.waitForIdle()
                 Thread.sleep(500)
                 continue
