@@ -37,9 +37,36 @@ Anfang.
     `/admin/dorfpflege/…` leitet dauerhaft per 308 dorthin um)
   - SQLite im WAL-Modus auf einem PVC (`/data/dorfapp.sqlite`)
 - **Domänenmodell**: Orte (`blumenkasten`, `beet`, `sonstiges`) haben
-  Pflegeaufgaben (`giessen` mit Litern, `jaeten`, `sonstiges`), je mit
-  Intervall (→ gelb) und Rot-Schwelle. Globaler **Hitzefaktor** (z.B. 0.5)
-  beschleunigt nur Gieß-Aufgaben.
+  Pflegeaufgaben (`giessen` mit Litern, `jaeten`, `sonstiges`). Eine Aufgabe
+  ist entweder **regelmäßig** — Intervall (→ gelb) und Rot-Schwelle — oder
+  **einmalig** (`oneOff`) mit einem **Fälligkeitsdatum** (`dueDate`) statt
+  eines Intervalls: „einmal zum Bahnhof fahren". Deren Ampel richtet sich
+  nach dem Termin: gelb ab drei Tagen davor (`model.OneOffLeadTime`), rot,
+  sobald er verstrichen ist; erledigt bleibt sie grün und wird nicht wieder
+  fällig. Der globale **Hitzefaktor** (z.B. 0.5) beschleunigt nur
+  Gieß-Aufgaben — auf einen Termin wirkt er nicht.
+  Mit `removeWhenDone` verschwindet eine einmalige Aufgabe nach der Meldung
+  von Karte und Liste. Gelöscht wird sie dabei **nicht**, sondern *abgeräumt*
+  (`removed_at`): An ihr hängen die Erledigungen, und die zählen weiter für
+  die Rangliste. Eine erledigte einmalige Aufgabe nimmt keine zweite Meldung
+  mehr an (409).
+- **Wer darf was**: Orte und Aufgaben anlegen, ändern, pausieren und löschen
+  darf ausschließlich die Verwaltung (Projektrolle `admin`). Durchgesetzt
+  wird das serverseitig aus dem Token — in REST (`adminOnly`), in der
+  Web-Verwaltung (`requireAdmin`) und am MCP-Endpoint gleichermaßen; die App
+  blendet den Bereich zusätzlich nur für Verwaltende ein. Alle anderen
+  Angemeldeten melden Erledigungen, tragen sich als Helfer:innen ein, sagen
+  zu und stehen in der Rangliste — daran ändert sich nichts.
+  **In der App** gibt es dafür den Bereich **„Verwaltung"**: Orte und
+  Aufgaben pflegen, während man davor steht. Der Standort kommt aus dem
+  eigenen Gerät („Meinen Standort übernehmen") oder aus einem Tipp auf die
+  Karte.
+- **Pausieren und Löschen mit Ansage**: Wer eine Aufgabe gerade zugesagt hat,
+  bekommt den Hinweis „nicht mehr nötig", sobald sie pausiert oder gelöscht
+  wird — für einzelne Aufgaben wie für ganze Orte, in REST, Web-Verwaltung
+  und MCP. Damit der Hinweis das Löschen überlebt, hängt
+  `care_notifications` nicht mehr per Fremdschlüssel am Vergabe-Vorgang und
+  führt Ort und Aufgabe zusätzlich im Klartext mit.
 - **Rangliste**: `GET /api/v1/stats/leaderboard?period=woche|monat|saison|jahr|gesamt`
   (Standard `saison` = 1. März bis 31. Oktober, Grenzen in Ortszeit) zeigt je
   Person Anzahl und Liter, die Gesamtsummen des Dorfes, den eigenen Rang und
@@ -283,7 +310,8 @@ DCR mit der festen PKCE-Client-ID). Beim Verbinden loggt man sich mit der
 Rössing-ID ein; nur Nutzer mit der Projektrolle `admin` kommen durch.
 
 Tools: `orte_liste`, `ort_anlegen/aendern/loeschen`,
-`aufgabe_anlegen/aendern/loeschen`, `erledigung_melden`,
+`aufgabe_anlegen/aendern/loeschen` (regelmäßig mit `intervalDays`, einmalig
+mit `oneOff` + `dueDate`, dazu `removeWhenDone`), `erledigung_melden`,
 `erledigung_zuruecknehmen`, `rangliste`, `hitzefaktor_setzen`.
 
 ## Deployment
