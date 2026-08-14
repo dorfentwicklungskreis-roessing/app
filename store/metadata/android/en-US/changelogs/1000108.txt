@@ -1,0 +1,8 @@
+Your phone's push identifier is now created only once you allow
+notifications. Before, the app requested one on every start and stored
+it on the village server - even if you had declined notifications. That
+was not right.
+
+If you turn notifications off again in the Android settings, the app
+deletes the identifier from the server the next time you open it. Same
+when you sign out.

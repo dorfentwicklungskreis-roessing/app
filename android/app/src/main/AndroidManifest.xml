@@ -60,5 +60,27 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="hinweise" />
+
+        <!--
+            Firebase bleibt still, bis jemand Mitteilungen erlaubt.
+
+            Ohne diese beiden Schalter meldet sich das Firebase-SDK beim
+            ersten Start von selbst bei Google an: Es legt eine
+            Installations-Kennung an und holt sich eine FCM-Kennung, ganz ohne
+            Zutun der App. Damit entstünde das Datum schon vor jeder
+            Einwilligung — auch bei jemandem, der Mitteilungen abgelehnt hat.
+
+            Scharf gestellt wird ausdrücklich in Geraeteabgleich.anmelden(),
+            also erst bei erteilter Erlaubnis; beim Entzug und beim Abmelden
+            geht es wieder aus. Die Einstellung ist bleibend (Firebase merkt
+            sie sich selbst), diese Werte gelten also nur beim allerersten
+            Start.
+        -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_data_collection_default_enabled"
+            android:value="false" />
     </application>
 </manifest>

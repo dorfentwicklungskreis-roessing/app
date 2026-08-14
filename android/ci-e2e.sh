@@ -21,6 +21,44 @@ adb emu geo fix 9.8162 52.1843 || true
   -PdevAuth=true \
   -Pandroid.testInstrumentationRunnerArguments.e2e=true
 
+# 1b) Derselbe Kennungs-Test noch einmal, diesmal mit NICHT erteilter
+#     Benachrichtigungs-Berechtigung.
+#
+#     Gradle installiert die Test-APKs immer mit `pm install -g` — alle
+#     Laufzeitrechte erteilt. Für den Nachweis, dass ohne Erlaubnis keine
+#     Gerätekennung ans Backend geht, muss die Berechtigung aber gerade
+#     fehlen. Deshalb hier von Hand ohne `-g` installieren und die
+#     Instrumentierung direkt starten.
+#
+#     `pm revoke` aus dem Test heraus scheidet aus: Android schießt beim
+#     Entzug einer Laufzeitberechtigung den Prozess ab — und das ist derselbe
+#     Prozess, in dem der Test läuft. `appops set POST_NOTIFICATION ignore`
+#     wirkt nicht: `areNotificationsEnabled()` richtet sich nicht danach.
+#
+#     Vorher deinstallieren, weil ein Update bereits erteilte Rechte behält.
+echo "--- Kennungs-Test ohne erteilte Benachrichtigungs-Berechtigung"
+adb uninstall de.roessing.app >/dev/null 2>&1 || true
+adb uninstall de.roessing.app.test >/dev/null 2>&1 || true
+adb install -r -t app/build/outputs/apk/debug/app-debug.apk
+adb install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+
+# `am instrument` liefert auch bei roten Tests den Exit-Code 0 — das Ergebnis
+# steht nur im Text. Deshalb beides prüfen: kein "FAILURES!!!", und ein "OK".
+ERGEBNIS=$(adb shell am instrument -w \
+  -e class de.roessing.app.GeraetekennungE2eTest \
+  -e e2e true \
+  -e erlaubnisfrei true \
+  de.roessing.app.test/androidx.test.runner.AndroidJUnitRunner)
+echo "$ERGEBNIS"
+if echo "$ERGEBNIS" | grep -q "FAILURES!!!"; then
+  echo "Kennungs-Test ohne Berechtigung fehlgeschlagen." >&2
+  exit 1
+fi
+if ! echo "$ERGEBNIS" | grep -q "^OK "; then
+  echo "Kennungs-Test ohne Berechtigung lief nicht durch." >&2
+  exit 1
+fi
+
 # 2) Echter Rössing-ID-Login gegen die Produktion — bewusst OHNE devAuth und ohne
 #    apiBaseUrl-Override. Deckt den Weg ab, der zuvor kaputt war: Browser-Login →
 #    Rücksprung über AppAuth → Token-Tausch → angemeldete Ansicht.

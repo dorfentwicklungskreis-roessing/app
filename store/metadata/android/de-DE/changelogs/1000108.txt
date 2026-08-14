@@ -1,0 +1,8 @@
+Die Kennung fürs Handy entsteht jetzt erst, wenn du Mitteilungen
+erlaubst. Vorher fragte die App bei jedem Start eine Kennung an und
+hinterlegte sie auf dem Dorfserver - auch bei abgelehnten Mitteilungen.
+Das war nicht in Ordnung.
+
+Schaltest du die Mitteilungen in den Android-Einstellungen wieder ab,
+löscht die App die Kennung beim nächsten Öffnen vom Server. Beim
+Abmelden aus der App ebenfalls.

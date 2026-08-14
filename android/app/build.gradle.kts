@@ -31,8 +31,8 @@ android {
         // keinen Build mit kleinerer Nummer über einen größeren — sonst
         // müssten alle Tester die App erst deinstallieren. Ab hier wieder in
         // Einerschritten weiterzählen.
-        versionCode = 1000107
-        versionName = "0.1.7"
+        versionCode = 1000108
+        versionName = "0.1.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -142,6 +142,10 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // Ohne das wirft jeder Aufruf von android.util.Log im Unit-Test
+            // eine RuntimeException — auch aus reiner Ablauflogik heraus, die
+            // mit Android sonst nichts zu tun hat.
+            isReturnDefaultValues = true
         }
     }
 }

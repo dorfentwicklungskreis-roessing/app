@@ -1,17 +1,15 @@
 package de.roessing.app.push
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
+import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -41,9 +39,16 @@ class DorfMessagingService : FirebaseMessagingService() {
      * sonst schickt es weiter ins Leere.
      */
     override fun onNewToken(token: String) {
+        // Auch die Erneuerung braucht die Erlaubnis: Ohne sie hätte die neue
+        // Kennung beim Backend nichts verloren.
+        if (!Benachrichtigungserlaubnis.wirksam(applicationContext)) {
+            Log.i(TAG, "Neue Gerätekennung verworfen — Benachrichtigungen sind nicht erlaubt")
+            return
+        }
         Log.i(TAG, "Neue Gerätekennung von Firebase")
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching { applicationContext.appContainer.deviceRepository.register(token) }
+                .onSuccess { Geraeteanmeldung.speicher(applicationContext).merken(true) }
                 .onFailure { Log.w(TAG, "Kennung konnte nicht angemeldet werden", it) }
         }
     }
@@ -107,9 +112,7 @@ object Systemmeldung {
     }
 
     private fun darfAnzeigen(context: Context): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
+        Benachrichtigungserlaubnis.wirksam(context)
 }
 
 /**
@@ -140,17 +143,23 @@ object Kanaele {
 /**
  * An- und Abmeldung des Geräts beim Backend.
  *
- * Angemeldet wird bei jedem Start der angemeldeten App: Das Backend legt
- * dieselbe Kennung nicht doppelt an, und so bleibt der Zeitstempel frisch.
+ * Die Kennung folgt der Erlaubnis: Sie entsteht erst, wenn Benachrichtigungen
+ * wirklich erlaubt sind, und verschwindet wieder, sobald die Erlaubnis fehlt.
+ * Die Entscheidung selbst steckt in [Geraeteabgleich] — hier hängen nur die
+ * Android-Teile dran (Firebase, Einstellungen der App).
  */
 object Geraeteanmeldung {
     private const val TAG = "Push"
+    private const val DATEI = "push"
+    private const val SCHLUESSEL = "kennung_angemeldet"
 
-    suspend fun anmelden(context: Context) {
-        val token = kennung() ?: return
-        runCatching { context.appContainer.deviceRepository.register(token) }
-            .onSuccess { Log.i(TAG, "Gerät für Benachrichtigungen angemeldet") }
-            .onFailure { Log.w(TAG, "Anmelden der Kennung fehlgeschlagen", it) }
+    /**
+     * Der Abgleich bei jedem Start und bei jeder Rückkehr in den Vordergrund:
+     * Erlaubnis erteilt → Kennung anlegen und hinterlegen; Erlaubnis fehlt →
+     * eine vorhandene Kennung löschen (und ohne vorhandene gar nichts tun).
+     */
+    suspend fun abgleichen(context: Context) {
+        abgleich(context).abgleichen(Benachrichtigungserlaubnis.wirksam(context))
     }
 
     /**
@@ -159,10 +168,52 @@ object Geraeteanmeldung {
      * Gerät, an dem niemand mehr angemeldet ist.
      */
     suspend fun abmelden(context: Context) {
-        val token = kennung() ?: return
-        runCatching { context.appContainer.deviceRepository.unregister(token) }
-            .onFailure { Log.w(TAG, "Abmelden der Kennung fehlgeschlagen", it) }
-        runCatching { FirebaseMessaging.getInstance().deleteToken() }
+        abgleich(context).abmelden()
+    }
+
+    private fun abgleich(context: Context) = Geraeteabgleich(
+        speicher = speicher(context),
+        geraete = context.appContainer.deviceRepository,
+        kennung = { kennung() },
+        kennungVerwerfen = { FirebaseMessaging.getInstance().deleteToken() },
+        firebaseBereit = { bereit -> firebaseBereit(context, bereit) },
+    )
+
+    /**
+     * Stellt das Firebase-SDK scharf oder still.
+     *
+     * Nötig, weil sich Firebase Cloud Messaging beim ersten Start sonst von
+     * selbst bei Google anmeldet (Auto-Init) und dabei eine Kennung anlegt —
+     * ohne Zutun der App und damit vor jeder Einwilligung. Im Manifest steht
+     * beides deshalb auf `false`; hier wird es bei erteilter Erlaubnis
+     * eingeschaltet und beim Entzug wieder aus. Firebase merkt sich die
+     * Einstellung selbst, sie übersteht also den Neustart.
+     */
+    private fun firebaseBereit(context: Context, bereit: Boolean) {
+        // Die Boolean?-Überladung ist die aktuelle; die auf Boolean gilt als
+        // überholt. null hieße dort „zurück auf den Wert aus dem Manifest".
+        val wert: Boolean? = bereit
+        FirebaseApp.getInstance().setDataCollectionDefaultEnabled(wert)
+        FirebaseMessaging.getInstance().isAutoInitEnabled = bereit
+    }
+
+    /**
+     * Ob diese Installation angemeldet ist, steht in einer eigenen kleinen
+     * Datei. Firebase danach zu fragen ginge nicht: Die Frage nach der
+     * Kennung legt sie an — genau das, was ohne Erlaubnis nicht passieren soll.
+     */
+    fun speicher(context: Context): Anmeldespeicher = object : Anmeldespeicher {
+        private val prefs =
+            context.applicationContext.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
+
+        override suspend fun angemeldet(): Boolean = prefs.getBoolean(
+            SCHLUESSEL,
+            Anmeldevermutung.beiFehlenderMerkung(Anmeldevermutung.istAktualisierung(context)),
+        )
+
+        override suspend fun merken(wert: Boolean) {
+            prefs.edit().putBoolean(SCHLUESSEL, wert).apply()
+        }
     }
 
     private suspend fun kennung(): String? = suspendCancellableCoroutine { fortsetzung ->
