@@ -303,10 +303,16 @@ func (s *Server) handleUpdatePlace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	vorher := *existing
 	in.Apply(existing)
 	if err := s.DB.UpdatePlace(existing); err != nil {
 		writeInternal(w, r, err)
 		return
+	}
+	// Stillgelegt heißt: Hier ist bis auf Weiteres nichts zu tun. Wer für
+	// eine Aufgabe dieses Ortes zugesagt hat, erfährt das.
+	if OrtWirdPausiert(vorher, *existing) {
+		OrtEntfaellt(s.DB, s.now(), s.Zusteller, existing.ID)
 	}
 	writeJSON(w, http.StatusOK, existing)
 }
@@ -317,6 +323,9 @@ func (s *Server) handleDeletePlace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
 		return
 	}
+	// Erst Bescheid sagen, dann löschen: Danach ist der Vorgang mitsamt
+	// seinem Anlass verschwunden.
+	OrtEntfaellt(s.DB, s.now(), s.Zusteller, id)
 	if err := s.DB.DeletePlace(id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeErr(w, http.StatusNotFound, "Ort nicht gefunden")
@@ -475,10 +484,14 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	vorher := *existing
 	in.Apply(existing)
 	if err := s.DB.UpdateTask(existing); err != nil {
 		writeInternal(w, r, err)
 		return
+	}
+	if WirdPausiert(vorher, *existing) {
+		AufgabeEntfaellt(s.DB, s.now(), s.Zusteller, existing.ID)
 	}
 	writeJSON(w, http.StatusOK, existing)
 }
@@ -489,6 +502,7 @@ func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
 		return
 	}
+	AufgabeEntfaellt(s.DB, s.now(), s.Zusteller, id)
 	if err := s.DB.DeleteTask(id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeErr(w, http.StatusNotFound, "Aufgabe nicht gefunden")

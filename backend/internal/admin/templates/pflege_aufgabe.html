@@ -33,24 +33,62 @@
         <input type="text" inputmode="decimal" name="liter" id="feld-liter" value="{{.Data.LiterText}}"
                class="input w-full">
 
+        <label class="fieldset-legend">Wie oft?</label>
+        <div class="join" id="feld-wiederholung">
+          <label class="btn join-item">
+            <input type="radio" name="wiederholung" value="regelmaessig" class="radio radio-primary"
+                   id="feld-wiederholung-regelmaessig"
+                   {{if not .Data.Aufgabe.OneOff}}checked{{end}}>
+            Regelmäßig
+          </label>
+          <label class="btn join-item">
+            <input type="radio" name="wiederholung" value="einmalig" class="radio radio-primary"
+                   id="feld-wiederholung-einmalig"
+                   {{if .Data.Aufgabe.OneOff}}checked{{end}}>
+            Einmalig
+          </label>
+        </div>
+        <p class="text-sm text-base-content/70">
+          Regelmäßig: Die Ampel richtet sich nach dem Intervall.
+          Einmalig: Sie richtet sich nach dem Termin — gelb in den letzten drei Tagen davor,
+          rot, sobald er verstrichen ist.
+        </p>
+
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="fieldset-legend" for="feld-intervall">Intervall (Tage)</label>
-            <input type="text" inputmode="decimal" name="intervall" id="feld-intervall" required
+            <label class="fieldset-legend" for="feld-intervall">Intervall (Tage) — bei regelmäßig</label>
+            <input type="text" inputmode="decimal" name="intervall" id="feld-intervall"
                    value="{{zahl .Data.Aufgabe.IntervalDays}}" class="input w-full">
           </div>
           <div>
-            <label class="fieldset-legend" for="feld-rot">Rot nach (Tage)</label>
-            <input type="text" inputmode="decimal" name="rot" id="feld-rot" required
+            <label class="fieldset-legend" for="feld-rot">Rot nach (Tage) — bei regelmäßig</label>
+            <input type="text" inputmode="decimal" name="rot" id="feld-rot"
                    value="{{zahl .Data.Aufgabe.RedAfterDays}}" class="input w-full">
           </div>
         </div>
+
+        <label class="fieldset-legend" for="feld-termin">Fällig am — bei einmalig</label>
+        <input type="date" name="termin" id="feld-termin"
+               value="{{datumFeld .Data.Aufgabe.DueDate}}" class="input w-full">
+
+        <label class="fieldset-label mt-2">
+          <input type="checkbox" name="entfernen" id="feld-entfernen" value="1" class="checkbox checkbox-primary"
+                 {{if .Data.Aufgabe.RemoveWhenDone}}checked{{end}}>
+          Nach dem Erledigen entfernen
+        </label>
+        <p class="text-sm text-base-content/70">
+          Die Aufgabe verschwindet dann von Karte und Liste, sobald sie gemeldet ist.
+          Die Erledigung bleibt und zählt weiter für die Rangliste.
+        </p>
 
         <label class="fieldset-label mt-2">
           <input type="checkbox" name="aktiv" id="feld-aktiv" value="1" class="checkbox checkbox-primary"
                  {{if .Data.Aufgabe.Active}}checked{{end}}>
           Aufgabe ist aktiv
         </label>
+        <p class="text-sm text-base-content/70">
+          Ohne Haken pausiert die Aufgabe. Wer sie gerade zugesagt hat, bekommt einen Hinweis.
+        </p>
       </fieldset>
       <div class="mt-2 flex flex-wrap gap-2">
         <button type="submit" class="btn btn-primary" id="aufgabe-speichern">
