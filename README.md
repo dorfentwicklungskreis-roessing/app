@@ -111,8 +111,13 @@ Anfang.
   `PATCH /api/v1/ideen/{id}` (Stand `neu`/`gelesen`/`umgesetzt`/`abgelehnt`
   und interne Notiz), `DELETE /api/v1/ideen/{id}`. In der Verwaltung liegt
   der Bereich unter `/admin/ideen/` (Zähler „neu" auf der Bereichsübersicht,
-  Löschen über eine eigene Bestätigungsseite); aus Claude heraus gibt es
-  `ideen_liste` und `idee_status_setzen`.
+  Statusfilter als echte Links, Löschen über eine eigene Bestätigungsseite)
+  samt Export unter `/admin/ideen/export.csv` — Semikolon und BOM, damit
+  deutsche Tabellenprogramme die Datei ohne Import-Dialog öffnen, und Zellen,
+  die mit `=`, `+`, `-` oder `@` beginnen, werden entschärft. Aus Claude
+  heraus gibt es `ideen_liste` (mit Überblick über den ganzen Bestand: gesamt,
+  offen, je Stand, je Weg, neueste und älteste Einreichung) und
+  `idee_status_setzen`.
 - **Spielschutz**: Nach einer Erledigung bleibt dieselbe Aufgabe gesperrt —
   50 % des Soll-Intervalls (beim Gießen mit dem Hitzefaktor skaliert, bei
   Jäten & Co. nicht), mindestens 12 Stunden, höchstens das volle Intervall.

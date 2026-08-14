@@ -102,6 +102,19 @@ test('Ideen: öffentlich einreichen, in der Verwaltung einordnen und löschen', 
     await expect(page.locator('body')).toContainText(`E2E-Wunsch ${marke}`);
   });
 
+  await test.step('Die Liste lässt sich als Tabelle laden', async () => {
+    await page.goto('/admin/ideen/');
+    await expect(page.locator('#ideen-export')).toBeVisible();
+    const antwort = await page.request.get('/admin/ideen/export.csv');
+    expect(antwort.status()).toBe(200);
+    expect(antwort.headers()['content-type']).toContain('text/csv');
+    expect(antwort.headers()['content-disposition']).toContain('attachment');
+    const csv = await antwort.text();
+    expect(csv).toContain('Wunsch');
+    expect(csv).toContain(`E2E-Wunsch ${marke}`);
+    expect(csv).toContain('erna@example.org');
+  });
+
   await test.step('Gelöscht wird über eine eigene Bestätigungsseite', async () => {
     await page.goto(ideeURL);
     await page.locator('#idee-loeschen').click();

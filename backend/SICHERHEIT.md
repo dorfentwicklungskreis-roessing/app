@@ -309,6 +309,23 @@ Menschen mit Vorlesehilfe ausbremsen.
 Die interne Notiz der Verwaltung verlässt die Verwaltung nicht — die Antwort
 des öffentlichen Eingangs blendet sie aus.
 
+**Anzeige und Export.** Eingereichter Text ist Fremdtext und wird nie als
+Markup wirksam: Die Verwaltung rendert ausschließlich über `html/template`
+(`TestIdeeMitMarkupWirdEscaped`), die Fehlerseite des Eingangs ebenso
+(`TestIdeeFehlerseiteEscaptDenText`). Der CSV-Export unter
+`/admin/ideen/export.csv` (admin-pflichtig) entschärft Zellen, die mit `=`,
+`+`, `-` oder `@` beginnen — sonst führte ein eingereichter Wunsch beim
+Öffnen im Tabellenprogramm eine Formel aus
+(`TestIdeenExportEntschaerftFormeln`).
+
+**Realistische Missbrauchsmuster** sind als eigene Reihe festgehalten
+(`internal/api/ideen_missbrauch_test.go`): Dauerfeuer über 40 Versuche —
+auch mit ungültigen Eingaben, die keinen Freifahrtschein geben —, überlange
+Texte, Steuerzeichen und Kopfzeilen-Einschleusung in der E-Mail, leere
+Formulare sowie ein Dutzend Varianten gefälschter Weiterleitungsziele
+(Portangabe, Rückschrägstrich, eingebettete Zugangsdaten, `data:`,
+vorangestellter Leerraum, Sub-Domain-Anhang).
+
 **Migration**: `CREATE TABLE IF NOT EXISTS ideen` — rein additiv, an
 bestehenden Tabellen ändert sich nichts, ein Rückschritt auf die vorige
 Version funktioniert weiterhin.

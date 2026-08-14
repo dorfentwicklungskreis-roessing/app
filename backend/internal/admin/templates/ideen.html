@@ -7,11 +7,17 @@
   und aus der App.
 </p>
 
-<div class="mt-4 flex flex-wrap gap-2" id="ideen-filter">
+<div class="mt-4 flex flex-wrap items-center gap-2" id="ideen-filter">
   {{range .Data.Filter}}
     <a class="btn btn-sm {{if .Aktiv}}btn-primary{{else}}btn-ghost{{end}}"
        href="/admin/ideen/{{if .Wert}}?status={{.Wert}}{{end}}">
       {{.Titel}} <span class="badge badge-sm">{{.Anzahl}}</span>
+    </a>
+  {{end}}
+  {{if .Data.Ideen}}
+    <a class="btn btn-sm btn-outline ml-auto" id="ideen-export"
+       href="/admin/ideen/export.csv{{if .Data.Aktiv}}?status={{.Data.Aktiv}}{{end}}">
+      Als Tabelle laden (CSV)
     </a>
   {{end}}
 </div>
@@ -50,7 +56,15 @@
   </div>
 {{else}}
   <div class="mt-4 alert" id="keine-ideen">
-    <span>Hier ist noch nichts eingegangen.</span>
+    {{if .Data.Aktiv}}
+      <span>Mit dem Stand „{{.Data.AktivTitel}}“ ist gerade nichts da.</span>
+      <a class="btn btn-sm" id="keine-ideen-zurueck" href="/admin/ideen/">Alle Ideen zeigen</a>
+    {{else}}
+      <span>
+        Hier ist noch nichts eingegangen. Eingereicht wird über das Formular
+        auf der Website und aus der App — beides landet direkt hier.
+      </span>
+    {{end}}
   </div>
 {{end}}
 {{end}}

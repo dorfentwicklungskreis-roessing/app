@@ -24,6 +24,8 @@ func (a *App) registerIdeen(mux *http.ServeMux) {
 		mux.HandleFunc("POST "+ideenBasis+pfad, a.requireAdmin(h))
 	}
 	get("/{$}", a.ideenListe)
+	// Muss vor der ID-Route stehen — als wörtlicher Pfad geht sie ohnehin vor.
+	get("/export.csv", a.ideenExport)
 	get("/{id}", a.ideeDetail)
 	post("/{id}", a.ideeSpeichern)
 	get("/{id}/loeschen", a.ideeLoeschenFrage)
@@ -38,6 +40,8 @@ type ideenDaten struct {
 	// clientseitiges Filtern.
 	Filter []ideenFilter
 	Aktiv  string
+	// AktivTitel ist der gewählte Stand in Alltagssprache (für Leerzustände).
+	AktivTitel string
 }
 
 type ideeZeile struct {
@@ -78,7 +82,10 @@ func (a *App) ideenListe(w http.ResponseWriter, r *http.Request, _ session) {
 	}
 	a.render(w, r, http.StatusOK, "ideen", view{
 		Title: "Ideen", Nav: "ideen",
-		Data: ideenDaten{Ideen: zeilen, Filter: filterAus(anzahl, string(status)), Aktiv: string(status)},
+		Data: ideenDaten{
+			Ideen: zeilen, Filter: filterAus(anzahl, string(status)),
+			Aktiv: string(status), AktivTitel: model.IdeeStatusText(status),
+		},
 	})
 }
 

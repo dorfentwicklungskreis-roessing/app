@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
@@ -25,7 +26,10 @@ func (s *Server) ideenTools() []tool {
 			Description: "Listet die Ideen aus dem Dorf („Was soll die App können?“) mit Datum, " +
 				"Name, E-Mail, Wunsch, Weg (website/app), Stand und interner Notiz. " +
 				"Optional nach Stand gefiltert (" + strings.Join(staende, ", ") + "). " +
-				"Neueste zuerst.",
+				"Neueste zuerst. Mitgeliefert wird ein Überblick über den GANZEN Bestand " +
+				"(gesamt, offen, je Stand, je Weg, neueste und älteste Einreichung) — auch " +
+				"bei gefilterter Liste, damit „was ist reingekommen?“ in einem Zug zu " +
+				"beantworten ist.",
 			Schema: obj(nil, map[string]any{
 				"status": enum("Nur Ideen mit diesem Stand (Standard: alle)", staende...),
 				"limit":  integer("Höchstens so viele Einträge ausgeben (Standard: alle)"),
@@ -68,11 +72,47 @@ func (s *Server) toolIdeenListe(args json.RawMessage, _ auth.User) (any, error) 
 	if in.Limit > 0 && in.Limit < len(ideen) {
 		ideen = ideen[:in.Limit]
 	}
-	anzahl, err := s.DB.CountIdeen()
+	ueberblick, err := s.ideenUeberblick()
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"ideen": ideen, "anzahl": anzahl}, nil
+	return map[string]any{"ideen": ideen, "ueberblick": ueberblick}, nil
+}
+
+// ideenUeberblick beantwortet „was ist reingekommen?“ in einem Zug: wie
+// viel insgesamt, wie viel je Stand und Weg, und wann zuletzt etwas kam.
+// Er beschreibt bewusst immer den ganzen Bestand — auch bei gefilterter
+// Liste, sonst ließe sich „wie viel ist noch offen?" nicht beantworten.
+func (s *Server) ideenUeberblick() (map[string]any, error) {
+	alle, err := s.DB.ListIdeen("")
+	if err != nil {
+		return nil, err
+	}
+	jeStand := map[string]int{}
+	for _, st := range model.IdeeStatusWerte {
+		jeStand[string(st)] = 0
+	}
+	jeWeg := map[string]int{string(model.IdeeQuelleWebsite): 0, string(model.IdeeQuelleApp): 0}
+	var neueste, aelteste string
+	for _, i := range alle {
+		jeStand[string(i.Status)]++
+		jeWeg[string(i.Quelle)]++
+		wann := i.CreatedAt.UTC().Format(time.RFC3339)
+		if neueste == "" || wann > neueste {
+			neueste = wann
+		}
+		if aelteste == "" || wann < aelteste {
+			aelteste = wann
+		}
+	}
+	return map[string]any{
+		"gesamt":   len(alle),
+		"offen":    jeStand[string(model.IdeeNeu)],
+		"jeStand":  jeStand,
+		"jeWeg":    jeWeg,
+		"neueste":  neueste,
+		"aelteste": aelteste,
+	}, nil
 }
 
 func (s *Server) toolIdeeStatusSetzen(args json.RawMessage, _ auth.User) (any, error) {

@@ -115,3 +115,62 @@ func TestIdeenWerkzeugeNurFuerAdmins(t *testing.T) {
 		t.Fatalf("Mitglied bekommt Status %d, erwartet 403", resp.StatusCode)
 	}
 }
+
+// „Was ist reingekommen?" soll eine brauchbare Antwort geben, ohne dass
+// erst die ganze Liste durchgezählt werden muss.
+func TestIdeenListeLiefertUeberblick(t *testing.T) {
+	ts, d := serverMitDB(t)
+	ideeAnlegen(t, d, "Ein Mitfahrbrett nach Hildesheim.", model.IdeeNeu)
+	ideeAnlegen(t, d, "Ein Vertretungsplan für die Grundschule.", model.IdeeNeu)
+	ideeAnlegen(t, d, "Ein Dorfkalender mit allen Terminen.", model.IdeeUmgesetzt)
+	ausDerApp := model.Idee{
+		Wunsch: "Erinnerungen bitte auch abends.", Quelle: model.IdeeQuelleApp,
+		UserSub: "u1", Status: model.IdeeGelesen, CreatedAt: vergabeJetzt,
+	}
+	if err := d.InsertIdee(&ausDerApp); err != nil {
+		t.Fatal(err)
+	}
+
+	text, fehler := callTool(t, ts, "ideen_liste", map[string]any{})
+	if fehler {
+		t.Fatalf("ideen_liste: %s", text)
+	}
+	var out struct {
+		Ideen      []model.Idee `json:"ideen"`
+		Ueberblick struct {
+			Gesamt  int            `json:"gesamt"`
+			JeStand map[string]int `json:"jeStand"`
+			JeWeg   map[string]int `json:"jeWeg"`
+			Neueste string         `json:"neueste"`
+		} `json:"ueberblick"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("Antwort nicht lesbar: %v — %s", err, text)
+	}
+	u := out.Ueberblick
+	if u.Gesamt != 4 {
+		t.Errorf("gesamt = %d, erwartet 4", u.Gesamt)
+	}
+	if u.JeStand["neu"] != 2 || u.JeStand["umgesetzt"] != 1 || u.JeStand["gelesen"] != 1 {
+		t.Errorf("jeStand = %v", u.JeStand)
+	}
+	if u.JeWeg["website"] != 3 || u.JeWeg["app"] != 1 {
+		t.Errorf("jeWeg = %v", u.JeWeg)
+	}
+	if u.Neueste == "" {
+		t.Error("neueste Einreichung fehlt")
+	}
+
+	// Auch bei gefilterter Liste beschreibt der Überblick den ganzen Bestand —
+	// sonst wäre „wie viel ist offen?" nicht zu beantworten.
+	text, _ = callTool(t, ts, "ideen_liste", map[string]any{"status": "umgesetzt"})
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Ideen) != 1 {
+		t.Fatalf("gefilterte Liste: %d Einträge", len(out.Ideen))
+	}
+	if out.Ueberblick.Gesamt != 4 {
+		t.Errorf("Überblick folgt dem Filter: gesamt = %d", out.Ueberblick.Gesamt)
+	}
+}
