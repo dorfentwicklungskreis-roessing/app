@@ -28,6 +28,15 @@ data class TaskDto(
     val liters: Double? = null,
     val intervalDays: Double = 7.0,
     val redAfterDays: Double = 14.0,
+    /**
+     * Einmalige Aufgabe („einmal zum Bahnhof fahren"): An die Stelle des
+     * Intervalls tritt dann das Fälligkeitsdatum.
+     */
+    val oneOff: Boolean = false,
+    /** Termin einer einmaligen Aufgabe (RFC3339) oder null. */
+    val dueDate: String? = null,
+    /** Nach dem Erledigen von Karte und Liste nehmen. */
+    val removeWhenDone: Boolean = false,
     val active: Boolean = true,
     val status: String = "green",
     val lastCompletion: CompletionDto? = null,
@@ -50,6 +59,17 @@ data class TaskDto(
     /** Zeitpunkt, bis zu dem der Spielschutz greift (oder null). */
     val lockedUntilInstant: java.time.Instant?
         get() = lockedUntil?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
+
+    /**
+     * Eine einmalige Aufgabe, die schon erledigt ist. Sie wird nicht wieder
+     * fällig, und das Backend weist eine zweite Meldung mit 409 ab — der
+     * Knopf gehört also weg, nicht bloß gesperrt.
+     */
+    val erledigtUndVorbei: Boolean get() = oneOff && lastCompletion != null
+
+    /** Termin einer einmaligen Aufgabe als Zeitpunkt (oder null). */
+    val dueDateInstant: java.time.Instant?
+        get() = dueDate?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
 
     /** Menschenlesbarer Name der Aufgabe. */
     val displayName: String
@@ -118,6 +138,41 @@ data class NotificationDto(
 
 @Serializable
 data class NotificationsResponse(val notifications: List<NotificationDto> = emptyList())
+
+/**
+ * Eingabe von POST/PUT /api/v1/places — die Verwaltung legt einen Ort an
+ * oder ändert ihn. Nur mit der Rolle „admin"; das Backend weist alles
+ * andere mit 403 ab.
+ */
+@Serializable
+data class PlaceEingabe(
+    val name: String,
+    val description: String = "",
+    val kind: String = "blumenkasten",
+    val lat: Double,
+    val lon: Double,
+    val active: Boolean = true,
+)
+
+/**
+ * Eingabe von POST /api/v1/places/{id}/tasks bzw. PUT /api/v1/tasks/{id}.
+ *
+ * Entweder regelmäßig (intervalDays/redAfterDays) oder einmalig (oneOff mit
+ * dueDate) — beides zusammen weist das Backend ab.
+ */
+@Serializable
+data class TaskEingabe(
+    val kind: String,
+    val title: String = "",
+    val liters: Double? = null,
+    val intervalDays: Double = 0.0,
+    val redAfterDays: Double = 0.0,
+    val oneOff: Boolean = false,
+    /** Datum („2026-08-20") oder RFC3339; leer bei regelmäßigen Aufgaben. */
+    val dueDate: String = "",
+    val removeWhenDone: Boolean = false,
+    val active: Boolean = true,
+)
 
 /** Eingabe von POST /api/v1/places/{id}/signup (taskKind leer = alle Aufgaben). */
 @Serializable

@@ -231,14 +231,17 @@ func scanAssignment(row scannable) (*model.Assignment, error) {
 // --- Zustellungen -----------------------------------------------------------
 
 const notificationSpalten = `id,assignment_id,task_id,place_id,user_sub,kind,
-	created_at,expires_at,ack_at,closed_at,closed_reason`
+	created_at,expires_at,ack_at,closed_at,closed_reason,place_name,task_name`
 
+// InsertNotification legt eine Zustellung an. Ort und Aufgabe werden im
+// Klartext mitgeschrieben: Wird die Aufgabe später gelöscht, ist der Hinweis
+// sonst namenlos („ an “).
 func (d *DB) InsertNotification(n *model.Notification) error {
 	res, err := d.sql.Exec(`INSERT INTO care_notifications
-		(assignment_id,task_id,place_id,user_sub,kind,created_at,expires_at)
-		VALUES(?,?,?,?,?,?,?)`,
+		(assignment_id,task_id,place_id,user_sub,kind,created_at,expires_at,place_name,task_name)
+		VALUES(?,?,?,?,?,?,?,?,?)`,
 		n.AssignmentID, n.TaskID, n.PlaceID, n.UserSub, string(n.Kind),
-		n.CreatedAt.UTC().Format(timeFormat), zeitText(n.ExpiresAt))
+		n.CreatedAt.UTC().Format(timeFormat), zeitText(n.ExpiresAt), n.PlaceName, n.TaskName)
 	if err != nil {
 		return err
 	}
@@ -327,7 +330,7 @@ func scanNotification(row scannable) (*model.Notification, error) {
 	var n model.Notification
 	var kind, created, expires, ack, closed string
 	err := row.Scan(&n.ID, &n.AssignmentID, &n.TaskID, &n.PlaceID, &n.UserSub, &kind,
-		&created, &expires, &ack, &closed, &n.ClosedReason)
+		&created, &expires, &ack, &closed, &n.ClosedReason, &n.PlaceName, &n.TaskName)
 	if err != nil {
 		return nil, err
 	}

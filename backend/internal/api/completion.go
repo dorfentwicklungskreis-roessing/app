@@ -101,6 +101,7 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 			return nil, err
 		}
 		beendeVergabe(d, now, task.ID, u.Sub)
+		raeumeAbWennErledigt(d, now, *task)
 		return &c, nil
 	}
 
@@ -121,7 +122,25 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 		}
 	}
 	beendeVergabe(d, now, task.ID, u.Sub)
+	raeumeAbWennErledigt(d, now, *task)
 	return &c, nil
+}
+
+// raeumeAbWennErledigt nimmt eine einmalige Aufgabe von Karte und Liste,
+// sobald sie gemeldet ist — sofern beim Anlegen „nach dem Erledigen
+// entfernen" gewählt wurde (#6).
+//
+// Abgeräumt heißt nicht gelöscht: Die Zeile bleibt, denn an ihr hängen die
+// Erledigungen, und die zählen weiter für die Rangliste. Scheitert das
+// Abräumen, bleibt die Erledigung trotzdem stehen — sie ist das Wichtige,
+// die Aufgabe ist dann eben noch sichtbar (und grün).
+func raeumeAbWennErledigt(d *db.DB, now time.Time, task model.CareTask) {
+	if !task.OneOff || !task.RemoveWhenDone || task.Abgeraeumt() {
+		return
+	}
+	if err := d.RemoveTask(task.ID, now); err != nil {
+		slog.Warn("Aufgabe konnte nicht abgeräumt werden", "aufgabe", task.ID, "err", err)
+	}
 }
 
 // beendeVergabe schließt einen laufenden Vergabe-Vorgang, sobald die Aufgabe
@@ -178,6 +197,19 @@ func LockedUntil(task model.CareTask, last *model.Completion, now time.Time, fac
 // Status ist 409: Die Anfrage ist in Ordnung, sie passt nur nicht zum
 // aktuellen Zustand — genauso wie bei der Sperrfrist.
 func pruefeAktiv(d *db.DB, task model.CareTask) error {
+	// Einmalig ist einmalig: Ist der Gang zum Bahnhof getan, gibt es nichts
+	// mehr zu melden — sonst ließen sich Ranglisten-Punkte vervielfachen,
+	// sobald die Sperrfrist des Spielschutzes abgelaufen ist.
+	if task.OneOff {
+		letzte, err := d.LastCompletion(task.ID)
+		if err != nil {
+			return err
+		}
+		if letzte != nil {
+			return completionErr(http.StatusConflict,
+				"Diese einmalige Aufgabe wurde bereits erledigt.")
+		}
+	}
 	if !task.Active {
 		return completionErr(http.StatusConflict,
 			"Diese Aufgabe ist derzeit deaktiviert und nimmt keine Meldungen an.")

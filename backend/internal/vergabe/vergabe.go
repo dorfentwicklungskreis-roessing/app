@@ -602,6 +602,33 @@ func (e *Engine) Beenden(taskID int64, grund, melder string) error {
 	return e.vorgangBeenden(*a, grund, melder, e.now())
 }
 
+// Entfaellt beendet den laufenden Vorgang einer Aufgabe, weil sie gleich
+// gelöscht oder pausiert wird. Wer zugesagt hat, bekommt dabei den Hinweis
+// „nicht mehr nötig" — vor dem Löschen aufzurufen, danach ist der Vorgang
+// mit der Aufgabe verschwunden (#7).
+//
+// Läuft gerade kein Vorgang, passiert nichts.
+func (e *Engine) Entfaellt(taskID int64) error {
+	return e.Beenden(taskID, model.EndObsolete, "")
+}
+
+// OrtEntfaellt macht dasselbe für alle Aufgaben eines Ortes.
+func (e *Engine) OrtEntfaellt(placeID int64) error {
+	tasks, err := e.db.ListTasks()
+	if err != nil {
+		return err
+	}
+	for _, t := range tasks {
+		if t.PlaceID != placeID {
+			continue
+		}
+		if err := e.Entfaellt(t.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *Engine) vorgangBeenden(a model.Assignment, grund, melder string, now time.Time) error {
 	var ausser []int64
 	// Wer zugesagt hatte, soll wissen, dass er nicht mehr losziehen muss —
@@ -644,6 +671,12 @@ func (e *Engine) benachrichtigen(a model.Assignment, userSub string, kind model.
 	n := model.Notification{
 		AssignmentID: a.ID, TaskID: task.ID, PlaceID: task.PlaceID, UserSub: userSub,
 		Kind: kind, CreatedAt: now, ExpiresAt: frist,
+		TaskName: task.DisplayName(),
+	}
+	// Ort und Aufgabe wandern im Klartext mit in die Zustellung: Wird die
+	// Aufgabe gleich darauf gelöscht, wäre der Hinweis sonst namenlos.
+	if place, perr := e.db.GetPlace(task.PlaceID); perr == nil {
+		n.PlaceName = place.Name
 	}
 	if err := e.db.InsertNotification(&n); err != nil {
 		return nil, err
@@ -694,6 +727,10 @@ func (e *Engine) Bestaetigen(id int64, userSub string) error {
 }
 
 // anreichern ergänzt Ort, Aufgabe und den Text, der in der App steht.
+//
+// Gibt es Aufgabe oder Ort nicht mehr (gelöscht, während jemand zugesagt
+// hatte), bleiben die Namen stehen, die bei der Zustellung gespeichert
+// wurden — der Hinweis muss auch dann sagen können, worum es ging.
 func (e *Engine) anreichern(n model.Notification) (*model.Notification, error) {
 	task, err := e.db.GetTask(n.TaskID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -741,7 +778,7 @@ func texte(n model.Notification, regeln model.AssignmentRules) (titel, text stri
 			wo + " wurde bereits erledigt — du musst nichts mehr tun. Danke trotzdem!"
 	case model.NotifyAssignmentDropped:
 		return "Nicht mehr nötig",
-			wo + " steht nicht mehr an (stillgelegt oder nicht mehr fällig) — " +
+			wo + " steht nicht mehr an (pausiert, gelöscht oder nicht mehr fällig) — " +
 				"du musst nichts mehr tun."
 	}
 	return wo, wo

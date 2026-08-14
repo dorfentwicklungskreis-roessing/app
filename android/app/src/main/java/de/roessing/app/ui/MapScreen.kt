@@ -58,6 +58,8 @@ private val START_ZOOM = zoomForBounds(ROESSING_BOUNDS, widthDp = 360.0, heightD
 private const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
 private const val SOURCE_ID = "places"
 private const val LAYER_ID = "places-layer"
+private const val AUSWAHL_SOURCE_ID = "auswahl"
+private const val AUSWAHL_LAYER_ID = "auswahl-layer"
 
 /**
  * Dorfkarte mit farbigen Status-Markern für alle Orte.
@@ -65,6 +67,10 @@ private const val LAYER_ID = "places-layer"
  * userLocation kommt vom Gerät und bleibt dort — die Karte nutzt ihn nur für
  * den Startausschnitt und den eigenen Standortpunkt.
  * focusRequest steigt bei jedem Druck auf „Mein Standort".
+ *
+ * onMapTap macht aus der Karte eine Auswahl: Ein Tipp auf die freie Fläche
+ * liefert die Koordinaten. So legt die Verwaltung einen Blumenkasten dort an,
+ * wo er wirklich steht. auswahl zeigt den bereits gewählten Punkt.
  */
 @Composable
 fun MapScreen(
@@ -73,6 +79,8 @@ fun MapScreen(
     userLocation: LatLon? = null,
     showUserLocation: Boolean = false,
     focusRequest: Int = 0,
+    onMapTap: ((LatLon) -> Unit)? = null,
+    auswahl: LatLon? = null,
     onPlaceTap: (Long) -> Unit,
 ) {
     val context = LocalContext.current
@@ -81,6 +89,8 @@ fun MapScreen(
     val dichte = LocalDensity.current
     val currentPlaces = rememberUpdatedState(places)
     val currentOnTap = rememberUpdatedState(onPlaceTap)
+    val currentOnMapTap = rememberUpdatedState(onMapTap)
+    val currentAuswahl = rememberUpdatedState(auswahl)
 
     // Kartengröße in dp — MapLibre rechnet Zoomstufen in genau dieser Einheit.
     var breiteDp by remember { mutableStateOf(0.0) }
@@ -97,6 +107,9 @@ fun MapScreen(
                     .target(ROESSING_CENTER).zoom(START_ZOOM).build()
                 map.setStyle(Style.Builder().fromUri(STYLE_URL)) { style ->
                     style.addSource(GeoJsonSource(SOURCE_ID, toGeoJson(currentPlaces.value)))
+                    // Der gewählte Punkt liegt in einer eigenen Quelle, damit
+                    // er nicht mit den echten Orten verwechselt wird.
+                    style.addSource(GeoJsonSource(AUSWAHL_SOURCE_ID, auswahlGeoJson(currentAuswahl.value)))
                     style.addLayer(
                         CircleLayer(LAYER_ID, SOURCE_ID).withProperties(
                             circleRadius(11f),
@@ -112,6 +125,15 @@ fun MapScreen(
                             circleOpacity(0.95f),
                         ),
                     )
+                    style.addLayer(
+                        CircleLayer(AUSWAHL_LAYER_ID, AUSWAHL_SOURCE_ID).withProperties(
+                            circleRadius(13f),
+                            circleColor("#1565C0"),
+                            circleStrokeWidth(3f),
+                            circleStrokeColor("#FFFFFF"),
+                            circleOpacity(0.9f),
+                        ),
+                    )
                 }
                 map.addOnCameraMoveStartedListener { grund ->
                     if (grund == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
@@ -122,8 +144,18 @@ fun MapScreen(
                     val screen = map.projection.toScreenLocation(point)
                     val features = map.queryRenderedFeatures(screen, LAYER_ID)
                     val id = features.firstOrNull()?.getNumberProperty("id")?.toLong()
-                    if (id != null) currentOnTap.value(id)
-                    id != null
+                    when {
+                        id != null -> {
+                            currentOnTap.value(id)
+                            true
+                        }
+                        // Auswahlmodus: die freie Fläche ist der neue Standort.
+                        currentOnMapTap.value != null -> {
+                            currentOnMapTap.value?.invoke(LatLon(point.latitude, point.longitude))
+                            true
+                        }
+                        else -> false
+                    }
                 }
             }
         }
@@ -171,6 +203,7 @@ fun MapScreen(
     // Marker aktualisieren, wenn sich die Daten ändern.
     mapView.getMapAsync { map: MapLibreMap ->
         map.style?.getSourceAs<GeoJsonSource>(SOURCE_ID)?.setGeoJson(toGeoJson(places))
+        map.style?.getSourceAs<GeoJsonSource>(AUSWAHL_SOURCE_ID)?.setGeoJson(auswahlGeoJson(auswahl))
     }
 
     // MapView an den Activity-Lifecycle koppeln (Pflicht bei MapLibre).
@@ -234,4 +267,12 @@ private fun toGeoJson(places: List<PlaceDto>): FeatureCollection =
                 addStringProperty("status", p.status)
             }
         },
+    )
+
+/** Der gewählte Standort als eigene Ebene — leer, solange nichts gewählt ist. */
+private fun auswahlGeoJson(auswahl: LatLon?): FeatureCollection =
+    FeatureCollection.fromFeatures(
+        listOfNotNull(
+            auswahl?.let { Feature.fromGeometry(Point.fromLngLat(it.lon, it.lat)) },
+        ),
     )

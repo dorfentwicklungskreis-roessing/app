@@ -35,6 +35,14 @@ const issuer = "https://id.example"
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	ts, _ := newTestServerMitDB(t)
+	return ts
+}
+
+// newTestServerMitDB liefert zusätzlich die Datenbank — für Tests, die eine
+// Ausgangslage direkt setzen (z.B. eine bestehende Zusage).
+func newTestServerMitDB(t *testing.T) (*httptest.Server, *db.DB) {
+	t.Helper()
 	d, err := db.Open(filepath.Join(t.TempDir(), "test.sqlite"))
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +54,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	s.Register(mux)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
-	return ts
+	return ts, d
 }
 
 // rpc schickt einen JSON-RPC-Call mit Bearer-Token an den MCP-Endpoint.

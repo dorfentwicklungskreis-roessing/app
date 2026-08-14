@@ -169,6 +169,15 @@ var funcs = template.FuncMap{
 		}
 		return ortszeit(*t).Format("02.01.2006, 15:04")
 	},
+	// datumFeld liefert einen optionalen Zeitpunkt so, wie ihn ein
+	// <input type="date"> erwartet — in Ortszeit, damit aus dem 20. um
+	// 23:59 nicht der 20. um 21:59 UTC und damit derselbe Tag wird.
+	"datumFeld": func(t *time.Time) string {
+		if t == nil {
+			return ""
+		}
+		return ortszeit(*t).Format("2006-01-02")
+	},
 	"zahl": zahl,
 	// zahlOpt formatiert eine optionale Zahl (leer statt 0) — für Formularfelder.
 	"zahlOpt": func(v *float64) string {

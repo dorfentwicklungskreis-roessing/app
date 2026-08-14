@@ -428,6 +428,40 @@ func TestEndToEnd(t *testing.T) {
 		ort(true)
 	})
 
+	// --- Einmalige Aufgaben (#6) und die Verwaltung aus der App (#5, #7) ---
+	//
+	// Der ganze Weg mit echten Tokens: anlegen → erscheint mit der richtigen
+	// Ampel → wird erledigt → verschwindet bzw. bleibt. Und: Ohne die Rolle
+	// „admin" geht gar nichts, egal mit welchem Client.
+	t.Run("Mitglied darf keine Aufgaben pflegen", func(t *testing.T) {
+		morgen := time.Now().AddDate(0, 0, 2).Format("2006-01-02")
+		faelle := []struct {
+			name   string
+			method string
+			pfad   string
+			koerp  map[string]any
+		}{
+			{"Aufgabe anlegen", "POST", fmt.Sprintf("/api/v1/places/%.0f/tasks", placeID),
+				map[string]any{"kind": "sonstiges", "title": "Heimlich", "oneOff": true, "dueDate": morgen}},
+			{"Aufgabe ändern", "PUT", fmt.Sprintf("/api/v1/tasks/%.0f", taskID),
+				map[string]any{"kind": "giessen", "intervalDays": 1, "redAfterDays": 2}},
+			{"Aufgabe löschen", "DELETE", fmt.Sprintf("/api/v1/tasks/%.0f", taskID), nil},
+			{"Ort ändern", "PUT", fmt.Sprintf("/api/v1/places/%.0f", placeID),
+				map[string]any{"name": "Umbenannt", "lat": 52.2, "lon": 9.8}},
+			{"Ort löschen", "DELETE", fmt.Sprintf("/api/v1/places/%.0f", placeID), nil},
+		}
+		for _, f := range faelle {
+			var koerper any
+			if f.koerp != nil {
+				koerper = f.koerp
+			}
+			resp, out := request(t, f.method, f.pfad, memberToken, koerper)
+			if resp.StatusCode != 403 {
+				t.Fatalf("%s als Mitglied: HTTP %d, erwartet 403: %v", f.name, resp.StatusCode, out)
+			}
+		}
+	})
+
 	// --- MCP ---
 	t.Run("MCP ohne Token → 401 + OAuth-Metadata", func(t *testing.T) {
 		resp, _ := mcpCall(t, "", "tools/list", nil)
@@ -938,6 +972,103 @@ func TestEndToEnd(t *testing.T) {
 			if r.StatusCode != 204 {
 				t.Fatalf("Idee löschen: HTTP %d", r.StatusCode)
 			}
+		}
+	})
+
+	// Steht bewusst am Ende: Der Block meldet zwei Erledigungen, und die
+	// Zählungen der Rangliste weiter oben rechnen mit festen Zahlen.
+	t.Run("Einmalige Aufgabe: Termin macht die Ampel", func(t *testing.T) {
+		// Ein eigener Ort, damit der Gießplan oben unberührt bleibt.
+		_, ort := request(t, "POST", "/api/v1/places", adminToken,
+			map[string]any{"name": "E2E-Bahnhof", "kind": "sonstiges", "lat": 52.2108, "lon": 9.8692})
+		bahnhof := ort["id"].(float64)
+		tasksPfad := fmt.Sprintf("/api/v1/places/%.0f/tasks", bahnhof)
+
+		anlegen := func(titel, termin string, entfernen bool) float64 {
+			t.Helper()
+			resp, out := request(t, "POST", tasksPfad, adminToken, map[string]any{
+				"kind": "sonstiges", "title": titel,
+				"oneOff": true, "dueDate": termin, "removeWhenDone": entfernen,
+			})
+			if resp.StatusCode != 201 {
+				t.Fatalf("%s: HTTP %d: %v", titel, resp.StatusCode, out)
+			}
+			if out["oneOff"] != true {
+				t.Fatalf("%s wurde nicht als einmalig gespeichert: %v", titel, out)
+			}
+			return out["id"].(float64)
+		}
+		tag := func(abstand int) string {
+			return time.Now().AddDate(0, 0, abstand).Format("2006-01-02")
+		}
+
+		fern := anlegen("Weit weg", tag(30), false)
+		bald := anlegen("Übermorgen", tag(1), false)
+		vorbei := anlegen("Längst fällig", tag(-2), false)
+		weg := anlegen("Zum Bahnhof fahren", tag(10), true)
+
+		status := func() map[float64]string {
+			t.Helper()
+			_, liste := request(t, "GET", "/api/v1/places", memberToken, nil)
+			out := map[float64]string{}
+			for _, p := range liste["places"].([]any) {
+				ortDaten := p.(map[string]any)
+				if ortDaten["id"].(float64) != bahnhof {
+					continue
+				}
+				for _, x := range ortDaten["tasks"].([]any) {
+					aufgabe := x.(map[string]any)
+					out[aufgabe["id"].(float64)] = aufgabe["status"].(string)
+				}
+			}
+			return out
+		}
+		stand := status()
+		for id, erwartet := range map[float64]string{fern: "green", bald: "yellow", vorbei: "red", weg: "green"} {
+			if stand[id] != erwartet {
+				t.Errorf("Aufgabe %.0f: Status %q, erwartet %q", id, stand[id], erwartet)
+			}
+		}
+
+		// Eine einmalige Aufgabe darf nicht ohne Termin entstehen.
+		resp, out := request(t, "POST", tasksPfad, adminToken,
+			map[string]any{"kind": "sonstiges", "title": "Ohne Termin", "oneOff": true})
+		if resp.StatusCode != 400 {
+			t.Fatalf("einmalig ohne Termin: HTTP %d, erwartet 400: %v", resp.StatusCode, out)
+		}
+
+		// Erledigen: „nach dem Erledigen entfernen" nimmt sie von der Karte,
+		// die Rangliste behält sie.
+		_, vorRang := request(t, "GET", "/api/v1/stats/leaderboard?period=gesamt", memberToken, nil)
+		vorher := vorRang["totals"].(map[string]any)["completions"].(float64)
+
+		resp, out = request(t, "POST", fmt.Sprintf("/api/v1/tasks/%.0f/completions", weg), memberToken, map[string]any{})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Erledigung: HTTP %d: %v", resp.StatusCode, out)
+		}
+		resp, out = request(t, "POST", fmt.Sprintf("/api/v1/tasks/%.0f/completions", vorbei), memberToken, map[string]any{})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Erledigung: HTTP %d: %v", resp.StatusCode, out)
+		}
+
+		stand = status()
+		if _, da := stand[weg]; da {
+			t.Error("Die erledigte einmalige Aufgabe steht noch auf der Karte")
+		}
+		if stand[vorbei] != "green" {
+			t.Errorf("Erledigte einmalige Aufgabe ohne Schalter: Status %q, erwartet green", stand[vorbei])
+		}
+
+		_, nachRang := request(t, "GET", "/api/v1/stats/leaderboard?period=gesamt", memberToken, nil)
+		nachher := nachRang["totals"].(map[string]any)["completions"].(float64)
+		if nachher != vorher+2 {
+			t.Errorf("Rangliste: %v → %v, erwartet zwei Erledigungen mehr", vorher, nachher)
+		}
+
+		// Und zweimal erledigen geht nicht: einmalig ist einmalig.
+		resp, out = request(t, "POST", fmt.Sprintf("/api/v1/tasks/%.0f/completions", vorbei), memberToken, map[string]any{})
+		if resp.StatusCode != 409 {
+			t.Fatalf("zweite Meldung auf einmalige Aufgabe: HTTP %d, erwartet 409: %v", resp.StatusCode, out)
 		}
 	})
 }

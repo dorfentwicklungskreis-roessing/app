@@ -278,10 +278,14 @@ func (a *App) ortSpeichern(w http.ResponseWriter, r *http.Request, _ session) {
 		a.zeigeOrt(w, r, http.StatusBadRequest, id, &p, err.Error())
 		return
 	}
+	vorher := *vorhanden
 	in.Apply(vorhanden)
 	if err := a.db.UpdatePlace(vorhanden); err != nil {
 		a.fail(w, r, http.StatusInternalServerError, err)
 		return
+	}
+	if api.OrtWirdPausiert(vorher, *vorhanden) {
+		api.OrtEntfaellt(a.db, a.now(), nil, vorhanden.ID)
 	}
 	a.setFlash(w, "success", "Ort gespeichert.")
 	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", mithelfenBasis, id), http.StatusSeeOther)
@@ -346,6 +350,7 @@ func (a *App) ortLoeschen(w http.ResponseWriter, r *http.Request, _ session) {
 		http.NotFound(w, r)
 		return
 	}
+	api.OrtEntfaellt(a.db, a.now(), nil, id)
 	if err := a.db.DeletePlace(id); err != nil {
 		a.fail(w, r, http.StatusInternalServerError, err)
 		return
@@ -450,10 +455,16 @@ func (a *App) aufgabeSpeichern(w http.ResponseWriter, r *http.Request, _ session
 		a.zeigeAufgabe(w, r, http.StatusBadRequest, *p, entwurf, liter, err.Error())
 		return
 	}
+	vorher := *t
 	in.Apply(t)
 	if err := a.db.UpdateTask(t); err != nil {
 		a.fail(w, r, http.StatusInternalServerError, err)
 		return
+	}
+	// Pausiert heißt: hier ist bis auf Weiteres nichts zu tun. Wer zugesagt
+	// hat, erfährt das, statt umsonst loszuziehen.
+	if api.WirdPausiert(vorher, *t) {
+		api.AufgabeEntfaellt(a.db, a.now(), nil, t.ID)
 	}
 	a.setFlash(w, "success", "Aufgabe gespeichert.")
 	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", mithelfenBasis, p.ID), http.StatusSeeOther)
@@ -481,6 +492,9 @@ func (a *App) aufgabeLoeschen(w http.ResponseWriter, r *http.Request, _ session)
 	if !ok {
 		return
 	}
+	// Erst Bescheid sagen, dann löschen — danach ist der Vorgang mit der
+	// Aufgabe verschwunden.
+	api.AufgabeEntfaellt(a.db, a.now(), nil, t.ID)
 	if err := a.db.DeleteTask(t.ID); err != nil {
 		a.fail(w, r, http.StatusInternalServerError, err)
 		return
@@ -734,18 +748,29 @@ func (a *App) aufgabeUndOrt(w http.ResponseWriter, r *http.Request) (*model.Care
 }
 
 // aufgabeAusFormular liest und prüft die Formulareingaben einer Aufgabe.
+//
+// Das Formular zeigt beide Feldgruppen gleichzeitig — Intervall und Termin —
+// und der Radioknopf „wiederholung" entscheidet, welche davon gilt. So bleibt
+// die Seite ohne JavaScript bedienbar; die nicht gewählte Gruppe wird
+// schlicht ignoriert.
 func aufgabeAusFormular(r *http.Request) (model.CareTask, string, api.TaskInput, error) {
 	if err := r.ParseForm(); err != nil {
 		return model.CareTask{}, "", api.TaskInput{}, err
 	}
 	aktiv := r.FormValue("aktiv") != ""
+	einmalig := r.FormValue("wiederholung") == "einmalig"
 	literText := strings.TrimSpace(r.FormValue("liter"))
 	in := api.TaskInput{
-		Kind:   r.FormValue("art"),
-		Title:  strings.TrimSpace(r.FormValue("titel")),
-		Active: &aktiv,
+		Kind:           r.FormValue("art"),
+		Title:          strings.TrimSpace(r.FormValue("titel")),
+		OneOff:         einmalig,
+		RemoveWhenDone: r.FormValue("entfernen") != "",
+		Active:         &aktiv,
 	}
-	entwurf := model.CareTask{Kind: model.TaskKind(in.Kind), Title: in.Title, Active: aktiv}
+	entwurf := model.CareTask{
+		Kind: model.TaskKind(in.Kind), Title: in.Title, Active: aktiv,
+		OneOff: einmalig, RemoveWhenDone: in.RemoveWhenDone,
+	}
 
 	if literText != "" {
 		v, err := formularZahl(r, "liter")
@@ -755,6 +780,20 @@ func aufgabeAusFormular(r *http.Request) (model.CareTask, string, api.TaskInput,
 		in.Liters = &v
 		entwurf.Liters = &v
 	}
+
+	if einmalig {
+		in.DueDate = strings.TrimSpace(r.FormValue("termin"))
+		// Für die Wiedervorlage im Formular: der eingegebene Termin, soweit
+		// lesbar. Die eigentliche Prüfung macht Validate().
+		if t, err := api.ParseTermin(in.DueDate); err == nil {
+			entwurf.DueDate = &t
+		}
+		if err := in.Validate(); err != nil {
+			return entwurf, literText, in, err
+		}
+		return entwurf, literText, in, nil
+	}
+
 	intervall, errI := formularZahl(r, "intervall")
 	rot, errR := formularZahl(r, "rot")
 	entwurf.IntervalDays, entwurf.RedAfterDays = intervall, rot

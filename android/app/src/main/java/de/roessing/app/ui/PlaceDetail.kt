@@ -38,9 +38,18 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val dateFormat = DateTimeFormatter.ofPattern("d.M.yyyy HH:mm").withZone(ZoneId.systemDefault())
+private val dayFormat = DateTimeFormatter.ofPattern("d.M.yyyy").withZone(ZoneId.of("Europe/Berlin"))
 
 internal fun formatTime(iso: String): String =
     runCatching { dateFormat.format(Instant.parse(iso)) }.getOrDefault(iso)
+
+/**
+ * Nur das Datum, in der Ortszeit des Dorfes. Ein Termin „bis zum 20." steht
+ * als 20. um 23:59 Ortszeit in der Datenbank — in einer anderen Zeitzone
+ * gelesen wäre daraus schnell der 21.
+ */
+internal fun formatDate(iso: String): String =
+    runCatching { dayFormat.format(Instant.parse(iso)) }.getOrDefault(iso.take(10))
 
 /** Detailansicht eines Ortes im BottomSheet: Aufgaben, Pläne, Historie, Melden. */
 @Composable
@@ -196,11 +205,8 @@ private fun TaskCard(
                 StatusPill(task.careStatus, taskStatusLabel(task.kind, task.careStatus))
             }
             Spacer(Modifier.height(6.dp))
-            val plan = buildString {
-                task.liters?.let { append("${it.trimmed()} Liter, ") }
-                append("alle ${task.intervalDays.trimmed()} Tage")
-            }
-            Text(plan, style = MaterialTheme.typography.bodyMedium)
+            // Regelmäßig steht hier der Plan, einmalig der Termin.
+            Text(planText(task), style = MaterialTheme.typography.bodyMedium)
             val last = task.lastCompletion
             Text(
                 if (last != null) {
@@ -249,28 +255,39 @@ private fun TaskCard(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            if (gesperrt) {
+            if (task.erledigtUndVorbei) {
+                // Einmalig ist einmalig: Statt eines Knopfes, der in ein 409
+                // läuft, steht hier schlicht, dass es getan ist.
                 Text(
-                    stringResource(R.string.task_locked, formatTime(task.lockedUntil!!)),
-                    style = MaterialTheme.typography.bodySmall,
+                    stringResource(R.string.task_once_done),
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.testTag("task-once-done-${task.id}"),
                 )
-                Spacer(Modifier.height(6.dp))
-            }
-            Button(
-                onClick = onComplete,
-                enabled = !pending && !gesperrt,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("complete-task-${task.id}"),
-            ) {
-                Text(
-                    when (task.kind) {
-                        "giessen" -> "Ich habe gegossen 💧"
-                        "jaeten" -> "Ich habe gejätet 🌿"
-                        else -> "Erledigt ✓"
-                    },
-                )
+            } else {
+                if (gesperrt) {
+                    Text(
+                        stringResource(R.string.task_locked, formatTime(task.lockedUntil!!)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
+                Button(
+                    onClick = onComplete,
+                    enabled = !pending && !gesperrt,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("complete-task-${task.id}"),
+                ) {
+                    Text(
+                        when (task.kind) {
+                            "giessen" -> "Ich habe gegossen 💧"
+                            "jaeten" -> "Ich habe gejätet 🌿"
+                            else -> "Erledigt ✓"
+                        },
+                    )
+                }
             }
             if (history.size > 1) {
                 Spacer(Modifier.height(10.dp))

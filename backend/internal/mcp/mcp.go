@@ -257,38 +257,48 @@ func (s *Server) registerTools() {
 		},
 		{
 			Name: "aufgabe_anlegen",
-			Description: "Legt eine Pflegeaufgabe für einen Ort an, z.B. Gießplan " +
-				"(kind=giessen, liters=10, intervalDays=7, redAfterDays=14) oder Jäten " +
-				"(kind=jaeten, intervalDays=21, redAfterDays=35).",
-			Schema: obj([]string{"placeId", "kind", "intervalDays", "redAfterDays"}, map[string]any{
-				"placeId":      integer("ID des Ortes"),
-				"kind":         enum("Art der Aufgabe", "giessen", "jaeten", "sonstiges"),
-				"title":        str("Optionaler Titel (v.a. für kind=sonstiges)"),
-				"liters":       num("Wassermenge pro Gießvorgang in Litern (nur giessen)"),
-				"intervalDays": num("Soll-Intervall in Tagen; danach wird die Aufgabe gelb"),
-				"redAfterDays": num("Nach so vielen Tagen ohne Erledigung wird sie rot"),
+			Description: "Legt eine Pflegeaufgabe für einen Ort an. Entweder REGELMÄSSIG, " +
+				"z.B. Gießplan (kind=giessen, liters=10, intervalDays=7, redAfterDays=14) " +
+				"oder Jäten (kind=jaeten, intervalDays=21, redAfterDays=35) — oder EINMALIG " +
+				"mit Termin statt Intervall (oneOff=true, dueDate=2026-08-20), z.B. " +
+				"„einmal zum Bahnhof fahren\". Beides zusammen geht nicht.",
+			Schema: obj([]string{"placeId", "kind"}, map[string]any{
+				"placeId":        integer("ID des Ortes"),
+				"kind":           enum("Art der Aufgabe", "giessen", "jaeten", "sonstiges"),
+				"title":          str("Optionaler Titel (v.a. für kind=sonstiges)"),
+				"liters":         num("Wassermenge pro Gießvorgang in Litern (nur giessen)"),
+				"intervalDays":   num("Nur regelmäßig: Soll-Intervall in Tagen; danach wird die Aufgabe gelb"),
+				"redAfterDays":   num("Nur regelmäßig: nach so vielen Tagen ohne Erledigung wird sie rot"),
+				"oneOff":         boolean("Einmalige Aufgabe statt eines wiederkehrenden Plans"),
+				"dueDate":        str("Nur einmalig: Fälligkeitsdatum (2026-08-20 oder RFC3339). Gelb ab drei Tagen davor, rot danach"),
+				"removeWhenDone": boolean("Nach dem Erledigen von Karte und Liste nehmen (Erledigung zählt weiter für die Rangliste)"),
 			}),
 			Handler: s.toolCreateTask,
 		},
 		{
-			Name:        "aufgabe_aendern",
-			Description: "Ändert eine Pflegeaufgabe. Nur angegebene Felder werden geändert.",
+			Name: "aufgabe_aendern",
+			Description: "Ändert eine Pflegeaufgabe. Nur angegebene Felder werden geändert. " +
+				"Mit active=false wird sie pausiert; wer sie zugesagt hat, bekommt einen Hinweis.",
 			Schema: obj([]string{"id"}, map[string]any{
-				"id":           integer("ID der Aufgabe"),
-				"kind":         enum("Art der Aufgabe", "giessen", "jaeten", "sonstiges"),
-				"title":        str("Titel"),
-				"liters":       num("Wassermenge in Litern"),
-				"intervalDays": num("Soll-Intervall in Tagen"),
-				"redAfterDays": num("Rot-Schwelle in Tagen"),
-				"active":       boolean("Aufgabe aktiv?"),
+				"id":             integer("ID der Aufgabe"),
+				"kind":           enum("Art der Aufgabe", "giessen", "jaeten", "sonstiges"),
+				"title":          str("Titel"),
+				"liters":         num("Wassermenge in Litern"),
+				"intervalDays":   num("Soll-Intervall in Tagen (regelmäßige Aufgaben)"),
+				"redAfterDays":   num("Rot-Schwelle in Tagen (regelmäßige Aufgaben)"),
+				"oneOff":         boolean("Auf einmalig umstellen (braucht dueDate)"),
+				"dueDate":        str("Fälligkeitsdatum einmaliger Aufgaben (2026-08-20 oder RFC3339)"),
+				"removeWhenDone": boolean("Nach dem Erledigen entfernen"),
+				"active":         boolean("Aufgabe aktiv?"),
 			}),
 			Handler: s.toolUpdateTask,
 		},
 		{
-			Name:        "aufgabe_loeschen",
-			Description: "Löscht eine Pflegeaufgabe samt Historie. Nicht umkehrbar!",
-			Schema:      obj([]string{"id"}, map[string]any{"id": integer("ID der Aufgabe")}),
-			Handler:     s.toolDeleteTask,
+			Name: "aufgabe_loeschen",
+			Description: "Löscht eine Pflegeaufgabe samt Historie. Nicht umkehrbar! " +
+				"Wer sie gerade zugesagt hat, bekommt vorher einen Hinweis.",
+			Schema:  obj([]string{"id"}, map[string]any{"id": integer("ID der Aufgabe")}),
+			Handler: s.toolDeleteTask,
 		},
 		{
 			Name: "erledigung_melden",
@@ -397,6 +407,7 @@ func (s *Server) toolUpdatePlace(args json.RawMessage, u auth.User) (any, error)
 	if err != nil {
 		return nil, fmt.Errorf("Ort %d nicht gefunden", in.ID)
 	}
+	vorher := *p
 	applyIf(&p.Name, in.Name)
 	applyIf(&p.Description, in.Description)
 	if in.Kind != nil {
@@ -411,6 +422,9 @@ func (s *Server) toolUpdatePlace(args json.RawMessage, u auth.User) (any, error)
 	if err := s.DB.UpdatePlace(p); err != nil {
 		return nil, err
 	}
+	if api.OrtWirdPausiert(vorher, *p) {
+		api.OrtEntfaellt(s.DB, s.now(), nil, p.ID)
+	}
 	return p, nil
 }
 
@@ -421,6 +435,7 @@ func (s *Server) toolDeletePlace(args json.RawMessage, u auth.User) (any, error)
 	if err := json.Unmarshal(args, &in); err != nil {
 		return nil, err
 	}
+	api.OrtEntfaellt(s.DB, s.now(), nil, in.ID)
 	if err := s.DB.DeletePlace(in.ID); err != nil {
 		return nil, fmt.Errorf("Ort %d nicht gefunden", in.ID)
 	}
@@ -451,13 +466,16 @@ func (s *Server) toolCreateTask(args json.RawMessage, u auth.User) (any, error) 
 
 func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) {
 	var in struct {
-		ID           int64    `json:"id"`
-		Kind         *string  `json:"kind"`
-		Title        *string  `json:"title"`
-		Liters       *float64 `json:"liters"`
-		IntervalDays *float64 `json:"intervalDays"`
-		RedAfterDays *float64 `json:"redAfterDays"`
-		Active       *bool    `json:"active"`
+		ID             int64    `json:"id"`
+		Kind           *string  `json:"kind"`
+		Title          *string  `json:"title"`
+		Liters         *float64 `json:"liters"`
+		IntervalDays   *float64 `json:"intervalDays"`
+		RedAfterDays   *float64 `json:"redAfterDays"`
+		OneOff         *bool    `json:"oneOff"`
+		DueDate        *string  `json:"dueDate"`
+		RemoveWhenDone *bool    `json:"removeWhenDone"`
+		Active         *bool    `json:"active"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
 		return nil, err
@@ -466,6 +484,7 @@ func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) 
 	if err != nil {
 		return nil, fmt.Errorf("Aufgabe %d nicht gefunden", in.ID)
 	}
+	vorher := *t
 	if in.Kind != nil {
 		if !model.ValidTaskKind(model.TaskKind(*in.Kind)) {
 			return nil, fmt.Errorf("ungültige Art: %s", *in.Kind)
@@ -478,12 +497,35 @@ func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) 
 	}
 	applyIf(&t.IntervalDays, in.IntervalDays)
 	applyIf(&t.RedAfterDays, in.RedAfterDays)
+	applyIf(&t.OneOff, in.OneOff)
+	applyIf(&t.RemoveWhenDone, in.RemoveWhenDone)
 	applyIf(&t.Active, in.Active)
-	if t.IntervalDays <= 0 || t.RedAfterDays < t.IntervalDays {
-		return nil, fmt.Errorf("ungültige Intervalle: intervalDays > 0 und redAfterDays >= intervalDays nötig")
+	if in.DueDate != nil {
+		termin, err := api.ParseTermin(*in.DueDate)
+		if err != nil {
+			return nil, err
+		}
+		t.DueDate = &termin
+	}
+	if t.OneOff {
+		if t.DueDate == nil {
+			return nil, fmt.Errorf("dueDate fehlt: eine einmalige Aufgabe braucht ein Fälligkeitsdatum")
+		}
+		// Intervalle spielen bei einem Termin keine Rolle.
+		t.IntervalDays, t.RedAfterDays = 0, 0
+	} else {
+		t.DueDate = nil
+		if t.IntervalDays <= 0 || t.RedAfterDays < t.IntervalDays {
+			return nil, fmt.Errorf("ungültige Intervalle: intervalDays > 0 und redAfterDays >= intervalDays nötig")
+		}
 	}
 	if err := s.DB.UpdateTask(t); err != nil {
 		return nil, err
+	}
+	// Pausieren ist für die Zusagenden dasselbe wie Löschen: Sie müssen nicht
+	// mehr los und sollen das erfahren.
+	if api.WirdPausiert(vorher, *t) {
+		api.AufgabeEntfaellt(s.DB, s.now(), nil, t.ID)
 	}
 	return t, nil
 }
@@ -495,6 +537,8 @@ func (s *Server) toolDeleteTask(args json.RawMessage, u auth.User) (any, error) 
 	if err := json.Unmarshal(args, &in); err != nil {
 		return nil, err
 	}
+	// Erst Bescheid sagen, dann löschen — danach ist der Vorgang weg.
+	api.AufgabeEntfaellt(s.DB, s.now(), nil, in.ID)
 	if err := s.DB.DeleteTask(in.ID); err != nil {
 		return nil, fmt.Errorf("Aufgabe %d nicht gefunden", in.ID)
 	}

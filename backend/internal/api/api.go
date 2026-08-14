@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -302,10 +303,16 @@ func (s *Server) handleUpdatePlace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	vorher := *existing
 	in.Apply(existing)
 	if err := s.DB.UpdatePlace(existing); err != nil {
 		writeInternal(w, r, err)
 		return
+	}
+	// Stillgelegt heißt: Hier ist bis auf Weiteres nichts zu tun. Wer für
+	// eine Aufgabe dieses Ortes zugesagt hat, erfährt das.
+	if OrtWirdPausiert(vorher, *existing) {
+		OrtEntfaellt(s.DB, s.now(), s.Zusteller, existing.ID)
 	}
 	writeJSON(w, http.StatusOK, existing)
 }
@@ -316,6 +323,9 @@ func (s *Server) handleDeletePlace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
 		return
 	}
+	// Erst Bescheid sagen, dann löschen: Danach ist der Vorgang mitsamt
+	// seinem Anlass verschwunden.
+	OrtEntfaellt(s.DB, s.now(), s.Zusteller, id)
 	if err := s.DB.DeletePlace(id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeErr(w, http.StatusNotFound, "Ort nicht gefunden")
@@ -328,13 +338,28 @@ func (s *Server) handleDeletePlace(w http.ResponseWriter, r *http.Request) {
 }
 
 // TaskInput ist der Eingabe-Datensatz für Pflegeaufgaben (REST und MCP).
+//
+// Eine Aufgabe ist entweder regelmäßig (Intervall und Rot-Schwelle) oder
+// einmalig (oneOff mit einem Termin). Beides zusammen gibt es nicht — sonst
+// wäre nie klar, woraus sich die Ampel ergibt.
 type TaskInput struct {
 	Kind         string   `json:"kind"`
 	Title        string   `json:"title"`
 	Liters       *float64 `json:"liters"`
 	IntervalDays float64  `json:"intervalDays"`
 	RedAfterDays float64  `json:"redAfterDays"`
-	Active       *bool    `json:"active"`
+	// OneOff: einmalige Aufgabe statt eines wiederkehrenden Plans.
+	OneOff bool `json:"oneOff"`
+	// DueDate ist der Termin einer einmaligen Aufgabe. Erlaubt sind ein
+	// reines Datum („2026-08-20", zählt bis zum Tagesende in Ortszeit) und
+	// ein vollständiger Zeitpunkt nach RFC3339.
+	DueDate string `json:"dueDate"`
+	// RemoveWhenDone: nach dem Erledigen von Karte und Liste nehmen.
+	RemoveWhenDone bool  `json:"removeWhenDone"`
+	Active         *bool `json:"active"`
+
+	// termin ist das geprüfte DueDate. Validate() setzt es, Apply() nutzt es.
+	termin *time.Time
 }
 
 func (in *TaskInput) Validate() error {
@@ -344,6 +369,26 @@ func (in *TaskInput) Validate() error {
 	if err := pruefeText("title", in.Title); err != nil {
 		return err
 	}
+	if in.Liters != nil {
+		if endlich("liters", *in.Liters, 0, MaxLiter) != nil || *in.Liters <= 0 {
+			return errors.New("liters muss eine Zahl > 0 sein")
+		}
+	}
+	if in.OneOff {
+		termin, err := ParseTermin(in.DueDate)
+		if err != nil {
+			return err
+		}
+		in.termin = &termin
+		// Intervalle spielen bei einem Termin keine Rolle; sie werden
+		// bewusst genullt, damit nirgends zwei Wahrheiten stehen.
+		in.IntervalDays, in.RedAfterDays = 0, 0
+		return nil
+	}
+	if in.DueDate != "" {
+		return errors.New("dueDate gibt es nur bei einmaligen Aufgaben (oneOff)")
+	}
+	in.termin = nil
 	// endlich() fängt auch NaN/Inf ab — die bestehen jede Bereichsprüfung.
 	if endlich("intervalDays", in.IntervalDays, 0, MaxTage) != nil || in.IntervalDays <= 0 {
 		return errors.New("intervalDays muss eine Zahl > 0 und <= " + itoa(MaxTage) + " sein")
@@ -354,18 +399,38 @@ func (in *TaskInput) Validate() error {
 	if in.RedAfterDays < in.IntervalDays {
 		return errors.New("redAfterDays muss >= intervalDays sein")
 	}
-	if in.Liters != nil {
-		if endlich("liters", *in.Liters, 0, MaxLiter) != nil || *in.Liters <= 0 {
-			return errors.New("liters muss eine Zahl > 0 sein")
-		}
-	}
 	return nil
+}
+
+// ParseTermin liest das Fälligkeitsdatum einer einmaligen Aufgabe.
+//
+// Ein reines Datum meint den ganzen Tag: „bis zum 20." ist am 20. um 22 Uhr
+// noch nicht überfällig. Maßgeblich ist die Ortszeit des Dorfes — der Server
+// läuft in UTC, den Termin hat aber jemand in Rössing im Kopf.
+func ParseTermin(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, errors.New("dueDate fehlt: eine einmalige Aufgabe braucht ein Fälligkeitsdatum")
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		ende := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 0, model.Location())
+		return ende, nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, errors.New("dueDate muss ein Datum (2026-08-20) oder ein Zeitpunkt nach RFC3339 sein")
+	}
+	if t.Year() < 2000 || t.Year() > 2200 {
+		return time.Time{}, errors.New("dueDate liegt außerhalb des zulässigen Bereichs")
+	}
+	return t, nil
 }
 
 func (in *TaskInput) Apply(t *model.CareTask) {
 	t.Kind, t.Title = model.TaskKind(in.Kind), in.Title
 	t.Liters = in.Liters
 	t.IntervalDays, t.RedAfterDays = in.IntervalDays, in.RedAfterDays
+	t.OneOff, t.DueDate, t.RemoveWhenDone = in.OneOff, in.termin, in.RemoveWhenDone
 	if in.Active != nil {
 		t.Active = *in.Active
 	}
@@ -419,10 +484,14 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	vorher := *existing
 	in.Apply(existing)
 	if err := s.DB.UpdateTask(existing); err != nil {
 		writeInternal(w, r, err)
 		return
+	}
+	if WirdPausiert(vorher, *existing) {
+		AufgabeEntfaellt(s.DB, s.now(), s.Zusteller, existing.ID)
 	}
 	writeJSON(w, http.StatusOK, existing)
 }
@@ -433,6 +502,7 @@ func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
 		return
 	}
+	AufgabeEntfaellt(s.DB, s.now(), s.Zusteller, id)
 	if err := s.DB.DeleteTask(id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeErr(w, http.StatusNotFound, "Aufgabe nicht gefunden")
