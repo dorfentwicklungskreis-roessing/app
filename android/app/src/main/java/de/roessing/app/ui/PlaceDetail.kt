@@ -264,30 +264,30 @@ private fun TaskCard(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.testTag("task-once-done-${task.id}"),
                 )
-                return@Column
-            }
-            if (gesperrt) {
-                Text(
-                    stringResource(R.string.task_locked, formatTime(task.lockedUntil!!)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(6.dp))
-            }
-            Button(
-                onClick = onComplete,
-                enabled = !pending && !gesperrt,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("complete-task-${task.id}"),
-            ) {
-                Text(
-                    when (task.kind) {
-                        "giessen" -> "Ich habe gegossen 💧"
-                        "jaeten" -> "Ich habe gejätet 🌿"
-                        else -> "Erledigt ✓"
-                    },
-                )
+            } else {
+                if (gesperrt) {
+                    Text(
+                        stringResource(R.string.task_locked, formatTime(task.lockedUntil!!)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
+                Button(
+                    onClick = onComplete,
+                    enabled = !pending && !gesperrt,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("complete-task-${task.id}"),
+                ) {
+                    Text(
+                        when (task.kind) {
+                            "giessen" -> "Ich habe gegossen 💧"
+                            "jaeten" -> "Ich habe gejätet 🌿"
+                            else -> "Erledigt ✓"
+                        },
+                    )
+                }
             }
             if (history.size > 1) {
                 Spacer(Modifier.height(10.dp))
