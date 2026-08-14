@@ -109,8 +109,13 @@ class VergabeE2eTest {
         return ort.getLong("id") to aufgabe.getLong("id")
     }
 
-    /** Wartet, bis für die Aufgabe eine Anfrage vorliegt (der Takt braucht kurz). */
-    private fun warteAufAnfrage(token: String, taskId: Long, sekunden: Int = 40): NotificationDto {
+    /**
+     * Wartet, bis für die Aufgabe eine Anfrage vorliegt.
+     *
+     * Großzügig bemessen: Der Takt der Vergabe steht in der Vorgabe auf einer
+     * Minute (`VERGABE_TAKT`), und getaktet wird erst nach der Anmeldung.
+     */
+    private fun warteAufAnfrage(token: String, taskId: Long, sekunden: Int = 150): NotificationDto {
         val vergabe = ApiVergabeRepository(api(token))
         repeat(sekunden * 2) {
             val treffer = runBlocking { vergabe.notifications() }
@@ -157,7 +162,7 @@ class VergabeE2eTest {
      * entscheidet die faire Reihenfolge — für diesen Test ist nur wichtig,
      * dass der Vorgang läuft. Zusagen darf ohnehin jede:r Eingetragene.
      */
-    private fun warteAufVorgang(taskId: Long, sekunden: Int = 40): Long {
+    private fun warteAufVorgang(taskId: Long, sekunden: Int = 150): Long {
         val orte = ApiPlacesRepository(api(annaToken))
         repeat(sekunden * 2) {
             val vorgang = runBlocking { orte.places() }.places
@@ -263,9 +268,19 @@ class VergabeE2eTest {
         }
         compose.onNodeWithTag("zurueck").performClick()
         compose.waitForIdle()
-        compose.waitUntil(20_000) {
-            compose.onAllNodesWithTagSicher("claim-${anfrage.assignmentId}")
+        // Der Knopf oben holt den Stand frisch — die Anfrage kam gerade eben.
+        // Notfalls mehrmals: Zwischen Abholen und Anzeigen liegt ein Netzweg.
+        var sichtbar = false
+        repeat(12) {
+            compose.onNodeWithTag("refresh").performClick()
+            compose.waitForIdle()
+            SystemClock.sleep(2_000)
+            if (compose.onAllNodesWithTagSicher("claim-${anfrage.assignmentId}")) {
+                sichtbar = true
+                return@repeat
+            }
         }
+        assertTrue("Die Anfrage steht nicht auf der Startseite", sichtbar)
         foto("e2e-04-anfrage")
 
         // 4) Zusagen — im Ortsdetail, wo der Knopf eindeutig zu dieser Aufgabe
@@ -275,7 +290,7 @@ class VergabeE2eTest {
         SystemClock.sleep(1_000)
         compose.onNodeWithTag("place-list").performScrollToNode(hasTestTag("place-card-$placeId"))
         compose.onNodeWithTag("place-card-$placeId").performClick()
-        compose.waitUntil(20_000) { compose.onAllNodesWithTagSicher("claim-task-$taskId") }
+        compose.waitUntil(60_000) { compose.onAllNodesWithTagSicher("claim-task-$taskId") }
         compose.onNodeWithTag("claim-task-$taskId").performScrollTo().performClick()
         compose.waitForIdle()
         SystemClock.sleep(2_000)

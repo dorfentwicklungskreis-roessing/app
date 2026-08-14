@@ -268,6 +268,7 @@ fun HomeScreen(
                     IconButton(
                         onClick = {
                             viewModel.refresh()
+                            viewModel.loadNotifications()
                             leaderboardViewModel.refresh()
                         },
                         modifier = Modifier.testTag("refresh"),
