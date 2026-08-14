@@ -60,6 +60,17 @@ interface DorfApi {
     @POST("api/v1/assignments/{id}/release")
     suspend fun release(@Path("id") assignmentId: Long): AssignmentDto
 
+    // --- Ideen-Sammlung ------------------------------------------------------
+
+    /**
+     * Reicht einen Wunsch ein („Was soll die App noch können?"). Derselbe
+     * Eingang, den auch das Formular auf der Website benutzt; er ist bewusst
+     * ohne Anmeldung erreichbar. Aus der App geht das Token trotzdem mit,
+     * damit die Idee dem Konto zugeordnet wird.
+     */
+    @POST("api/v1/ideen")
+    suspend fun idee(@Body input: IdeeInput): IdeeDto
+
     // --- Gerät für Push-Benachrichtigungen ----------------------------------
 
     @POST("api/v1/me/devices")

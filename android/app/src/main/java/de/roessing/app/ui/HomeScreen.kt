@@ -81,6 +81,7 @@ fun HomeScreen(
     viewModel: PlacesViewModel,
     leaderboardViewModel: LeaderboardViewModel,
     profileViewModel: ProfileViewModel,
+    ideenViewModel: IdeenViewModel,
     pushZiel: PushZiel? = null,
     onPushZielVerbraucht: () -> Unit = {},
     onLogout: () -> Unit,
@@ -88,6 +89,7 @@ fun HomeScreen(
     val state by viewModel.state.collectAsState()
     val leaderboard by leaderboardViewModel.state.collectAsState()
     val profil by profileViewModel.state.collectAsState()
+    val ideen by ideenViewModel.state.collectAsState()
     var bereich by rememberSaveable { mutableStateOf(Bereich.START) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -229,6 +231,25 @@ fun HomeScreen(
     LaunchedEffect(bereich) {
         if (bereich == Bereich.DORFBEWOHNER) profileViewModel.loadMembers()
     }
+    // Name und E-Mail im Ideen-Formular kommen aus dem Profil. Sie werden
+    // nur nachgetragen, wenn die Felder noch leer sind — wer schon getippt
+    // hat, verliert nichts (siehe IdeenViewModel.vorbelegen).
+    LaunchedEffect(bereich, profil.displayName, profil.email) {
+        if (bereich == Bereich.IDEEN) {
+            ideenViewModel.vorbelegen(
+                name = profil.displayName.ifBlank { state.me?.name.orEmpty() },
+                email = profil.email.ifBlank { state.me?.email.orEmpty() },
+            )
+        }
+    }
+    val ideeGesendet = stringResource(R.string.ideas_thanks)
+    LaunchedEffect(Unit) {
+        ideenViewModel.events.collect { event ->
+            when (event) {
+                IdeenEvent.Gesendet -> snackbar.showSnackbar(ideeGesendet)
+            }
+        }
+    }
     val profilGespeichert = stringResource(R.string.profile_saved)
     LaunchedEffect(Unit) {
         profileViewModel.events.collect { event ->
@@ -247,6 +268,7 @@ fun HomeScreen(
                             Bereich.PROFIL -> stringResource(R.string.profile_title)
                             Bereich.DORFBEWOHNER -> stringResource(R.string.members_title)
                             Bereich.MITHELFEN -> stringResource(R.string.area_care_title)
+                            Bereich.IDEEN -> stringResource(R.string.ideas_title)
                             Bereich.START -> stringResource(R.string.home_title)
                         },
                     )
@@ -410,6 +432,15 @@ fun HomeScreen(
                 Bereich.DORFBEWOHNER -> MembersScreen(
                     state = profil,
                     modifier = Modifier.padding(padding),
+                )
+
+                Bereich.IDEEN -> IdeenScreen(
+                    state = ideen,
+                    modifier = Modifier.padding(padding),
+                    onWunsch = ideenViewModel::setWunsch,
+                    onName = ideenViewModel::setName,
+                    onEmail = ideenViewModel::setEmail,
+                    onSenden = ideenViewModel::absenden,
                 )
 
                 Bereich.MITHELFEN -> Column(Modifier.padding(padding)) {

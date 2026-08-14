@@ -4,11 +4,13 @@ import android.app.Application
 import android.content.Context
 import de.roessing.app.auth.AuthManager
 import de.roessing.app.data.ApiDeviceRepository
+import de.roessing.app.data.ApiIdeenRepository
 import de.roessing.app.data.ApiPlacesRepository
 import de.roessing.app.data.ApiProfileRepository
 import de.roessing.app.data.ApiStatsRepository
 import de.roessing.app.data.ApiVergabeRepository
 import de.roessing.app.data.DeviceRepository
+import de.roessing.app.data.IdeenRepository
 import de.roessing.app.data.DorfApi
 import de.roessing.app.data.PlacesRepository
 import de.roessing.app.data.ProfileRepository
@@ -41,6 +43,7 @@ class AppContainer(context: Context) {
     val profileRepository: ProfileRepository = ApiProfileRepository(api)
     val vergabeRepository: VergabeRepository = ApiVergabeRepository(api)
     val deviceRepository: DeviceRepository = ApiDeviceRepository(api)
+    val ideenRepository: IdeenRepository = ApiIdeenRepository(api)
 }
 
 val Context.appContainer: AppContainer

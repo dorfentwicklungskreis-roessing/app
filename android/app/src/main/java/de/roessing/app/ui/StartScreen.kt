@@ -44,7 +44,7 @@ import de.roessing.app.ui.theme.statusFarben
  * Die Bereiche der App. „Mithelfen" ist der erste — weitere kommen, deshalb
  * ist die Startseite eine Übersicht und nicht die Gieß-Karte.
  */
-enum class Bereich { START, MITHELFEN, PROFIL, DORFBEWOHNER }
+enum class Bereich { START, MITHELFEN, PROFIL, DORFBEWOHNER, IDEEN }
 
 /**
  * Startseite: freundlicher Einstieg mit dem Namen aus dem Profil, darunter
@@ -131,7 +131,7 @@ fun StartScreen(
             )
         }
 
-        AusblickKachel()
+        IdeenKachel(onClick = { onBereich(Bereich.IDEEN) })
     }
 }
 
@@ -262,38 +262,51 @@ private fun BereichKachel(
 }
 
 /**
- * Der ehrliche Ausblick: Es kommt mehr, aber hier wird nichts versprochen —
- * und keine Kontaktadresse erfunden, die es nicht gibt.
+ * Der ehrliche Ausblick — und gleichzeitig der Weg dorthin: Es kommt mehr,
+ * und was als Nächstes kommt, entscheidet das Dorf. Deshalb ist die Kachel
+ * anklickbar und führt direkt in das Formular „Was soll die App noch
+ * können?". Versprochen wird hier nichts.
  */
 @Composable
-private fun AusblickKachel() {
+private fun IdeenKachel(onClick: () -> Unit) {
     Card(
+        onClick = onClick,
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("weitere-bereiche"),
+            .testTag("bereich-ideen"),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Outlined.Lightbulb,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            Symbolkreis(
+                symbol = Icons.Outlined.Lightbulb,
+                hintergrund = MaterialTheme.colorScheme.tertiary,
+                vordergrund = MaterialTheme.colorScheme.onTertiary,
+                groesse = 44,
             )
             Spacer(Modifier.width(14.dp))
-            Column {
+            Column(Modifier.weight(1f).testTag("weitere-bereiche")) {
                 Text(
-                    stringResource(R.string.home_more_title),
-                    style = MaterialTheme.typography.titleSmall,
+                    stringResource(R.string.area_ideas_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    stringResource(R.string.area_ideas_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
                     stringResource(R.string.home_more_text),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }

@@ -72,8 +72,12 @@ jobs:
           # zusammen mit einer öffentlichen https-URL ab (und die ist Vorbelegung).
           # VERGABE_TAKT kurz: Die Vergabe-Tests warten sonst je Schritt bis
           # zu einer Minute auf den nächsten Durchlauf.
+          # IDEEN_*: Der Ideen-Eingang ist im Betrieb streng begrenzt (5 pro
+          # Stunde). Im E2E reicht der Test mehrfach hintereinander ein; die
+          # Grenze selbst hat einen eigenen Test in backend/internal/api.
           DB_PATH=/tmp/e2e.sqlite AUTH_MODE=insecure-dev SEED=1 LISTEN_ADDR=:8099 \
           PUBLIC_URL=http://localhost:8099 VERGABE_TAKT=5s \
+          IDEEN_BURST=50 IDEEN_PRO_STUNDE=50 \
             go run ./cmd/server &
           for i in $(seq 1 30); do curl -sf localhost:8099/healthz && break; sleep 1; done
       # Beide Testläufe laufen bewusst im SELBEN Emulator-Schritt:

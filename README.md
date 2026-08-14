@@ -118,6 +118,13 @@ Anfang.
   heraus gibt es `ideen_liste` (mit Überblick über den ganzen Bestand: gesamt,
   offen, je Stand, je Weg, neueste und älteste Einreichung) und
   `idee_status_setzen`.
+  **In der App** führt eine eigene Kachel auf der Bereichs-Startseite
+  („Idee vorschlagen — was soll die App noch können?") zum Formular: ein
+  mehrzeiliges Wunschfeld, darunter Name und E-Mail, **aus dem Profil
+  vorbelegt** und änderbar. Eine abgelehnte Einreichung zeigt die Begründung
+  des Backends im Wortlaut und lässt den getippten Text stehen; nach dem
+  Abschicken bleibt nur das Wunschfeld leer, damit die nächste Idee ohne
+  Tipparbeit hineinpasst.
 - **Spielschutz**: Nach einer Erledigung bleibt dieselbe Aufgabe gesperrt —
   50 % des Soll-Intervalls (beim Gießen mit dem Hitzefaktor skaliert, bei
   Jäten & Co. nicht), mindestens 12 Stunden, höchstens das volle Intervall.

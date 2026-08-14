@@ -21,7 +21,24 @@
     <string name="area_profile_subtitle">Deine Angaben — und was andere davon sehen.</string>
     <string name="area_members_subtitle">Wer mitmacht, mit Kontakt nach Freigabe.</string>
     <string name="home_more_title">Weitere Bereiche kommen</string>
-    <string name="home_more_text">Sag uns, was die App können soll.</string>
+    <string name="home_more_text">Was als Nächstes dazukommt, entscheidet ihr — sag uns, was die App können soll.</string>
+    <!-- Ideen-Sammlung: „Was soll die App noch können?" -->
+    <string name="area_ideas_title">Idee vorschlagen</string>
+    <string name="area_ideas_subtitle">Was soll die App noch können?</string>
+    <string name="ideas_title">Deine Idee</string>
+    <string name="ideas_intro">Die App fürs Dorf ist längst nicht fertig — „Mithelfen" ist nur der Anfang. Was würde dir den Alltag in Rössing leichter machen? Ein Satz reicht.</string>
+    <string name="ideas_encourage">Trau dich, groß zu denken: Vieles, was nach viel Aufwand klingt, ist gut machbar. Was wir nicht bauen können, sagen wir ehrlich.</string>
+    <string name="ideas_wish_label">Was soll die App können?</string>
+    <string name="ideas_wish_placeholder">Zum Beispiel: Ich möchte sehen, wann der nächste Bus fährt.</string>
+    <string name="ideas_name_label">Name (freiwillig)</string>
+    <string name="ideas_email_label">E-Mail (freiwillig)</string>
+    <string name="ideas_email_help">Nur, falls wir bei deiner Idee nachfragen dürfen.</string>
+    <string name="ideas_prefilled_hint">Name und E-Mail sind aus deinem Profil vorbelegt — du kannst sie ändern oder leeren.</string>
+    <string name="ideas_privacy">Gespeichert werden dein Wunsch und, wenn du sie angibst, Name und E-Mail. Sie sind nur für den Dorfentwicklungskreis sichtbar und werden nicht veröffentlicht.</string>
+    <string name="ideas_submit">Idee abschicken</string>
+    <string name="ideas_sending">Wird abgeschickt …</string>
+    <string name="ideas_thanks">Danke, deine Idee ist angekommen!</string>
+    <string name="ideas_counter">%1$d von %2$d Zeichen</string>
     <string name="map_title">Blumenkästen</string>
     <string name="tab_map">Karte</string>
     <string name="list_title">Liste</string>

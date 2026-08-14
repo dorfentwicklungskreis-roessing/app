@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import de.roessing.app.auth.LoginResult
 import de.roessing.app.auth.SessionState
 import de.roessing.app.ui.HomeScreen
+import de.roessing.app.ui.IdeenViewModel
 import de.roessing.app.ui.LeaderboardViewModel
 import de.roessing.app.ui.LoginScreen
 import de.roessing.app.ui.PlacesViewModel
@@ -110,10 +111,12 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
             val vm: PlacesViewModel = viewModel(factory = factory)
             val rangVm: LeaderboardViewModel = viewModel(factory = factory)
             val profilVm: ProfileViewModel = viewModel(factory = factory)
+            val ideenVm: IdeenViewModel = viewModel(factory = factory)
             HomeScreen(
                 viewModel = vm,
                 leaderboardViewModel = rangVm,
                 profileViewModel = profilVm,
+                ideenViewModel = ideenVm,
                 pushZiel = pushZiel,
                 onPushZielVerbraucht = onPushZielVerbraucht,
                 onLogout = {
@@ -141,6 +144,9 @@ private fun viewModelFactory(container: AppContainer) =
 
             modelClass.isAssignableFrom(ProfileViewModel::class.java) ->
                 ProfileViewModel(container.profileRepository) as T
+
+            modelClass.isAssignableFrom(IdeenViewModel::class.java) ->
+                IdeenViewModel(container.ideenRepository) as T
 
             else -> error("Unbekanntes ViewModel: ${modelClass.name}")
         }
