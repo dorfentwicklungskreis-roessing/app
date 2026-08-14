@@ -68,8 +68,8 @@ var IdeenStandardZiele = []string{
 // Stück, danach fünf pro Stunde nach. Ein Mensch schreibt nicht mehr, ein
 // Skript ist damit sofort ausgebremst.
 const (
-	IdeenBurstStandard    = 5
-	IdeenProStundeStandar = 5
+	IdeenBurstStandard     = 5
+	IdeenProStundeStandard = 5
 )
 
 // --- Registrierung ------------------------------------------------------------
@@ -120,7 +120,7 @@ func IdeenRateLimitFromEnv() httpx.RateLimitConfig {
 	an := !istAus(os.Getenv("IDEEN_LIMIT")) && !istAus(os.Getenv("RATE_LIMIT"))
 	return httpx.RateLimitConfig{
 		Burst:   umgebungZahl("IDEEN_BURST", IdeenBurstStandard),
-		PerHour: umgebungZahl("IDEEN_PRO_STUNDE", IdeenProStundeStandar),
+		PerHour: umgebungZahl("IDEEN_PRO_STUNDE", IdeenProStundeStandard),
 		Enabled: &an,
 	}
 }
