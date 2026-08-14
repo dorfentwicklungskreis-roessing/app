@@ -206,21 +206,64 @@ fun MapScreen(
         map.style?.getSourceAs<GeoJsonSource>(AUSWAHL_SOURCE_ID)?.setGeoJson(auswahlGeoJson(auswahl))
     }
 
-    // MapView an den Activity-Lifecycle koppeln (Pflicht bei MapLibre).
+    // MapView an den Activity-Lifecycle koppeln (Pflicht bei MapLibre) — und
+    // sie beim Verlassen der Komposition auch wirklich freigeben.
+    //
+    // Die Freigabe darf nicht allein am ON_DESTROY der Activity hängen: Die
+    // Karte lebt nur, solange „Mithelfen → Karte" gewählt ist. Ein Wechsel auf
+    // „Liste" oder „Rangliste" nimmt MapScreen aus der Komposition, das
+    // `remember { MapView(context) }` fällt weg — und mit dem alten Code wurde
+    // dabei nur der Beobachter abgemeldet. onDestroy() lief nie.
+    //
+    // Das ist kein bloßes Speicherleck, sondern ein Absturz mit Anlauf
+    // (Issue #24): Der native Kartenkern läuft weiter und lädt Stil, Sprites
+    // und Kacheln zu Ende. Seine Rückrufe erreichen die Java-Seite über eine
+    // schwache Referenz auf NativeMapView. Sobald die verwaiste MapView für
+    // die Speicherbereinigung unerreichbar ist, wird sie eingesammelt — und
+    // der nächste Rückruf des noch lebenden nativen Kerns trifft ins Leere.
+    // Die Laufzeit beendet den Prozess sofort:
+    //
+    //   JNI DETECTED ERROR IN APPLICATION: can't call void
+    //   org.maplibre.android.maps.NativeMapView.onSpriteRequested(...)
+    //   on null object — in call to CallVoidMethodV
+    //   from void android.os.MessageQueue.nativePollOnce(long, int)
+    //
+    // Im E2E-Lauf trifft es zufällig den Test, der gerade läuft, wenn
+    // Speicherbereinigung und später Rückruf zusammenfallen — daher
+    // „Instrumentation run failed due to Process crashed" ohne schuldigen
+    // Test. Im Alltag trifft es die Nutzerin beim Hin und Her zwischen den
+    // Reitern.
     DisposableEffect(lifecycleOwner) {
+        // ON_DESTROY der Activity und das Verlassen der Komposition können
+        // beide zuerst kommen; freigegeben wird genau einmal.
+        var freigegeben = false
+        val freigeben = {
+            if (!freigegeben) {
+                freigegeben = true
+                // Vollständige Abmeldereihenfolge, nicht nur onDestroy():
+                // onStop() zählt zusätzlich die prozessweite FileSource herunter
+                // (Kachel-Abruf samt Threads) — onDestroy() allein tut das nicht.
+                // Beim Weg über ON_DESTROY sind onPause/onStop schon gelaufen;
+                // MapLibre verträgt den zweiten Aufruf.
+                mapView.onPause()
+                mapView.onStop()
+                mapView.onDestroy()
+            }
+        }
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> mapView.onStart()
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                Lifecycle.Event.ON_DESTROY -> freigeben()
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            freigeben()
         }
     }
 
