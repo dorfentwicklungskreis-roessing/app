@@ -82,8 +82,9 @@ class RealLoginE2eTest {
         klickeWeiter()
 
         // 4) Rücksprung in die App: Der Login gilt erst als bewiesen, wenn die
-        //    angemeldete Ansicht (Karte/Liste) erscheint.
-        val angemeldet = device.wait(Until.hasObject(By.text("Blumenkästen")), 90_000)
+        //    angemeldete Ansicht erscheint — das ist seit dem Umbau die
+        //    Startseite mit den Bereichen, erkennbar an der Begrüßung.
+        val angemeldet = device.wait(Until.hasObject(By.textStartsWith("Moin")), 90_000)
 
         // Aussagekräftige Diagnose, falls der Rücksprung wieder bricht.
         if (!angemeldet) {
@@ -92,8 +93,14 @@ class RealLoginE2eTest {
         }
 
         // Die Orte-Liste beweist zusätzlich, dass das Access-Token vom Backend
-        // akzeptiert wird (echter API-Aufruf, keine Mocks). Direkt nach dem Login
-        // läuft der erste Abruf noch, deshalb großzügig warten.
+        // akzeptiert wird (echter API-Aufruf, keine Mocks). Sie liegt jetzt im
+        // Bereich „Mithelfen", also erst dorthin. Die Kachel trägt neben dem
+        // Namen noch Untertitel und Statuszeile — deshalb textContains.
+        val kachel = device.wait(Until.findObject(By.textContains("Mithelfen")), 30_000)
+        requireNotNull(kachel) { "Bereichskachel „Mithelfen\" nach dem Login nicht gefunden" }
+        kachel.click()
+
+        // Direkt nach dem Login läuft der erste Abruf noch, deshalb großzügig warten.
         val listeTab = device.wait(Until.findObject(By.text("Liste")), 30_000)
         requireNotNull(listeTab) { "Tab „Liste\" nach dem Login nicht gefunden" }
         listeTab.click()
