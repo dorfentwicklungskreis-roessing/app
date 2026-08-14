@@ -31,8 +31,8 @@ android {
         // keinen Build mit kleinerer Nummer über einen größeren — sonst
         // müssten alle Tester die App erst deinstallieren. Ab hier wieder in
         // Einerschritten weiterzählen.
-        versionCode = 1000108
-        versionName = "0.1.8"
+        versionCode = 1000109
+        versionName = "0.1.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
