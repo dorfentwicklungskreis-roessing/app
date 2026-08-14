@@ -27,6 +27,28 @@ import kotlin.coroutines.resume
 
 private val Context.authDataStore by preferencesDataStore(name = "auth")
 
+/**
+ * Der Scope, mit dem Zitadel die Projektrollen ins Token legt.
+ *
+ * Angefordert wird er mit „projects" (Plural), zurück kommt der Claim
+ * `urn:zitadel:iam:org:project:roles` mit „project" (Singular) — daraus liest
+ * das Backend die Rolle `admin` (siehe backend/internal/auth). Ohne diesen
+ * Scope stellt Zitadel ein Token ganz ohne Rollen aus: Dann ist in der App
+ * niemand Verwaltung, und der Bereich „Verwaltung" antwortet nur mit 403.
+ *
+ * Dieselbe Schreibweise nutzt die Web-Verwaltung seit jeher
+ * (backend/internal/admin/oidc.go) — sie bekommt damit nachweislich Rollen.
+ */
+const val ROLLEN_SCOPE = "urn:zitadel:iam:org:projects:roles"
+
+/**
+ * Die Scopes, mit denen sich die App anmeldet.
+ *
+ * offline_access hält die Sitzung über den Neustart hinweg, die Rollen
+ * entscheiden, wer verwalten darf.
+ */
+val LOGIN_SCOPES = listOf("openid", "profile", "email", "offline_access", ROLLEN_SCOPE)
+
 /** Login-Zustand der App. */
 sealed interface SessionState {
     data object Loading : SessionState
@@ -110,7 +132,7 @@ class AuthManager(private val context: Context) {
                 ResponseTypeValues.CODE,
                 Uri.parse(BuildConfig.OIDC_REDIRECT_URI),
             )
-                .setScopes("openid", "profile", "email", "offline_access")
+                .setScopes(LOGIN_SCOPES)
                 // Bewusst KEIN prompt-Parameter: Zitadel kennt nur none/login/
                 // select_account/create. Ein unbekannter Wert wie "consent" ist
                 // laut Spec zwar zu ignorieren, ist aber unnötiges Risiko.
@@ -199,6 +221,15 @@ class AuthManager(private val context: Context) {
             }
         }
     }
+
+    /**
+     * Das zuletzt erhaltene ID-Token — nur zur Diagnose im Login-Test.
+     *
+     * Zitadel legt Rollen je nach Einstellung ins Access-Token, ins ID-Token
+     * oder in keines von beiden. Wer wissen will, warum niemand Verwaltung
+     * ist, muss beide ansehen können.
+     */
+    val letztesIdToken: String? get() = authState?.idToken
 
     suspend fun logout() {
         authState = null

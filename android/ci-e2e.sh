@@ -126,10 +126,27 @@ if [ "${API_LEVEL:-}" = "35" ] && [ -n "${REAL_LOGIN_USER:-}" ] && [ -n "${REAL_
   # Zitadel-Anmeldung zeigt.
   adb shell 'echo "chrome --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line' || true
 
+  # Der Ausgang wird gemerkt statt sofort abgebrochen: Die Diagnose unten ist
+  # gerade dann wertvoll, wenn der Login schiefging.
+  LOGIN_ERGEBNIS=0
   ./gradlew connectedDebugAndroidTest \
     -Pandroid.testInstrumentationRunnerArguments.class=de.roessing.app.RealLoginE2eTest \
     -Pandroid.testInstrumentationRunnerArguments.realLoginUser="$REAL_LOGIN_USER" \
-    -Pandroid.testInstrumentationRunnerArguments.realLoginPassword="$REAL_LOGIN_PASSWORD"
+    -Pandroid.testInstrumentationRunnerArguments.realLoginPassword="$REAL_LOGIN_PASSWORD" \
+    || LOGIN_ERGEBNIS=$?
+
+  # Was im ECHTEN Token steht, gehört in die Ausgabe: Fehlt der Rollen-Claim,
+  # ist in der ausgelieferten App niemand Verwaltung — und das sieht man sonst
+  # nirgends, weil jede Rechteprüfung das 403 ja erwartet.
+  echo "--- Claims des echten Tokens (aus dem Login oben)"
+  adb logcat -d -s TOKENPROBE:I | sed -n 's/.*TOKENPROBE *: //p' || true
+
+  # Und wenn der Login selbst hakte: der letzte Bildschirm im Klartext.
+  if [ "$LOGIN_ERGEBNIS" != "0" ]; then
+    echo "--- Letzter Bildschirm der Anmeldung"
+    adb logcat -d -s LOGINPROBE:I | sed -n 's/.*LOGINPROBE *: //p' || true
+    exit "$LOGIN_ERGEBNIS"
+  fi
 else
   echo "Echter Login-Test übersprungen (API ${API_LEVEL:-unbekannt} bzw. keine Secrets)."
 fi
