@@ -14,10 +14,10 @@ import (
 func TestErledigungBestaetigenUndZuruecknehmen(t *testing.T) {
 	_, h, d, sitzung := aufbau(t)
 	task := beispielPflege(t, d, time.Date(2026, time.May, 1, 8, 0, 0, 0, time.UTC))
-	aufgabePfad := fmt.Sprintf("/admin/dorfpflege/aufgaben/%d", task.ID)
+	aufgabePfad := fmt.Sprintf("/admin/mithelfen/aufgaben/%d", task.ID)
 
 	// Auf der Ortsseite führt „Erledigt melden" auf die Bestätigungsseite.
-	ortPfad := fmt.Sprintf("/admin/dorfpflege/orte/%d", task.PlaceID)
+	ortPfad := fmt.Sprintf("/admin/mithelfen/orte/%d", task.PlaceID)
 	if seite := hole(t, h, ortPfad, sitzung).Body.String(); !strings.Contains(seite, aufgabePfad+"/erledigt\"") {
 		t.Errorf("Ortsseite verlinkt die Bestätigung nicht: %s", seite)
 	}
@@ -49,7 +49,7 @@ func TestErledigungBestaetigenUndZuruecknehmen(t *testing.T) {
 	erledigung := cs[0]
 
 	// Die Historie bietet die Rücknahme an.
-	ruecknahme := fmt.Sprintf("/admin/dorfpflege/erledigungen/%d/zuruecknehmen", erledigung.ID)
+	ruecknahme := fmt.Sprintf("/admin/mithelfen/erledigungen/%d/zuruecknehmen", erledigung.ID)
 	if seite := hole(t, h, ortPfad, sitzung).Body.String(); !strings.Contains(seite, ruecknahme) {
 		t.Errorf("Ortsseite bietet keine Rücknahme an: %s", seite)
 	}
@@ -73,7 +73,7 @@ func TestErledigungBestaetigenUndZuruecknehmen(t *testing.T) {
 
 	// Unbekannte Erledigung → 404.
 	for _, pfad := range []string{
-		"/admin/dorfpflege/erledigungen/999999/zuruecknehmen",
+		"/admin/mithelfen/erledigungen/999999/zuruecknehmen",
 		ruecknahme, // dieselbe zweimal zurücknehmen
 	} {
 		if w := hole(t, h, pfad, sitzung); w.Code != http.StatusNotFound {
@@ -85,7 +85,7 @@ func TestErledigungBestaetigenUndZuruecknehmen(t *testing.T) {
 	}
 
 	// Unbekannte Aufgabe → 404.
-	if w := hole(t, h, "/admin/dorfpflege/aufgaben/999999/erledigt", sitzung); w.Code != http.StatusNotFound {
+	if w := hole(t, h, "/admin/mithelfen/aufgaben/999999/erledigt", sitzung); w.Code != http.StatusNotFound {
 		t.Errorf("unbekannte Aufgabe: %d, erwartet 404", w.Code)
 	}
 }

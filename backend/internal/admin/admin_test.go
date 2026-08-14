@@ -79,18 +79,18 @@ func TestStartseiteUndAnmeldung(t *testing.T) {
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "/admin/login") {
 		t.Fatalf("Anmeldeseite fehlt: %d", w.Code)
 	}
-	if strings.Contains(w.Body.String(), "/admin/dorfpflege/") {
+	if strings.Contains(w.Body.String(), "/admin/mithelfen/") {
 		t.Fatal("Verwaltung ist ohne Anmeldung sichtbar")
 	}
 
 	// Mit Session: Bereichsübersicht.
 	w = hole(t, h, "/admin/", sitzung)
-	if !strings.Contains(w.Body.String(), "/admin/dorfpflege/") {
-		t.Fatalf("Bereich Dorfpflege fehlt: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "/admin/mithelfen/") {
+		t.Fatalf("Bereich Mithelfen fehlt: %s", w.Body.String())
 	}
 
 	// Geschützte Seite ohne Session leitet auf die Anmeldung um.
-	w = hole(t, h, "/admin/dorfpflege/")
+	w = hole(t, h, "/admin/mithelfen/")
 	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/admin/" {
 		t.Fatalf("Schutz greift nicht: %d %s", w.Code, w.Header().Get("Location"))
 	}
@@ -100,7 +100,7 @@ func TestOrtAufgabeErledigungUndLoeschen(t *testing.T) {
 	_, h, d, sitzung := aufbau(t)
 
 	// Ort anlegen.
-	w := sende(t, h, "/admin/dorfpflege/orte/neu", url.Values{
+	w := sende(t, h, "/admin/mithelfen/orte/neu", url.Values{
 		"name": {"Teststelle"}, "art": {"beet"}, "beschreibung": {"aus dem Test"},
 		"lat": {"52,2115"}, "lon": {"9.8710"}, "aktiv": {"1"},
 	}, sitzung)
@@ -117,7 +117,7 @@ func TestOrtAufgabeErledigungUndLoeschen(t *testing.T) {
 	}
 
 	// Fehlerhafte Eingabe: Formular kommt mit Meldung zurück, nichts wird gespeichert.
-	w = sende(t, h, "/admin/dorfpflege/orte/neu", url.Values{
+	w = sende(t, h, "/admin/mithelfen/orte/neu", url.Values{
 		"name": {""}, "art": {"beet"}, "lat": {"52.2"}, "lon": {"9.8"},
 	}, sitzung)
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "formularfehler") {
@@ -125,7 +125,7 @@ func TestOrtAufgabeErledigungUndLoeschen(t *testing.T) {
 	}
 
 	// Aufgabe anlegen.
-	pfad := "/admin/dorfpflege/orte/" + strconv.FormatInt(ort.ID, 10)
+	pfad := "/admin/mithelfen/orte/" + strconv.FormatInt(ort.ID, 10)
 	w = sende(t, h, pfad+"/aufgaben/neu", url.Values{
 		"art": {"giessen"}, "liter": {"10"}, "intervall": {"7"}, "rot": {"14"}, "aktiv": {"1"},
 	}, sitzung)
@@ -144,7 +144,7 @@ func TestOrtAufgabeErledigungUndLoeschen(t *testing.T) {
 	}
 
 	// Erledigung melden → Status grün, Historie gefüllt.
-	w = sende(t, h, "/admin/dorfpflege/aufgaben/"+strconv.FormatInt(aufgaben[0].ID, 10)+"/erledigt",
+	w = sende(t, h, "/admin/mithelfen/aufgaben/"+strconv.FormatInt(aufgaben[0].ID, 10)+"/erledigt",
 		url.Values{"notiz": {"gegossen"}}, sitzung)
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("Erledigung: %d %s", w.Code, w.Body.String())
@@ -174,7 +174,7 @@ func TestOrtAufgabeErledigungUndLoeschen(t *testing.T) {
 func TestHitzefaktor(t *testing.T) {
 	_, h, d, sitzung := aufbau(t)
 
-	w := sende(t, h, "/admin/dorfpflege/einstellungen", url.Values{"hitzefaktor": {"0,5"}}, sitzung)
+	w := sende(t, h, "/admin/mithelfen/einstellungen", url.Values{"hitzefaktor": {"0,5"}}, sitzung)
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("Speichern: %d %s", w.Code, w.Body.String())
 	}
@@ -182,7 +182,7 @@ func TestHitzefaktor(t *testing.T) {
 		t.Fatalf("Faktor nicht gespeichert: %v", f)
 	}
 
-	w = sende(t, h, "/admin/dorfpflege/einstellungen", url.Values{"hitzefaktor": {"99"}}, sitzung)
+	w = sende(t, h, "/admin/mithelfen/einstellungen", url.Values{"hitzefaktor": {"99"}}, sitzung)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("unsinniger Faktor wurde akzeptiert: %d", w.Code)
 	}
@@ -195,13 +195,13 @@ func TestSessionCookieIstManipulationssicher(t *testing.T) {
 	a, h, _, sitzung := aufbau(t)
 
 	gefaelscht := &http.Cookie{Name: cookieSession, Value: sitzung.Value + "x"}
-	w := hole(t, h, "/admin/dorfpflege/", gefaelscht)
+	w := hole(t, h, "/admin/mithelfen/", gefaelscht)
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("gefälschtes Cookie wurde akzeptiert: %d", w.Code)
 	}
 
 	abgelaufen, _ := a.signer.encode(cookieSession, session{Sub: "u1", Admin: true, Exp: time.Now().Add(-time.Minute).Unix()})
-	w = hole(t, h, "/admin/dorfpflege/", &http.Cookie{Name: cookieSession, Value: abgelaufen})
+	w = hole(t, h, "/admin/mithelfen/", &http.Cookie{Name: cookieSession, Value: abgelaufen})
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("abgelaufene Session wurde akzeptiert: %d", w.Code)
 	}

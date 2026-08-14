@@ -1,16 +1,16 @@
 {{/* Startseite der Verwaltung: die Bereiche der Dorf-App als Kacheln.
-     Aktuell nur „Dorfpflege“; weitere Bereiche kommen einfach daneben. */}}
+     Den Anfang macht „Mithelfen“; weitere Bereiche kommen einfach daneben. */}}
 {{define "seite"}}
 <h1 class="text-2xl font-bold" id="seitentitel">Verwaltung</h1>
 <p class="mt-1 text-base-content/70">Wähle einen Bereich der Dorf-App.</p>
 
 <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-  <div class="card bg-base-100 shadow-sm" id="bereich-dorfpflege">
+  <div class="card bg-base-100 shadow-sm" id="bereich-mithelfen">
     <div class="card-body">
-      <h2 class="card-title">🌻 Dorfpflege</h2>
-      <p class="text-base-content/70">Blumenkästen und Beete, Gieß- und Jätpläne, Ampel-Status und Erledigungen.</p>
+      <h2 class="card-title">🌻 Mithelfen</h2>
+      <p class="text-base-content/70">Was gerade im Dorf ansteht: Blumenkästen und Beete, Gieß- und Jätpläne, Ampel-Status und Erledigungen.</p>
       <div class="card-actions justify-end">
-        <a class="btn btn-primary btn-sm" href="/admin/dorfpflege/">Öffnen</a>
+        <a class="btn btn-primary btn-sm" href="/admin/mithelfen/">Öffnen</a>
       </div>
     </div>
   </div>

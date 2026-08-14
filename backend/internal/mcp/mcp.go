@@ -120,8 +120,9 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request, u auth.User)
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "dorf-app", "version": "0.1.0"},
-			"instructions": "Verwaltung der Dorfpflege in Rössing: Orte (Blumenkästen, Beete) " +
-				"mit Pflegeaufgaben (Gießen, Jäten) und Ampel-Status (green/yellow/red).",
+			"instructions": "Verwaltung des Bereichs „Mithelfen“ der Dorf-App Rössing — was " +
+				"gerade im Dorf ansteht: Orte (Blumenkästen, Beete) mit Pflegeaufgaben " +
+				"(Gießen, Jäten) und Ampel-Status (green/yellow/red).",
 		}
 	case "ping":
 		resp.Result = map[string]any{}
@@ -313,7 +314,7 @@ func (s *Server) registerTools() {
 		},
 		{
 			Name: "rangliste",
-			Description: "Rangliste der Dorfpflege: wer hat im Zeitraum wie viele Erledigungen " +
+			Description: "Rangliste des Mithelfens: wer hat im Zeitraum wie viele Erledigungen " +
 				"(je Aufgabenart) und wie viele Liter geschafft, samt Gesamtsummen des Dorfes " +
 				"und Auszeichnungen. Damit lassen sich Fragen wie „wer hat diesen Monat am " +
 				"meisten gegossen?“ beantworten.",

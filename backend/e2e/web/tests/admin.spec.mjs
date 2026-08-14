@@ -16,10 +16,10 @@ test('Startseite antwortet und verlinkt Verwaltung und App', async ({ page }) =>
 
   await page.goto('/');
   await expect(page.getByRole('link', { name: /Verwaltung/ })).toBeVisible();
-  // Die Dorf-App ist mehr als Dorfpflege — das muss die Startseite sagen,
+  // Die Dorf-App ist mehr als der Bereich „Mithelfen“ — das muss die Startseite sagen,
   // ohne Bereiche anzukündigen, die es noch nicht gibt.
   await expect(page.locator('body')).toContainText('Dorf-App Rössing');
-  await expect(page.locator('body')).toContainText('Dorfpflege');
+  await expect(page.locator('body')).toContainText('Mithelfen');
   await expect(page.locator('body')).toContainText('Weitere Bereiche');
 
   const css = await page.request.get('/admin/static/app.css');
@@ -31,6 +31,22 @@ test('Startseite antwortet und verlinkt Verwaltung und App', async ({ page }) =>
   expect(cssText).toContain('badge-warning');
 });
 
+// Der Bereich hieß bis August 2026 „Dorfpflege“ und lag unter /admin/dorfpflege/.
+// Verschickte Links und Lesezeichen müssen weiter ankommen.
+test('Alte /admin/dorfpflege/-Pfade leiten dauerhaft weiter', async ({ page }) => {
+  const faelle = [
+    ['/admin/dorfpflege', '/admin/mithelfen/'],
+    ['/admin/dorfpflege/', '/admin/mithelfen/'],
+    ['/admin/dorfpflege/orte/neu', '/admin/mithelfen/orte/neu'],
+    ['/admin/dorfpflege/rangliste?zeitraum=gesamt', '/admin/mithelfen/rangliste?zeitraum=gesamt'],
+  ];
+  for (const [alt, neu] of faelle) {
+    const antwort = await page.request.get(alt, { maxRedirects: 0 });
+    expect(antwort.status(), alt).toBe(308);
+    expect(antwort.headers()['location'], alt).toBe(neu);
+  }
+});
+
 test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor, Löschen', async ({ page }) => {
   const { admin } = state();
   const ortsname = `E2E-Kasten ${Date.now()}`;
@@ -40,7 +56,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     await anmelden(page, admin.userName, admin.password);
     await expect(page).toHaveURL(`${BASE_URL}/admin/`);
     await expect(page.locator('#seitentitel')).toHaveText('Verwaltung');
-    await expect(page.locator('#bereich-dorfpflege')).toBeVisible();
+    await expect(page.locator('#bereich-mithelfen')).toBeVisible();
     await expect(page.locator('#angemeldet-als')).toContainText(admin.userName);
     // Kein Token im Browser — die Sitzung hängt an einem HttpOnly-Cookie.
     expect(await page.evaluate(() => sessionStorage.length + localStorage.length)).toBe(0);
@@ -51,10 +67,10 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     expect(sitzung.sameSite).toBe('Lax');
   });
 
-  await test.step('Echter Seitenwechsel in den Bereich Dorfpflege', async () => {
-    await page.locator('#bereich-dorfpflege').getByRole('link', { name: 'Öffnen' }).click();
-    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/`);
-    await expect(page.locator('#seitentitel')).toHaveText('Dorfpflege');
+  await test.step('Echter Seitenwechsel in den Bereich Mithelfen', async () => {
+    await page.locator('#bereich-mithelfen').getByRole('link', { name: 'Öffnen' }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/`);
+    await expect(page.locator('#seitentitel')).toHaveText('Mithelfen');
     await expect(page.locator('#orte-tabelle')).toBeVisible();
     await expect(page.getByText('Unter den Eichen — Kasten 1')).toBeVisible();
   });
@@ -70,7 +86,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
 
   await test.step('Ort über eine eigene Seite anlegen', async () => {
     await page.locator('#neuer-ort').click();
-    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/orte/neu`);
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/orte/neu`);
     await page.locator('#feld-name').fill(ortsname);
     await page.locator('#feld-art').selectOption('beet');
     await page.locator('#feld-beschreibung').fill('vom Browser-E2E angelegt');
@@ -79,7 +95,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     await page.locator('#ort-speichern').click();
 
     // Post/Redirect/Get: eigene Detailseite mit eigener URL.
-    await expect(page).toHaveURL(/\/admin\/dorfpflege\/orte\/\d+$/);
+    await expect(page).toHaveURL(/\/admin\/mithelfen\/orte\/\d+$/);
     ortURL = page.url();
     await expect(page.locator('#meldung')).toHaveAttribute('data-art', 'success');
     await expect(page.locator('#seitentitel')).toHaveText(ortsname);
@@ -87,7 +103,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
   });
 
   await test.step('Der neue Ort steht in Liste und Karte', async () => {
-    await page.goto('/admin/dorfpflege/');
+    await page.goto('/admin/mithelfen/');
     await expect(page.locator('#orte-tabelle tbody tr')).toHaveCount(orteVorher + 1);
     await expect(page.locator('#orte-tabelle').getByText(ortsname)).toBeVisible();
     await expect(page.locator('#karte')).toHaveAttribute('data-markers', String(orteVorher + 1));
@@ -101,7 +117,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     await page.goto(ortURL);
     await expect(page.locator('#keine-aufgaben')).toBeVisible();
     await page.locator('#neue-aufgabe').click();
-    await expect(page).toHaveURL(/\/admin\/dorfpflege\/orte\/\d+\/aufgaben\/neu$/);
+    await expect(page).toHaveURL(/\/admin\/mithelfen\/orte\/\d+\/aufgaben\/neu$/);
     await page.locator('#feld-art').selectOption('giessen');
     await page.locator('#feld-liter').fill('10');
     await page.locator('#feld-intervall').fill('7');
@@ -115,7 +131,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
 
   await test.step('Fehlerhafte Aufgabe wird auf der Seite abgewiesen', async () => {
     await page.locator('.aufgabe-bearbeiten').first().click();
-    await expect(page).toHaveURL(/\/admin\/dorfpflege\/aufgaben\/\d+$/);
+    await expect(page).toHaveURL(/\/admin\/mithelfen\/aufgaben\/\d+$/);
     await page.locator('#feld-rot').fill('3'); // kleiner als das Intervall
     await page.locator('#aufgabe-speichern').click();
     await expect(page.locator('#formularfehler')).toContainText('redAfterDays');
@@ -127,7 +143,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
   await test.step('Erledigung melden fragt auf einer eigenen Seite nach', async () => {
     const aufgabe = page.locator('[data-aufgabe-id]').first();
     await aufgabe.locator('.erledigt-melden').click();
-    await expect(page).toHaveURL(/\/admin\/dorfpflege\/aufgaben\/\d+\/erledigt$/);
+    await expect(page).toHaveURL(/\/admin\/mithelfen\/aufgaben\/\d+\/erledigt$/);
     await expect(page.locator('#seitentitel')).toContainText('Erledigt melden');
     await expect(page.locator('body')).toContainText(ortsname);
     // Abbrechen meldet nichts.
@@ -180,9 +196,9 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
   });
 
   await test.step('Rangliste zeigt die Erledigung und lässt den Zeitraum umschalten', async () => {
-    await page.goto('/admin/dorfpflege/');
+    await page.goto('/admin/mithelfen/');
     await page.locator('#zur-rangliste').click();
-    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/rangliste`);
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/rangliste`);
     await expect(page.locator('#seitentitel')).toHaveText('Rangliste');
     await expect(page.locator('#rangliste')).toHaveAttribute('data-zeitraum', 'saison');
     await expect(page.locator('#rangliste-gesamt')).toBeVisible();
@@ -191,7 +207,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     // auf „gesamt", damit der Test unabhängig vom Kalender läuft (außerhalb
     // der Saison wäre die Standardliste zu Recht leer).
     await page.locator('#zeitraum-gesamt').click();
-    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/rangliste?zeitraum=gesamt`);
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/rangliste?zeitraum=gesamt`);
     await expect(page.locator('#rangliste')).toHaveAttribute('data-zeitraum', 'gesamt');
     await expect(page.locator('#rangliste-tabelle')).toContainText(admin.userName);
     const gesamt = Number(await page.locator('#rangliste-gesamt').getAttribute('data-erledigungen'));
@@ -216,22 +232,22 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
   });
 
   await test.step('Hitzefaktor auf eigener Seite setzen', async () => {
-    await page.goto('/admin/dorfpflege/');
+    await page.goto('/admin/mithelfen/');
     await page.locator('#zu-einstellungen').click();
-    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/einstellungen`);
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/einstellungen`);
     await page.locator('#feld-hitzefaktor').fill('0.5');
     await page.locator('#hitzefaktor-speichern').click();
-    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/einstellungen`);
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/einstellungen`);
     await expect(page.locator('#feld-hitzefaktor')).toHaveValue('0.5');
 
-    await page.goto('/admin/dorfpflege/');
+    await page.goto('/admin/mithelfen/');
     await expect(page.locator('#anzeige-hitzefaktor')).toHaveText('0.5');
   });
 
   await test.step('Löschen läuft über eine Bestätigungsseite, kein Popup', async () => {
     await page.goto(ortURL);
     await page.locator('#ort-loeschen').click();
-    await expect(page).toHaveURL(/\/admin\/dorfpflege\/orte\/\d+\/loeschen$/);
+    await expect(page).toHaveURL(/\/admin\/mithelfen\/orte\/\d+\/loeschen$/);
     await expect(page.locator('#bestaetigen-text')).toContainText(ortsname);
 
     // Abbrechen führt zurück, ohne zu löschen.
@@ -240,7 +256,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
 
     await page.locator('#ort-loeschen').click();
     await page.locator('#loeschen-bestaetigen').click();
-    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/`);
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/`);
     await expect(page.locator('#orte-tabelle').getByText(ortsname)).toHaveCount(0);
     await expect(page.locator('#orte-tabelle tbody tr')).toHaveCount(orteVorher);
   });
@@ -250,7 +266,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     // Wohin die Rössing-ID nach dem Logout schickt, ist ihre Sache — wichtig
     // ist nur, dass unsere Sitzung weg ist.
     await page.waitForLoadState('domcontentloaded');
-    await page.goto('/admin/dorfpflege/');
+    await page.goto('/admin/mithelfen/');
     await expect(page).toHaveURL(`${BASE_URL}/admin/`);
     await expect(page.locator('#anmelden')).toBeVisible();
   });
@@ -266,7 +282,7 @@ test('Mitglied ohne Admin-Rolle bekommt keine Verwaltung', async ({ page }) => {
   expect(await page.context().cookies().then((cs) => cs.some((c) => c.name === 'dorf_admin_session'))).toBe(false);
 
   // Auch direkt angesteuerte Seiten bleiben verschlossen.
-  await page.goto('/admin/dorfpflege/orte/neu');
+  await page.goto('/admin/mithelfen/orte/neu');
   await expect(page).toHaveURL(`${BASE_URL}/admin/`);
   await expect(page.locator('#anmelden')).toBeVisible();
 });
@@ -287,11 +303,11 @@ test('Verwaltung funktioniert vollständig ohne JavaScript', async ({ browser })
     // Anmeldung: der Code-Tausch passiert im Backend, der Browser muss nichts können.
     await anmelden(page, admin.userName, admin.password);
     await expect(page).toHaveURL(`${BASE_URL}/admin/`);
-    await expect(page.locator('#bereich-dorfpflege')).toBeVisible();
+    await expect(page.locator('#bereich-mithelfen')).toBeVisible();
 
     // Navigation über echte Links.
-    await page.locator('#bereich-dorfpflege').getByRole('link', { name: 'Öffnen' }).click();
-    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/`);
+    await page.locator('#bereich-mithelfen').getByRole('link', { name: 'Öffnen' }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/`);
     await expect(page.locator('#orte-tabelle')).toBeVisible();
     // Ohne JavaScript bleibt die Karte leer, die Verwaltung aber bedienbar.
     await expect(page.locator('#karte canvas')).toHaveCount(0);
@@ -302,7 +318,7 @@ test('Verwaltung funktioniert vollständig ohne JavaScript', async ({ browser })
     await page.locator('#feld-lat').fill('52.2100');
     await page.locator('#feld-lon').fill('9.8690');
     await page.locator('#ort-speichern').click();
-    await expect(page).toHaveURL(/\/admin\/dorfpflege\/orte\/\d+$/);
+    await expect(page).toHaveURL(/\/admin\/mithelfen\/orte\/\d+$/);
     await expect(page.locator('#seitentitel')).toHaveText(ortsname);
     const ortURL = page.url();
 
@@ -317,7 +333,7 @@ test('Verwaltung funktioniert vollständig ohne JavaScript', async ({ browser })
     await expect(page.locator('#ort-status')).toHaveAttribute('data-status', 'green');
 
     // Rangliste ist auch ohne JavaScript vollständig bedienbar.
-    await page.goto('/admin/dorfpflege/rangliste?zeitraum=gesamt');
+    await page.goto('/admin/mithelfen/rangliste?zeitraum=gesamt');
     await expect(page.locator('#rangliste-tabelle')).toContainText(admin.userName);
     await page.locator('#zeitraum-monat').click();
     await expect(page.locator('#rangliste')).toHaveAttribute('data-zeitraum', 'monat');
@@ -331,7 +347,7 @@ test('Verwaltung funktioniert vollständig ohne JavaScript', async ({ browser })
     // Löschen über die Bestätigungsseite — ohne confirm() geht das auch ohne JS.
     await page.locator('#ort-loeschen').click();
     await page.locator('#loeschen-bestaetigen').click();
-    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfpflege/`);
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/`);
     await expect(page.locator('#orte-tabelle').getByText(ortsname)).toHaveCount(0);
   } finally {
     await kontext.close();
@@ -410,12 +426,12 @@ test('Verwaltung: Profil pflegen, Sichtbarkeit setzen, Mitgliederliste', async (
   await test.step('Die Rangliste nutzt den Nickname aus dem Profil', async () => {
     // Eigener Ort mit eigener Aufgabe: So hängt der Schritt an nichts, was
     // ein anderer Test angelegt, gemeldet oder gelöscht hat.
-    await page.goto('/admin/dorfpflege/orte/neu');
+    await page.goto('/admin/mithelfen/orte/neu');
     await page.locator('#feld-name').fill(`Profil-E2E ${Date.now()}`);
     await page.locator('#feld-lat').fill('52.2105');
     await page.locator('#feld-lon').fill('9.8695');
     await page.locator('#ort-speichern').click();
-    await expect(page).toHaveURL(/\/admin\/dorfpflege\/orte\/\d+$/);
+    await expect(page).toHaveURL(/\/admin\/mithelfen\/orte\/\d+$/);
     const ortURL = page.url();
 
     await page.locator('#neue-aufgabe').click();
@@ -431,7 +447,7 @@ test('Verwaltung: Profil pflegen, Sichtbarkeit setzen, Mitgliederliste', async (
     // Die Historie des Ortes zeigt den Nickname, nicht den Anmeldenamen.
     await expect(page.locator('#historie')).toContainText(nickname);
 
-    await page.goto('/admin/dorfpflege/rangliste?zeitraum=gesamt');
+    await page.goto('/admin/mithelfen/rangliste?zeitraum=gesamt');
     await expect(page.locator('#rangliste-tabelle')).toContainText(nickname);
 
     // Aufräumen: Der Ort war nur für diesen Test da.

@@ -6,7 +6,7 @@
 
 {{define "seite"}}
 <div class="breadcrumbs text-sm">
-  <ul><li><a href="/admin/dorfpflege/">Dorfpflege</a></li><li>{{.Data.Ort.Name}}</li></ul>
+  <ul><li><a href="/admin/mithelfen/">Mithelfen</a></li><li>{{.Data.Ort.Name}}</li></ul>
 </div>
 
 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -29,7 +29,7 @@
         <div class="mt-2 flex flex-wrap gap-2">
           <button type="submit" class="btn btn-primary" id="ort-speichern">Speichern</button>
           <a class="btn btn-error btn-outline" id="ort-loeschen"
-             href="/admin/dorfpflege/orte/{{.Data.Ort.ID}}/loeschen">Ort löschen</a>
+             href="/admin/mithelfen/orte/{{.Data.Ort.ID}}/loeschen">Ort löschen</a>
         </div>
       </form>
     </div>
@@ -50,7 +50,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-xl font-semibold">Aufgaben</h2>
       <a class="btn btn-primary btn-sm" id="neue-aufgabe"
-         href="/admin/dorfpflege/orte/{{.Data.Ort.ID}}/aufgaben/neu">Neue Aufgabe</a>
+         href="/admin/mithelfen/orte/{{.Data.Ort.ID}}/aufgaben/neu">Neue Aufgabe</a>
     </div>
 
     <div class="mt-2 flex flex-col gap-3" id="aufgaben" data-anzahl="{{len .Data.Ort.Tasks}}">
@@ -88,11 +88,11 @@
         <div class="mt-2 flex flex-wrap items-center gap-2">
           {{if and $.Data.Ort.Active .Active}}
           <a class="btn btn-success btn-sm erledigt-melden"
-             href="/admin/dorfpflege/aufgaben/{{.ID}}/erledigt">Erledigt melden</a>
+             href="/admin/mithelfen/aufgaben/{{.ID}}/erledigt">Erledigt melden</a>
           {{end}}
-          <a class="btn btn-ghost btn-sm aufgabe-bearbeiten" href="/admin/dorfpflege/aufgaben/{{.ID}}">Bearbeiten</a>
+          <a class="btn btn-ghost btn-sm aufgabe-bearbeiten" href="/admin/mithelfen/aufgaben/{{.ID}}">Bearbeiten</a>
           <a class="btn btn-ghost btn-sm text-error aufgabe-loeschen"
-             href="/admin/dorfpflege/aufgaben/{{.ID}}/loeschen">Löschen</a>
+             href="/admin/mithelfen/aufgaben/{{.ID}}/loeschen">Löschen</a>
         </div>
       </div>
       {{else}}
@@ -121,7 +121,7 @@
             <td>{{.Erledigung.Note}}</td>
             <td class="text-right">
               <a class="btn btn-ghost btn-xs text-error" data-zuruecknehmen="{{.Erledigung.ID}}"
-                 href="/admin/dorfpflege/erledigungen/{{.Erledigung.ID}}/zuruecknehmen">Zurücknehmen</a>
+                 href="/admin/mithelfen/erledigungen/{{.Erledigung.ID}}/zuruecknehmen">Zurücknehmen</a>
             </td>
           </tr>
           {{else}}

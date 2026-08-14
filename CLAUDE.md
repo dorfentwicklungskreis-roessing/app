@@ -21,7 +21,8 @@ Details: siehe `README.md`.
   `npm run build:css` erzeugt und **committet** (`static/app.css`, `go:embed`);
   die CI prüft auf Drift. JavaScript nur für die Karte: alles muss ohne JS
   bedienbar bleiben. Bereiche liegen unter eigenen Präfixen
-  (`/admin/dorfpflege/…`), damit weitere Bereiche danebenpassen.
+  (`/admin/mithelfen/…`), damit weitere Bereiche danebenpassen. Wird ein
+  Bereich umbenannt, bleibt der alte Pfad als 308-Weiterleitung bestehen.
 - **Android**: Version Catalog (`gradle/libs.versions.toml`) pflegen, keine
   neuen DI-Frameworks — manuelle DI über `AppContainer`. UI-Strings nach
   `res/values/strings.xml` (deutsch). Unit-Tests für ViewModels Pflicht.

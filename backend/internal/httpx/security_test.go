@@ -20,7 +20,7 @@ func kopfzeilen(t *testing.T, h http.Handler, pfad string) http.Header {
 
 func TestSicherheitsKopfzeilen(t *testing.T) {
 	h := SecurityHeaders(SecurityConfig{})(dummy())
-	kopf := kopfzeilen(t, h, "/admin/dorfpflege/")
+	kopf := kopfzeilen(t, h, "/admin/mithelfen/")
 
 	pflicht := map[string]string{
 		"X-Content-Type-Options": "nosniff",
@@ -145,16 +145,16 @@ func TestHerkunftsPruefung(t *testing.T) {
 		return w.Code
 	}
 
-	if code := post("/admin/dorfpflege/orte/neu", "https://app.example"); code != http.StatusOK {
+	if code := post("/admin/mithelfen/orte/neu", "https://app.example"); code != http.StatusOK {
 		t.Fatalf("eigene Herkunft abgelehnt: %d", code)
 	}
-	if code := post("/admin/dorfpflege/orte/neu", ""); code != http.StatusOK {
+	if code := post("/admin/mithelfen/orte/neu", ""); code != http.StatusOK {
 		t.Fatalf("Anfrage ohne Origin abgelehnt: %d", code)
 	}
-	if code := post("/admin/dorfpflege/orte/neu", "https://boese.example"); code != http.StatusForbidden {
+	if code := post("/admin/mithelfen/orte/neu", "https://boese.example"); code != http.StatusForbidden {
 		t.Fatalf("fremde Herkunft nicht abgewehrt: %d", code)
 	}
-	if code := post("/admin/dorfpflege/orte/neu", "https://app.example.boese.example"); code != http.StatusForbidden {
+	if code := post("/admin/mithelfen/orte/neu", "https://app.example.boese.example"); code != http.StatusForbidden {
 		t.Fatalf("Präfix-Trick nicht abgewehrt: %d", code)
 	}
 	// Token-authentifizierte Endpunkte bleiben unangetastet: sie tragen keine
@@ -166,7 +166,7 @@ func TestHerkunftsPruefung(t *testing.T) {
 		t.Fatalf("/oauth/register wurde blockiert: %d", code)
 	}
 	// Lesende Zugriffe sind nie betroffen.
-	r := httptest.NewRequest(http.MethodGet, "/admin/dorfpflege/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/admin/mithelfen/", nil)
 	r.Header.Set("Origin", "https://boese.example")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)

@@ -1,8 +1,8 @@
 {{define "seite"}}
 <div class="breadcrumbs text-sm">
   <ul>
-    <li><a href="/admin/dorfpflege/">Dorfpflege</a></li>
-    <li><a href="/admin/dorfpflege/orte/{{.Data.Ort.ID}}">{{.Data.Ort.Name}}</a></li>
+    <li><a href="/admin/mithelfen/">Mithelfen</a></li>
+    <li><a href="/admin/mithelfen/orte/{{.Data.Ort.ID}}">{{.Data.Ort.Name}}</a></li>
     <li>{{if .Data.Neu}}Neue Aufgabe{{else}}Aufgabe bearbeiten{{end}}</li>
   </ul>
 </div>
@@ -56,10 +56,10 @@
         <button type="submit" class="btn btn-primary" id="aufgabe-speichern">
           {{if .Data.Neu}}Aufgabe anlegen{{else}}Speichern{{end}}
         </button>
-        <a class="btn btn-ghost" href="/admin/dorfpflege/orte/{{.Data.Ort.ID}}">Abbrechen</a>
+        <a class="btn btn-ghost" href="/admin/mithelfen/orte/{{.Data.Ort.ID}}">Abbrechen</a>
         {{if not .Data.Neu}}
           <a class="btn btn-error btn-outline" id="aufgabe-loeschen"
-             href="/admin/dorfpflege/aufgaben/{{.Data.Aufgabe.ID}}/loeschen">Aufgabe löschen</a>
+             href="/admin/mithelfen/aufgaben/{{.Data.Aufgabe.ID}}/loeschen">Aufgabe löschen</a>
         {{end}}
       </div>
     </form>

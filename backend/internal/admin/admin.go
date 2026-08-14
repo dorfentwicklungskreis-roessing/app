@@ -10,7 +10,7 @@
 // HttpOnly-Session-Cookie.
 //
 // Die Verwaltung ist in Bereiche gegliedert: /admin/ zeigt die Bereiche,
-// der Bereich Dorfpflege liegt unter /admin/dorfpflege/. Weitere Bereiche
+// der Bereich „Mithelfen“ liegt unter /admin/mithelfen/. Weitere Bereiche
 // (z.B. Dorfladen RNah) lassen sich danebensetzen, ohne URLs umzubauen.
 package admin
 
@@ -117,7 +117,7 @@ func (a *App) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/login", a.handleLogin)
 	mux.HandleFunc("POST /admin/logout", a.handleLogout)
 
-	a.registerDorfpflege(mux)
+	a.registerMithelfen(mux)
 	a.registerDorfbewohner(mux)
 }
 
@@ -135,7 +135,7 @@ func cacheAssets(next http.Handler) http.Handler {
 // Meldung) plus die seitenspezifischen Daten unter .Data.
 type view struct {
 	Title string
-	// Nav markiert den aktiven Navigationspunkt ("verwaltung", "dorfpflege", …).
+	// Nav markiert den aktiven Navigationspunkt ("verwaltung", "mithelfen", …).
 	Nav   string
 	User  *session
 	Flash *flash

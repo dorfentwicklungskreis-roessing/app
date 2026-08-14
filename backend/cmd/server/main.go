@@ -1,4 +1,4 @@
-// Dorf-App-Backend: REST-API, MCP-Server und Web-Admin für die Dorfpflege.
+// Dorf-App-Backend: REST-API, MCP-Server und Web-Admin der Dorf-App Rössing.
 //
 // Konfiguration per Env:
 //

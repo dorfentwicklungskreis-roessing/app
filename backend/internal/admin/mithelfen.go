@@ -15,20 +15,25 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
-// Bereich „Dorfpflege“: Orte (Blumenkästen, Beete …) mit Pflegeaufgaben.
-// Alles unter /admin/dorfpflege/, damit weitere Bereiche (z.B. Dorfladen RNah)
-// später danebengesetzt werden können.
-const pflegeBasis = "/admin/dorfpflege"
+// Bereich „Mithelfen“ — was gerade im Dorf ansteht: Orte (Blumenkästen,
+// Beete …) mit Pflegeaufgaben. Alles unter /admin/mithelfen/, damit weitere
+// Bereiche (z.B. Dorfladen RNah) später danebengesetzt werden können.
+const mithelfenBasis = "/admin/mithelfen"
+
+// alterMithelfenBasis ist der frühere Pfad des Bereichs (bis August 2026 hieß
+// er „Dorfpflege“). Er bleibt als dauerhafte Weiterleitung bestehen, damit
+// verschickte Links und Lesezeichen weiter funktionieren.
+const alterMithelfenBasis = "/admin/dorfpflege"
 
 // Kartenmitte: Rössing, Unter den Eichen.
 var kartenMitte = [2]float64{9.8700, 52.2110}
 
-func (a *App) registerDorfpflege(mux *http.ServeMux) {
+func (a *App) registerMithelfen(mux *http.ServeMux) {
 	get := func(pfad string, h func(http.ResponseWriter, *http.Request, session)) {
-		mux.HandleFunc("GET "+pflegeBasis+pfad, a.requireAdmin(h))
+		mux.HandleFunc("GET "+mithelfenBasis+pfad, a.requireAdmin(h))
 	}
 	post := func(pfad string, h func(http.ResponseWriter, *http.Request, session)) {
-		mux.HandleFunc("POST "+pflegeBasis+pfad, a.requireAdmin(h))
+		mux.HandleFunc("POST "+mithelfenBasis+pfad, a.requireAdmin(h))
 	}
 
 	get("/{$}", a.pflegeUebersicht)
@@ -56,6 +61,26 @@ func (a *App) registerDorfpflege(mux *http.ServeMux) {
 
 	get("/einstellungen", a.einstellungenFormular)
 	post("/einstellungen", a.einstellungenSpeichern)
+
+	registerAlteBereichsPfade(mux, alterMithelfenBasis, mithelfenBasis)
+}
+
+// registerAlteBereichsPfade leitet einen früheren Bereichspfad samt allem
+// darunter dauerhaft auf den neuen um. 308 statt 301, damit auch abgeschickte
+// Formulare ihre Methode und ihren Rumpf behalten. Die Weiterleitung greift
+// bewusst vor der Anmeldeprüfung: Ein alter Link soll nicht erst auf der
+// Anmeldeseite landen und dabei sein Ziel verlieren.
+func registerAlteBereichsPfade(mux *http.ServeMux, alt, neu string) {
+	mux.HandleFunc(alt, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, neu+"/", http.StatusPermanentRedirect)
+	})
+	mux.HandleFunc(alt+"/", func(w http.ResponseWriter, r *http.Request) {
+		ziel := neu + strings.TrimPrefix(r.URL.Path, alt)
+		if r.URL.RawQuery != "" {
+			ziel += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, ziel, http.StatusPermanentRedirect)
+	})
 }
 
 // --- Übersicht --------------------------------------------------------------
@@ -73,7 +98,7 @@ func (a *App) pflegeUebersicht(w http.ResponseWriter, r *http.Request, _ session
 		return
 	}
 	a.render(w, r, http.StatusOK, "pflege_uebersicht", view{
-		Title: "Dorfpflege", Nav: "dorfpflege",
+		Title: "Mithelfen", Nav: "mithelfen",
 		Data: uebersichtDaten{Orte: orte, Hitzefaktor: faktor, KarteJSON: karteJSON(orte)},
 	})
 }
@@ -132,8 +157,8 @@ func (a *App) ortNeuFormular(w http.ResponseWriter, r *http.Request, _ session) 
 
 func (a *App) zeigeOrtNeu(w http.ResponseWriter, r *http.Request, status int, p model.Place, fehler string) {
 	a.render(w, r, status, "pflege_ort_neu", view{
-		Title: "Neuer Ort", Nav: "dorfpflege",
-		Data: ortFormularDaten{Neu: true, Ort: p, Fehler: fehler, Ziel: pflegeBasis + "/orte/neu"},
+		Title: "Neuer Ort", Nav: "mithelfen",
+		Data: ortFormularDaten{Neu: true, Ort: p, Fehler: fehler, Ziel: mithelfenBasis + "/orte/neu"},
 	})
 }
 
@@ -150,7 +175,7 @@ func (a *App) ortAnlegen(w http.ResponseWriter, r *http.Request, _ session) {
 		return
 	}
 	a.setFlash(w, "success", "Ort "+zitat(neu.Name)+" wurde angelegt.")
-	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, neu.ID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", mithelfenBasis, neu.ID), http.StatusSeeOther)
 }
 
 func (a *App) ortDetail(w http.ResponseWriter, r *http.Request, _ session) {
@@ -210,11 +235,11 @@ func (a *App) zeigeOrt(w http.ResponseWriter, r *http.Request, status int, id in
 		formularOrt.ID = ort.ID
 	}
 	a.render(w, r, status, "pflege_ort", view{
-		Title: ort.Name, Nav: "dorfpflege",
+		Title: ort.Name, Nav: "mithelfen",
 		Data: ortDetailDaten{
 			Formular: ortFormularDaten{
 				Ort: formularOrt, Fehler: fehler,
-				Ziel:      fmt.Sprintf("%s/orte/%d", pflegeBasis, ort.ID),
+				Ziel:      fmt.Sprintf("%s/orte/%d", mithelfenBasis, ort.ID),
 				KarteJSON: karteJSON([]model.PlaceWithStatus{*ort}),
 			},
 			Ort:      *ort,
@@ -245,7 +270,7 @@ func (a *App) ortSpeichern(w http.ResponseWriter, r *http.Request, _ session) {
 		return
 	}
 	a.setFlash(w, "success", "Ort gespeichert.")
-	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, id), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", mithelfenBasis, id), http.StatusSeeOther)
 }
 
 // ortAusFormular liest und prüft die Formulareingaben. Der zurückgegebene
@@ -290,13 +315,13 @@ func (a *App) ortLoeschenFrage(w http.ResponseWriter, r *http.Request, _ session
 		return
 	}
 	a.render(w, r, http.StatusOK, "bestaetigen", view{
-		Title: "Ort löschen", Nav: "dorfpflege",
+		Title: "Ort löschen", Nav: "mithelfen",
 		Data: bestaetigenDaten{
 			Ueberschrift: "Ort löschen",
 			Text:         zitat(p.Name) + " wird dauerhaft gelöscht — samt aller Aufgaben und der kompletten Historie der Erledigungen.",
-			Aktion:       fmt.Sprintf("%s/orte/%d/loeschen", pflegeBasis, id),
+			Aktion:       fmt.Sprintf("%s/orte/%d/loeschen", mithelfenBasis, id),
 			Knopf:        "Ja, Ort löschen",
-			Zurueck:      fmt.Sprintf("%s/orte/%d", pflegeBasis, id),
+			Zurueck:      fmt.Sprintf("%s/orte/%d", mithelfenBasis, id),
 		},
 	})
 }
@@ -312,7 +337,7 @@ func (a *App) ortLoeschen(w http.ResponseWriter, r *http.Request, _ session) {
 		return
 	}
 	a.setFlash(w, "success", "Der Ort wurde gelöscht.")
-	http.Redirect(w, r, pflegeBasis+"/", http.StatusSeeOther)
+	http.Redirect(w, r, mithelfenBasis+"/", http.StatusSeeOther)
 }
 
 // --- Aufgaben ---------------------------------------------------------------
@@ -344,10 +369,10 @@ func (a *App) aufgabeNeuFormular(w http.ResponseWriter, r *http.Request, _ sessi
 
 func (a *App) zeigeAufgabeNeu(w http.ResponseWriter, r *http.Request, status int, p model.Place, t model.CareTask, liter, fehler string) {
 	a.render(w, r, status, "pflege_aufgabe", view{
-		Title: "Neue Aufgabe", Nav: "dorfpflege",
+		Title: "Neue Aufgabe", Nav: "mithelfen",
 		Data: aufgabeFormularDaten{
 			Neu: true, Ort: p, Aufgabe: t, LiterText: liter, Fehler: fehler,
-			Ziel: fmt.Sprintf("%s/orte/%d/aufgaben/neu", pflegeBasis, p.ID),
+			Ziel: fmt.Sprintf("%s/orte/%d/aufgaben/neu", mithelfenBasis, p.ID),
 		},
 	})
 }
@@ -375,7 +400,7 @@ func (a *App) aufgabeAnlegen(w http.ResponseWriter, r *http.Request, _ session) 
 		return
 	}
 	a.setFlash(w, "success", "Aufgabe "+zitat(aufgabenName(t))+" wurde angelegt.")
-	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", mithelfenBasis, p.ID), http.StatusSeeOther)
 }
 
 func (a *App) aufgabeFormular(w http.ResponseWriter, r *http.Request, _ session) {
@@ -392,10 +417,10 @@ func (a *App) aufgabeFormular(w http.ResponseWriter, r *http.Request, _ session)
 
 func (a *App) zeigeAufgabe(w http.ResponseWriter, r *http.Request, status int, p model.Place, t model.CareTask, liter, fehler string) {
 	a.render(w, r, status, "pflege_aufgabe", view{
-		Title: "Aufgabe bearbeiten", Nav: "dorfpflege",
+		Title: "Aufgabe bearbeiten", Nav: "mithelfen",
 		Data: aufgabeFormularDaten{
 			Ort: p, Aufgabe: t, LiterText: liter, Fehler: fehler,
-			Ziel: fmt.Sprintf("%s/aufgaben/%d", pflegeBasis, t.ID),
+			Ziel: fmt.Sprintf("%s/aufgaben/%d", mithelfenBasis, t.ID),
 		},
 	})
 }
@@ -417,7 +442,7 @@ func (a *App) aufgabeSpeichern(w http.ResponseWriter, r *http.Request, _ session
 		return
 	}
 	a.setFlash(w, "success", "Aufgabe gespeichert.")
-	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", mithelfenBasis, p.ID), http.StatusSeeOther)
 }
 
 func (a *App) aufgabeLoeschenFrage(w http.ResponseWriter, r *http.Request, _ session) {
@@ -426,13 +451,13 @@ func (a *App) aufgabeLoeschenFrage(w http.ResponseWriter, r *http.Request, _ ses
 		return
 	}
 	a.render(w, r, http.StatusOK, "bestaetigen", view{
-		Title: "Aufgabe löschen", Nav: "dorfpflege",
+		Title: "Aufgabe löschen", Nav: "mithelfen",
 		Data: bestaetigenDaten{
 			Ueberschrift: "Aufgabe löschen",
 			Text:         "Die Aufgabe " + zitat(aufgabenName(*t)) + " an " + zitat(p.Name) + " wird samt Historie gelöscht.",
-			Aktion:       fmt.Sprintf("%s/aufgaben/%d/loeschen", pflegeBasis, t.ID),
+			Aktion:       fmt.Sprintf("%s/aufgaben/%d/loeschen", mithelfenBasis, t.ID),
 			Knopf:        "Ja, Aufgabe löschen",
-			Zurueck:      fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID),
+			Zurueck:      fmt.Sprintf("%s/orte/%d", mithelfenBasis, p.ID),
 		},
 	})
 }
@@ -447,7 +472,7 @@ func (a *App) aufgabeLoeschen(w http.ResponseWriter, r *http.Request, _ session)
 		return
 	}
 	a.setFlash(w, "success", "Die Aufgabe wurde gelöscht.")
-	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", mithelfenBasis, p.ID), http.StatusSeeOther)
 }
 
 // erledigtFrage zeigt die Bestätigungsseite vor dem Melden. Ein Klick allein
@@ -471,12 +496,12 @@ func (a *App) zeigeErledigtFrage(w http.ResponseWriter, r *http.Request, status 
 		return
 	}
 	a.render(w, r, status, "pflege_erledigt", view{
-		Title: "Erledigt melden", Nav: "dorfpflege",
+		Title: "Erledigt melden", Nav: "mithelfen",
 		Data: erledigtDaten{
 			Ort: p, Aufgabe: t, LiterText: zahlOderLeer(t.Liters), Gesperrt: gesperrt, Fehler: fehler,
 			Stillgelegt: stilllegungsGrund(p, t),
-			Ziel:        fmt.Sprintf("%s/aufgaben/%d/erledigt", pflegeBasis, t.ID),
-			Zurueck:     fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID),
+			Ziel:        fmt.Sprintf("%s/aufgaben/%d/erledigt", mithelfenBasis, t.ID),
+			Zurueck:     fmt.Sprintf("%s/orte/%d", mithelfenBasis, p.ID),
 		},
 	})
 }
@@ -530,7 +555,7 @@ func (a *App) erledigtMelden(w http.ResponseWriter, r *http.Request, s session) 
 		meldung = "Nachtrag für " + zitat(aufgabenName(*t)) + " wurde eingetragen (Sperrfrist übergangen)."
 	}
 	a.setFlash(w, "success", meldung)
-	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", mithelfenBasis, p.ID), http.StatusSeeOther)
 }
 
 // --- Rücknahme einer Erledigung ---------------------------------------------
@@ -550,15 +575,15 @@ func (a *App) erledigungZuruecknehmenFrage(w http.ResponseWriter, r *http.Reques
 		c.UserName = namen.Resolve(c.UserSub, c.UserName)
 	}
 	a.render(w, r, http.StatusOK, "bestaetigen", view{
-		Title: "Erledigung zurücknehmen", Nav: "dorfpflege",
+		Title: "Erledigung zurücknehmen", Nav: "mithelfen",
 		Data: bestaetigenDaten{
 			Ueberschrift: "Erledigung zurücknehmen",
 			Text: "Die Meldung von " + c.UserName + " vom " + c.DoneAt.Local().Format("02.01.2006, 15:04") +
 				" für " + zitat(aufgabenName(*t)) + " an " + zitat(p.Name) + menge + " wird gelöscht. " +
 				"Der Ampel-Status rechnet sich danach neu.",
-			Aktion:  fmt.Sprintf("%s/erledigungen/%d/zuruecknehmen", pflegeBasis, c.ID),
+			Aktion:  fmt.Sprintf("%s/erledigungen/%d/zuruecknehmen", mithelfenBasis, c.ID),
 			Knopf:   "Ja, Meldung zurücknehmen",
-			Zurueck: fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID),
+			Zurueck: fmt.Sprintf("%s/orte/%d", mithelfenBasis, p.ID),
 		},
 	})
 }
@@ -573,7 +598,7 @@ func (a *App) erledigungZuruecknehmen(w http.ResponseWriter, r *http.Request, _ 
 		return
 	}
 	a.setFlash(w, "success", "Die Meldung wurde zurückgenommen.")
-	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", pflegeBasis, p.ID), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("%s/orte/%d", mithelfenBasis, p.ID), http.StatusSeeOther)
 }
 
 // erledigungMitAufgabe lädt Erledigung, Aufgabe und Ort; antwortet mit 404.
@@ -654,7 +679,7 @@ func (a *App) rangliste(w http.ResponseWriter, r *http.Request, s session) {
 	for _, z := range zeitraeume {
 		wahl = append(wahl, zeitraumWahl{
 			Wert: z.Wert, Name: z.Name,
-			URL:   pflegeBasis + "/rangliste?zeitraum=" + string(z.Wert),
+			URL:   mithelfenBasis + "/rangliste?zeitraum=" + string(z.Wert),
 			Aktiv: z.Wert == zeitraum,
 		})
 	}
@@ -664,7 +689,7 @@ func (a *App) rangliste(w http.ResponseWriter, r *http.Request, s session) {
 	}
 	// Bis ist die exklusive Obergrenze — angezeigt wird der letzte Tag davor.
 	a.render(w, r, http.StatusOK, "pflege_rangliste", view{
-		Title: "Rangliste", Nav: "dorfpflege",
+		Title: "Rangliste", Nav: "mithelfen",
 		Data: ranglisteDaten{
 			Zeitraum: zeitraum, Zeitraeume: wahl,
 			Podest: podest, Alle: liste.Entries, Summen: liste.Totals, Ich: liste.Me,
@@ -743,7 +768,7 @@ func (a *App) einstellungenFormular(w http.ResponseWriter, r *http.Request, _ se
 		return
 	}
 	a.render(w, r, http.StatusOK, "pflege_einstellungen", view{
-		Title: "Einstellungen", Nav: "dorfpflege",
+		Title: "Einstellungen", Nav: "mithelfen",
 		Data: einstellungenDaten{Hitzefaktor: zahl(f)},
 	})
 }
@@ -753,7 +778,7 @@ func (a *App) einstellungenSpeichern(w http.ResponseWriter, r *http.Request, _ s
 	f, err := formularZahl(r, "hitzefaktor")
 	if err != nil || f <= 0 || f > 4 {
 		a.render(w, r, http.StatusBadRequest, "pflege_einstellungen", view{
-			Title: "Einstellungen", Nav: "dorfpflege",
+			Title: "Einstellungen", Nav: "mithelfen",
 			Data: einstellungenDaten{Hitzefaktor: roh, Fehler: "Der Hitzefaktor muss eine Zahl größer 0 und höchstens 4 sein."},
 		})
 		return
@@ -763,7 +788,7 @@ func (a *App) einstellungenSpeichern(w http.ResponseWriter, r *http.Request, _ s
 		return
 	}
 	a.setFlash(w, "success", "Hitzefaktor auf "+zahl(f)+" gesetzt.")
-	http.Redirect(w, r, pflegeBasis+"/einstellungen", http.StatusSeeOther)
+	http.Redirect(w, r, mithelfenBasis+"/einstellungen", http.StatusSeeOther)
 }
 
 // --- Kleinkram --------------------------------------------------------------

@@ -52,7 +52,7 @@ func TestRanglisteSeite(t *testing.T) {
 	melde(t, d, task.ID, "erna", "Erna", mai(18, 9), 10)
 	melde(t, d, task.ID, "karl", "Karl", mai(25, 9), 5)
 
-	w := hole(t, h, "/admin/dorfpflege/rangliste", sitzung)
+	w := hole(t, h, "/admin/mithelfen/rangliste", sitzung)
 	if w.Code != http.StatusOK {
 		t.Fatalf("Rangliste: %d %s", w.Code, w.Body.String())
 	}
@@ -76,7 +76,7 @@ func TestRanglisteSeite(t *testing.T) {
 	}
 
 	// Zeitraum per Query umschalten — echte Seitenwechsel, kein JavaScript.
-	w = hole(t, h, "/admin/dorfpflege/rangliste?zeitraum=woche", sitzung)
+	w = hole(t, h, "/admin/mithelfen/rangliste?zeitraum=woche", sitzung)
 	if w.Code != http.StatusOK {
 		t.Fatalf("Woche: %d", w.Code)
 	}
@@ -92,17 +92,17 @@ func TestRanglisteSeite(t *testing.T) {
 	}
 
 	// Unbekannter Zeitraum wird abgewiesen.
-	if w := hole(t, h, "/admin/dorfpflege/rangliste?zeitraum=jahrzehnt", sitzung); w.Code != http.StatusBadRequest {
+	if w := hole(t, h, "/admin/mithelfen/rangliste?zeitraum=jahrzehnt", sitzung); w.Code != http.StatusBadRequest {
 		t.Errorf("unbekannter Zeitraum: %d, erwartet 400", w.Code)
 	}
 
 	// Ohne Anmeldung ist die Seite verschlossen.
-	if w := hole(t, h, "/admin/dorfpflege/rangliste"); w.Code != http.StatusSeeOther {
+	if w := hole(t, h, "/admin/mithelfen/rangliste"); w.Code != http.StatusSeeOther {
 		t.Errorf("ohne Session: %d, erwartet Weiterleitung", w.Code)
 	}
 
 	// Im Menü ist die Rangliste verlinkt.
-	if seite := hole(t, h, "/admin/dorfpflege/", sitzung).Body.String(); !strings.Contains(seite, "/admin/dorfpflege/rangliste") {
+	if seite := hole(t, h, "/admin/mithelfen/", sitzung).Body.String(); !strings.Contains(seite, "/admin/mithelfen/rangliste") {
 		t.Error("Rangliste ist im Menü nicht verlinkt")
 	}
 }

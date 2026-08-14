@@ -7,13 +7,13 @@
 {{define "seite"}}
 <div class="flex flex-wrap items-center justify-between gap-3">
   <div>
-    <h1 class="text-2xl font-bold" id="seitentitel">Dorfpflege</h1>
-    <p class="text-base-content/70">Alle gepflegten Orte im Dorf mit ihrem Ampel-Status.</p>
+    <h1 class="text-2xl font-bold" id="seitentitel">Mithelfen</h1>
+    <p class="text-base-content/70">Was gerade im Dorf ansteht — alle Orte mit ihrem Ampel-Status.</p>
   </div>
   <div class="flex gap-2">
-    <a class="btn btn-primary" href="/admin/dorfpflege/orte/neu" id="neuer-ort">Neuer Ort</a>
-    <a class="btn btn-outline" href="/admin/dorfpflege/rangliste" id="zur-rangliste">Rangliste</a>
-    <a class="btn btn-outline" href="/admin/dorfpflege/einstellungen" id="zu-einstellungen">Einstellungen</a>
+    <a class="btn btn-primary" href="/admin/mithelfen/orte/neu" id="neuer-ort">Neuer Ort</a>
+    <a class="btn btn-outline" href="/admin/mithelfen/rangliste" id="zur-rangliste">Rangliste</a>
+    <a class="btn btn-outline" href="/admin/mithelfen/einstellungen" id="zu-einstellungen">Einstellungen</a>
   </div>
 </div>
 
@@ -50,7 +50,7 @@
           {{range .Data.Orte}}
           <tr data-ort-id="{{.ID}}" data-status="{{.Status}}">
             <td>
-              <a class="link link-hover font-medium" href="/admin/dorfpflege/orte/{{.ID}}">{{.Name}}</a>
+              <a class="link link-hover font-medium" href="/admin/mithelfen/orte/{{.ID}}">{{.Name}}</a>
               {{if .Description}}<div class="text-sm text-base-content/60">{{.Description}}</div>{{end}}
               {{if not .Active}}<span class="badge badge-ghost badge-sm">inaktiv</span>{{end}}
             </td>
@@ -68,7 +68,7 @@
               {{end}}
             </td>
             <td class="text-right">
-              <a class="btn btn-ghost btn-sm" href="/admin/dorfpflege/orte/{{.ID}}">Öffnen</a>
+              <a class="btn btn-ghost btn-sm" href="/admin/mithelfen/orte/{{.ID}}">Öffnen</a>
             </td>
           </tr>
           {{else}}

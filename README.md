@@ -33,7 +33,8 @@ Anfang.
     (JS nur für die Karte). Anmeldung: OIDC Authorization Code + PKCE
     **serverseitig** — im Browser liegt nur ein signiertes, HttpOnly-Cookie.
     Aufbau nach Bereichen: `/admin/` listet die Bereiche der Dorf-App,
-    die Dorfpflege liegt unter `/admin/dorfpflege/…`
+    „Mithelfen" liegt unter `/admin/mithelfen/…` (der frühere Pfad
+    `/admin/dorfpflege/…` leitet dauerhaft per 308 dorthin um)
   - SQLite im WAL-Modus auf einem PVC (`/data/dorfapp.sqlite`)
 - **Domänenmodell**: Orte (`blumenkasten`, `beet`, `sonstiges`) haben
   Pflegeaufgaben (`giessen` mit Litern, `jaeten`, `sonstiges`), je mit
@@ -47,7 +48,7 @@ Anfang.
   `DELETE /api/v1/completions/{id}` zurück — erlaubt dem Melder und Admins.
   In der App gibt es dazu den Reiter „Rangliste" im Bereich „Mithelfen"; gemeldet wird erst nach einer
   Rückfrage (Ort und Menge), damit ein Fehlklick nichts einträgt. In der
-  Verwaltung liegt beides unter `/admin/dorfpflege/rangliste` bzw. als
+  Verwaltung liegt beides unter `/admin/mithelfen/rangliste` bzw. als
   eigene Bestätigungsseite in der Historie eines Ortes.
 - **Profile**: Jede Person pflegt in der App unter „Mein Profil" ihren
   Anzeigenamen, einen Nickname für die Rangliste, Telefon, E-Mail und eine

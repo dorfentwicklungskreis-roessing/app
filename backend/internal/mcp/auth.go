@@ -41,7 +41,7 @@ func (s *Server) registerWellKnown(mux *http.ServeMux) {
 		"authorization_servers":    []string{s.Resource},
 		"bearer_methods_supported": []string{"header"},
 		"scopes_supported":         []string{"openid", "profile", "email"},
-		"resource_name":            "Dorfpflege Rössing (MCP)",
+		"resource_name":            "Dorf-App Rössing (MCP)",
 	}
 	resourceHandler := func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, resourceMeta)

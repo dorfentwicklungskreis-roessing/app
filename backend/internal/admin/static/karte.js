@@ -117,7 +117,7 @@
         ? karte.queryRenderedFeatures(e.point, { layers: ["orte-punkte"] })
         : [];
       if (treffer.length && !waehlbar) {
-        window.location.href = "/admin/dorfpflege/orte/" + treffer[0].properties.id;
+        window.location.href = "/admin/mithelfen/orte/" + treffer[0].properties.id;
         return;
       }
       if (waehlbar) {

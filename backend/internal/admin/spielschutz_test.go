@@ -16,8 +16,8 @@ import (
 func TestSpielschutzInDerVerwaltung(t *testing.T) {
 	_, h, d, sitzung := aufbau(t) // „jetzt" ist der 1. Juni 2026, 12:00 UTC
 	task := beispielPflege(t, d, time.Date(2026, time.May, 1, 8, 0, 0, 0, time.UTC))
-	ortPfad := fmt.Sprintf("/admin/dorfpflege/orte/%d", task.PlaceID)
-	erledigtPfad := fmt.Sprintf("/admin/dorfpflege/aufgaben/%d/erledigt", task.ID)
+	ortPfad := fmt.Sprintf("/admin/mithelfen/orte/%d", task.PlaceID)
+	erledigtPfad := fmt.Sprintf("/admin/mithelfen/aufgaben/%d/erledigt", task.ID)
 
 	// Erna hat vor zwei Stunden gegossen; die Sperre läuft (7 Tage Intervall
 	// → 3,5 Tage). Wieder möglich am 5. Juni um 00:00 Ortszeit.
@@ -82,13 +82,13 @@ func TestBestaetigungOhneSperre(t *testing.T) {
 	_, h, d, sitzung := aufbau(t)
 	task := beispielPflege(t, d, time.Date(2026, time.May, 1, 8, 0, 0, 0, time.UTC))
 
-	seite := hole(t, h, fmt.Sprintf("/admin/dorfpflege/aufgaben/%d/erledigt", task.ID), sitzung).Body.String()
+	seite := hole(t, h, fmt.Sprintf("/admin/mithelfen/aufgaben/%d/erledigt", task.ID), sitzung).Body.String()
 	for _, darfNicht := range []string{"erledigt-gesperrt", "feld-uebergehen"} {
 		if strings.Contains(seite, darfNicht) {
 			t.Errorf("unnötiger Hinweis %q auf der Bestätigungsseite", darfNicht)
 		}
 	}
-	if seite := hole(t, h, fmt.Sprintf("/admin/dorfpflege/orte/%d", task.PlaceID), sitzung).Body.String(); strings.Contains(seite, "Bereits erledigt") {
+	if seite := hole(t, h, fmt.Sprintf("/admin/mithelfen/orte/%d", task.PlaceID), sitzung).Body.String(); strings.Contains(seite, "Bereits erledigt") {
 		t.Errorf("Ortsseite meldet eine Sperre, obwohl noch nie gemeldet wurde")
 	}
 }
@@ -103,7 +103,7 @@ func TestAnzeigeInOrtszeit(t *testing.T) {
 	task := beispielPflege(t, d, time.Date(2026, time.May, 1, 8, 0, 0, 0, time.UTC))
 	melde(t, d, task.ID, "erna", "Erna", time.Date(2026, time.June, 1, 10, 0, 0, 0, time.UTC), 10)
 
-	seite := hole(t, h, fmt.Sprintf("/admin/dorfpflege/orte/%d", task.PlaceID), sitzung).Body.String()
+	seite := hole(t, h, fmt.Sprintf("/admin/mithelfen/orte/%d", task.PlaceID), sitzung).Body.String()
 	// 10:00 UTC ist im Sommer 12:00 in Rössing.
 	if !strings.Contains(seite, "01.06.2026, 12:00") {
 		t.Errorf("Historie zeigt keine Ortszeit (erwartet 01.06.2026, 12:00): %s", seite)

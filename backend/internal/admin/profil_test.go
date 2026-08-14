@@ -150,14 +150,14 @@ func TestMitgliederNavigationVorhanden(t *testing.T) {
 func TestVerwaltungsHistorieNutztProfilnamen(t *testing.T) {
 	a, h, d, sitzung := aufbau(t)
 
-	w := sende(t, h, "/admin/dorfpflege/orte/neu", url.Values{
+	w := sende(t, h, "/admin/mithelfen/orte/neu", url.Values{
 		"name": {"Teststelle"}, "art": {"beet"}, "lat": {"52.2"}, "lon": {"9.8"}, "aktiv": {"1"},
 	}, sitzung)
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("Ort anlegen: %d", w.Code)
 	}
 	orte, _ := d.ListPlaces()
-	pfad := "/admin/dorfpflege/orte/" + itoa64(orte[0].ID)
+	pfad := "/admin/mithelfen/orte/" + itoa64(orte[0].ID)
 	w = sende(t, h, pfad+"/aufgaben/neu", url.Values{
 		"art": {"giessen"}, "liter": {"10"}, "intervall": {"7"}, "rot": {"14"}, "aktiv": {"1"},
 	}, sitzung)
@@ -165,7 +165,7 @@ func TestVerwaltungsHistorieNutztProfilnamen(t *testing.T) {
 		t.Fatalf("Aufgabe anlegen: %d", w.Code)
 	}
 	aufgaben, _ := d.ListTasks()
-	w = sende(t, h, "/admin/dorfpflege/aufgaben/"+itoa64(aufgaben[0].ID)+"/erledigt",
+	w = sende(t, h, "/admin/mithelfen/aufgaben/"+itoa64(aufgaben[0].ID)+"/erledigt",
 		url.Values{"notiz": {"gegossen"}}, sitzung)
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("Erledigung: %d", w.Code)

@@ -31,18 +31,18 @@ func TestRateLimitSchuetztSchreibendeZugriffe(t *testing.T) {
 
 	// Lesende Zugriffe zählen nicht mit — das Dorf darf beliebig oft schauen.
 	for i := 0; i < 20; i++ {
-		if w := anfrage(t, h, http.MethodGet, "/admin/dorfpflege/", "10.0.0.1"); w.Code != http.StatusOK {
+		if w := anfrage(t, h, http.MethodGet, "/admin/mithelfen/", "10.0.0.1"); w.Code != http.StatusOK {
 			t.Fatalf("GET %d wurde begrenzt: %d", i, w.Code)
 		}
 	}
 
 	// Schreibende Zugriffe: Burst erschöpft sich.
 	for i := 0; i < 3; i++ {
-		if w := anfrage(t, h, http.MethodPost, "/admin/dorfpflege/orte/neu", "10.0.0.1"); w.Code != http.StatusOK {
+		if w := anfrage(t, h, http.MethodPost, "/admin/mithelfen/orte/neu", "10.0.0.1"); w.Code != http.StatusOK {
 			t.Fatalf("POST %d wurde zu früh begrenzt: %d", i, w.Code)
 		}
 	}
-	w := anfrage(t, h, http.MethodPost, "/admin/dorfpflege/orte/neu", "10.0.0.1")
+	w := anfrage(t, h, http.MethodPost, "/admin/mithelfen/orte/neu", "10.0.0.1")
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("vierter POST hätte 429 sein müssen, war %d", w.Code)
 	}
@@ -55,13 +55,13 @@ func TestRateLimitSchuetztSchreibendeZugriffe(t *testing.T) {
 	}
 
 	// Eine andere IP hat ihren eigenen Eimer.
-	if w := anfrage(t, h, http.MethodPost, "/admin/dorfpflege/orte/neu", "10.0.0.2"); w.Code != http.StatusOK {
+	if w := anfrage(t, h, http.MethodPost, "/admin/mithelfen/orte/neu", "10.0.0.2"); w.Code != http.StatusOK {
 		t.Fatalf("fremde IP wurde mitbestraft: %d", w.Code)
 	}
 
 	// Nach genügend Zeit füllt sich der Eimer wieder.
 	jetzt = jetzt.Add(2 * time.Second)
-	if w := anfrage(t, h, http.MethodPost, "/admin/dorfpflege/orte/neu", "10.0.0.1"); w.Code != http.StatusOK {
+	if w := anfrage(t, h, http.MethodPost, "/admin/mithelfen/orte/neu", "10.0.0.1"); w.Code != http.StatusOK {
 		t.Fatalf("Eimer füllt sich nicht nach: %d", w.Code)
 	}
 }

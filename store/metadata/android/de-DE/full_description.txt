@@ -1,4 +1,4 @@
-Die Dorf-App ist die App für Rössing (Gemeinde Nordstemmen). Sie richtet sich an die Menschen im Dorf, die hier etwas tun — angefangen bei der Dorfpflege.
+Die Dorf-App ist die App für Rössing (Gemeinde Nordstemmen). Sie richtet sich an die Menschen im Dorf, die hier etwas tun — angefangen beim Mithelfen: was gerade im Dorf ansteht.
 
 WICHTIG VOR DEM INSTALLIEREN
 Die App lässt sich nur mit einer Rössing-ID benutzen. Das ist das Nutzerkonto des Dorfes, betrieben auf id.rössing.de. Ohne dieses Konto kommt man nicht über den Anmeldebildschirm hinaus. Wer im Dorf mitmachen und eine Rössing-ID bekommen möchte, spricht den Dorfentwicklungskreis an.
@@ -30,4 +30,4 @@ BETRIEB
 Server und Nutzerkonten betreibt der Dorfentwicklungskreis Rössing selbst. Es steckt kein Unternehmen dahinter und es wird nichts verkauft.
 
 AUSBLICK
-Die Dorfpflege ist der erste Bereich der App. Weitere Bereiche können folgen; versprochen wird hier nichts, was noch nicht da ist.
+„Mithelfen“ — was gerade im Dorf ansteht — ist der erste Bereich der App. Weitere Bereiche können folgen; versprochen wird hier nichts, was noch nicht da ist.

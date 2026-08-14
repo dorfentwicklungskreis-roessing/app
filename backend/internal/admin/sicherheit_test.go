@@ -12,7 +12,7 @@ import (
 func TestFehlerseiteOhneInterna(t *testing.T) {
 	a, _, _, _ := aufbau(t)
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/admin/dorfpflege/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/admin/mithelfen/", nil)
 	a.fail(w, r, http.StatusInternalServerError, errUnbekannteSeite("geheimes/detail.html"))
 
 	if w.Code != http.StatusInternalServerError {
@@ -109,15 +109,15 @@ func TestSitzungAbgelaufenUndManipuliert(t *testing.T) {
 func TestVerwaltungBrauchtAnmeldung(t *testing.T) {
 	_, h, _, _ := aufbau(t)
 	for _, pfad := range []string{
-		"/admin/dorfpflege/", "/admin/dorfpflege/orte/neu", "/admin/dorfpflege/rangliste",
-		"/admin/dorfpflege/einstellungen",
+		"/admin/mithelfen/", "/admin/mithelfen/orte/neu", "/admin/mithelfen/rangliste",
+		"/admin/mithelfen/einstellungen",
 	} {
 		w := hole(t, h, pfad)
 		if w.Code != http.StatusSeeOther {
 			t.Errorf("%s ohne Anmeldung: Status %d", pfad, w.Code)
 		}
 	}
-	for _, pfad := range []string{"/admin/dorfpflege/orte/neu", "/admin/dorfpflege/einstellungen"} {
+	for _, pfad := range []string{"/admin/mithelfen/orte/neu", "/admin/mithelfen/einstellungen"} {
 		w := sende(t, h, pfad, nil)
 		if w.Code != http.StatusSeeOther {
 			t.Errorf("POST %s ohne Anmeldung: Status %d", pfad, w.Code)

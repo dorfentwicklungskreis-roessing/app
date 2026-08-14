@@ -38,8 +38,8 @@ func stillgelegt(t *testing.T, d *db.DB, task model.CareTask, aufgabe, ort bool)
 func TestOrtsseiteOhneMeldenBeiInaktiverAufgabe(t *testing.T) {
 	_, h, d, sitzung := aufbau(t)
 	task := beispielPflege(t, d, time.Date(2026, time.May, 1, 8, 0, 0, 0, time.UTC))
-	ortPfad := fmt.Sprintf("/admin/dorfpflege/orte/%d", task.PlaceID)
-	melden := fmt.Sprintf("/admin/dorfpflege/aufgaben/%d/erledigt", task.ID)
+	ortPfad := fmt.Sprintf("/admin/mithelfen/orte/%d", task.PlaceID)
+	melden := fmt.Sprintf("/admin/mithelfen/aufgaben/%d/erledigt", task.ID)
 
 	// Solange alles aktiv ist, gibt es den Knopf.
 	if seite := hole(t, h, ortPfad, sitzung).Body.String(); !strings.Contains(seite, melden) {
@@ -55,7 +55,7 @@ func TestOrtsseiteOhneMeldenBeiInaktiverAufgabe(t *testing.T) {
 		t.Error("die Seite erklärt die Stilllegung nicht")
 	}
 	// Bearbeiten und Löschen bleiben erreichbar — sonst käme man nicht mehr ran.
-	if !strings.Contains(seite, fmt.Sprintf("/admin/dorfpflege/aufgaben/%d\"", task.ID)) {
+	if !strings.Contains(seite, fmt.Sprintf("/admin/mithelfen/aufgaben/%d\"", task.ID)) {
 		t.Error("stillgelegte Aufgabe lässt sich nicht mehr bearbeiten")
 	}
 }
@@ -66,8 +66,8 @@ func TestOrtsseiteOhneMeldenBeiInaktivemOrt(t *testing.T) {
 	task := beispielPflege(t, d, time.Date(2026, time.May, 1, 8, 0, 0, 0, time.UTC))
 	stillgelegt(t, d, task, false, true)
 
-	seite := hole(t, h, fmt.Sprintf("/admin/dorfpflege/orte/%d", task.PlaceID), sitzung).Body.String()
-	if strings.Contains(seite, fmt.Sprintf("/admin/dorfpflege/aufgaben/%d/erledigt", task.ID)) {
+	seite := hole(t, h, fmt.Sprintf("/admin/mithelfen/orte/%d", task.PlaceID), sitzung).Body.String()
+	if strings.Contains(seite, fmt.Sprintf("/admin/mithelfen/aufgaben/%d/erledigt", task.ID)) {
 		t.Error("stillgelegter Ort bietet weiterhin „Erledigt melden“ an")
 	}
 	if !strings.Contains(seite, "deaktiviert") {
@@ -80,7 +80,7 @@ func TestMeldeseiteBeiStilllegung(t *testing.T) {
 	_, h, d, sitzung := aufbau(t)
 	task := beispielPflege(t, d, time.Date(2026, time.May, 1, 8, 0, 0, 0, time.UTC))
 	stillgelegt(t, d, task, true, false)
-	pfad := fmt.Sprintf("/admin/dorfpflege/aufgaben/%d/erledigt", task.ID)
+	pfad := fmt.Sprintf("/admin/mithelfen/aufgaben/%d/erledigt", task.ID)
 
 	w := hole(t, h, pfad, sitzung)
 	seite := w.Body.String()
