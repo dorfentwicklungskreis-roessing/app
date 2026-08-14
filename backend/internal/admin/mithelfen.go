@@ -13,6 +13,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
 
 // Bereich „Mithelfen“ — was gerade im Dorf ansteht: Orte (Blumenkästen,
@@ -56,6 +57,9 @@ func (a *App) registerMithelfen(mux *http.ServeMux) {
 
 	get("/erledigungen/{id}/zuruecknehmen", a.erledigungZuruecknehmenFrage)
 	post("/erledigungen/{id}/zuruecknehmen", a.erledigungZuruecknehmen)
+
+	get("/vorgaenge/{id}/zusage-aufheben", a.zusageAufhebenFrage)
+	post("/vorgaenge/{id}/zusage-aufheben", a.zusageAufheben)
 
 	get("/rangliste", a.rangliste)
 
@@ -141,6 +145,9 @@ type ortDetailDaten struct {
 	Formular ortFormularDaten
 	Ort      model.PlaceWithStatus
 	Historie []historieEintrag
+	// Vergabe: Stand je Aufgabe (wer ist angemeldet, wer wurde gefragt,
+	// wer hat zugesagt). Schlüssel ist die Aufgaben-ID.
+	Vergabe map[int64]*vergabe.Stand
 }
 
 type historieEintrag struct {
@@ -229,6 +236,12 @@ func (a *App) zeigeOrt(w http.ResponseWriter, r *http.Request, status int, id in
 		return historie[i].Erledigung.DoneAt.After(historie[j].Erledigung.DoneAt)
 	})
 
+	staende, err := a.vergabeStaende(*ort)
+	if err != nil {
+		a.fail(w, r, http.StatusInternalServerError, err)
+		return
+	}
+
 	formularOrt := ort.Place
 	if entwurf != nil {
 		formularOrt = *entwurf
@@ -244,6 +257,7 @@ func (a *App) zeigeOrt(w http.ResponseWriter, r *http.Request, status int, id in
 			},
 			Ort:      *ort,
 			Historie: historie,
+			Vergabe:  staende,
 		},
 	})
 }
@@ -758,6 +772,7 @@ func aufgabeAusFormular(r *http.Request) (model.CareTask, string, api.TaskInput,
 
 type einstellungenDaten struct {
 	Hitzefaktor string
+	Vergabe     vergabeFormular
 	Fehler      string
 }
 
@@ -767,28 +782,65 @@ func (a *App) einstellungenFormular(w http.ResponseWriter, r *http.Request, _ se
 		a.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
+	regeln, err := a.db.AssignmentRules()
+	if err != nil {
+		a.fail(w, r, http.StatusInternalServerError, err)
+		return
+	}
 	a.render(w, r, http.StatusOK, "pflege_einstellungen", view{
 		Title: "Einstellungen", Nav: "mithelfen",
-		Data: einstellungenDaten{Hitzefaktor: zahl(f)},
+		Data: einstellungenDaten{Hitzefaktor: zahl(f), Vergabe: vergabeFormularVon(regeln)},
 	})
 }
 
+// einstellungenSpeichern nimmt Hitzefaktor und Vergabe-Regeln in einem Zug
+// entgegen. Wird etwas abgewiesen, bleibt gar nichts stehen — sonst wäre
+// nach einer Fehlermeldung die Hälfte gespeichert.
 func (a *App) einstellungenSpeichern(w http.ResponseWriter, r *http.Request, _ session) {
-	roh := strings.TrimSpace(r.FormValue("hitzefaktor"))
+	rohFaktor := strings.TrimSpace(r.FormValue("hitzefaktor"))
+	regeln, rohVergabe, vergabeAngegeben, regelFehler := regelnAusFormular(r)
+	if !vergabeAngegeben {
+		// Formular ohne Vergabe-Felder: gespeicherte Regeln behalten.
+		if vorhanden, err := a.db.AssignmentRules(); err == nil {
+			rohVergabe = vergabeFormularVon(vorhanden)
+		}
+	}
 	f, err := formularZahl(r, "hitzefaktor")
-	if err != nil || f <= 0 || f > 4 {
+
+	zurueckweisen := func(text string) {
 		a.render(w, r, http.StatusBadRequest, "pflege_einstellungen", view{
 			Title: "Einstellungen", Nav: "mithelfen",
-			Data: einstellungenDaten{Hitzefaktor: roh, Fehler: "Der Hitzefaktor muss eine Zahl größer 0 und höchstens 4 sein."},
+			Data: einstellungenDaten{Hitzefaktor: rohFaktor, Vergabe: rohVergabe, Fehler: text},
 		})
+	}
+	if err != nil || f <= 0 || f > 4 {
+		zurueckweisen("Der Hitzefaktor muss eine Zahl größer 0 und höchstens 4 sein.")
+		return
+	}
+	if vergabeAngegeben && regelFehler != nil {
+		zurueckweisen(grossAmAnfang(regelFehler.Error()) + ".")
 		return
 	}
 	if err := a.db.SetWateringFactor(f); err != nil {
 		a.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
-	a.setFlash(w, "success", "Hitzefaktor auf "+zahl(f)+" gesetzt.")
+	if vergabeAngegeben {
+		if err := a.db.SetAssignmentRules(regeln); err != nil {
+			a.fail(w, r, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	a.setFlash(w, "success", "Einstellungen gespeichert.")
 	http.Redirect(w, r, mithelfenBasis+"/einstellungen", http.StatusSeeOther)
+}
+
+// grossAmAnfang macht aus einer Fehlermeldung einen Satzanfang.
+func grossAmAnfang(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // --- Kleinkram --------------------------------------------------------------

@@ -119,6 +119,13 @@ type TaskWithStatus struct {
 	// LockedUntil: bis dahin greift der Spielschutz (siehe cooldown.go).
 	// Fehlt, wenn gerade gemeldet werden darf.
 	LockedUntil *time.Time `json:"lockedUntil,omitempty"`
+	// Assignment: laufender Vergabe-Vorgang (siehe internal/vergabe).
+	// Fehlt, solange niemand gefragt wurde.
+	Assignment *Assignment `json:"assignment,omitempty"`
+	// SignupCount: wie viele Personen sich hier zum Mithelfen angemeldet haben.
+	SignupCount int `json:"signupCount"`
+	// SignedUp: ob die abrufende Person selbst angemeldet ist.
+	SignedUp bool `json:"signedUp"`
 }
 
 // PlaceWithStatus ist die API-Sicht auf einen Ort inklusive Aufgaben.

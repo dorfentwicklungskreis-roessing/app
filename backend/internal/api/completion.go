@@ -2,12 +2,14 @@ package api
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
 
 // CompletionInput ist die Eingabe einer Erledigungs-Meldung (REST und MCP).
@@ -98,6 +100,7 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 		if err := d.InsertCompletion(&c); err != nil {
 			return nil, err
 		}
+		beendeVergabe(d, now, task.ID, u.Sub)
 		return &c, nil
 	}
 
@@ -117,7 +120,22 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 			RetryAfter: &frei,
 		}
 	}
+	beendeVergabe(d, now, task.ID, u.Sub)
 	return &c, nil
+}
+
+// beendeVergabe schließt einen laufenden Vergabe-Vorgang, sobald die Aufgabe
+// gemeldet ist — ganz gleich, wer gemeldet hat und ob es dazu eine Zusage
+// gab. Alle offenen Anfragen erlöschen damit sofort; niemand bekommt danach
+// noch eine Anfrage zu dieser Aufgabe.
+//
+// Scheitert das, bleibt die Erledigung trotzdem stehen: Sie ist das
+// Wichtige. Der nächste Takt des Zeitgebers räumt den Vorgang dann ab.
+func beendeVergabe(d *db.DB, now time.Time, taskID int64, melder string) {
+	e := vergabe.New(d, vergabe.Config{Now: func() time.Time { return now }})
+	if err := e.Beenden(taskID, model.EndDone, melder); err != nil {
+		slog.Warn("Vergabe: Vorgang konnte nicht beendet werden", "aufgabe", taskID, "err", err)
+	}
 }
 
 // TaskCooldown liefert die Sperrfrist einer Aufgabe mit der aktuellen

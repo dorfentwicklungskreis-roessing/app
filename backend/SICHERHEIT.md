@@ -215,8 +215,64 @@ funktioniert weiterhin (die alte Version ignoriert die Tabelle).
    den Hinweis „Das sehen andere" gut sichtbar über dem Formular, nicht im
    Kleingedruckten.
 
+## Vergabe der Pflegeaufgaben (Stand 14.08.2026)
+
+Wer sich zum Mithelfen anmeldet, wird von der App angesprochen, sobald an
+„seinem" Ort etwas fällig wird. Datenschutzseitig entstehen dabei drei neue
+Tabellen (`care_signups`, `care_assignments`, `care_notifications`) mit
+folgenden Angaben:
+
+| Angabe | Inhalt | freiwillig? |
+|---|---|---|
+| Anmeldung | Kennung, Ort, ggf. Aufgabenart, Zeitpunkt | **ja**, jederzeit widerrufbar |
+| Vorgang | Aufgabe, Stand, wer zugesagt hat und bis wann | folgt aus der Zusage |
+| Zustellung | Kennung, Anlass, Zeitpunkt, ob gelesen | folgt aus der Anmeldung |
+
+### Wer was sieht
+
+- **Angemeldet wird immer nur die eigene Person.** `POST
+  /api/v1/places/{id}/signup` mit fremder Kennung im Rumpf antwortet `403` —
+  auch für Admins (`internal/api/vergabe_test.go: TestKeineFremdeAnmeldung`).
+  Verwaltende können also nachsehen, wer mithilft, aber niemanden heimlich
+  eintragen.
+- **Namen der Angemeldeten sehen nur Verwaltende.** `GET
+  /api/v1/places/{id}/signups` ist admin-pflichtig
+  (`TestAnmeldungenSehenNurAdmins`); alle anderen bekommen in der Orts-Liste
+  ausschließlich die Anzahl (`signupCount`) und den eigenen Zustand
+  (`signedUp`).
+- **Sichtbar ist eine Zusage.** Wer eine Aufgabe übernimmt, erscheint für alle
+  Angemeldeten mit Namen und Frist („übernommen von … bis …") — das ist der
+  Zweck der Sache: Sonst gießen zwei Leute denselben Kasten. Der Name folgt
+  denselben Regeln wie in der Rangliste (`model.NameResolver`).
+- **Benachrichtigungen sind privat.** `GET /api/v1/me/notifications` liefert
+  ausschließlich die eigenen; fremde lassen sich weder lesen noch bestätigen
+  (`TestBenachrichtigungAbrufenUndBestaetigen`).
+- **Ruhezeiten** (Vorgabe 21–7 Uhr Ortszeit) sind kein Datenschutz, aber
+  Rücksicht: Zwischen diesen Zeiten wird nichts zugestellt.
+
+### Was daraus für Datenschutzerklärung und Play folgt
+
+1. **Datenschutzerklärung** (`store/datenschutz.md`) muss um die
+   Aufgaben-Vergabe ergänzt werden: dass eine freiwillige Anmeldung
+   gespeichert wird, dass daraus Anfragen entstehen (Zeitpunkt, Ort, Aufgabe,
+   ob gelesen), dass eine Zusage mit Namen und Frist für die übrigen
+   Angemeldeten sichtbar ist, und dass Abmelden jederzeit möglich ist. Die
+   Aufbewahrung folgt der Aufgabe: Vorgänge und Zustellungen hängen an der
+   Pflegeaufgabe und verschwinden mit ihr (`ON DELETE CASCADE`).
+2. **Play-Datensicherheit** braucht keine neue Kategorie: Es kommen keine
+   weiteren personenbezogenen Felder hinzu (nur Kennung, Ort, Zeitpunkte).
+   Die bestehende Angabe „App activity → Other actions" deckt die Anmeldung
+   und die Zusagen ab; als Zweck weiterhin „App functionality", keine
+   Weitergabe an Dritte.
+3. **Push kommt später.** Heute holt die App die Benachrichtigungen selbst ab
+   (`GET /api/v1/me/notifications`) — es ist kein Google-Dienst beteiligt und
+   nichts zu deklarieren. Sobald ein Push-Weg danebengesetzt wird (die
+   Schnittstelle `vergabe.Zusteller` ist dafür da), sind Datensicherheit und
+   Datenschutzerklärung erneut anzufassen.
+
 ## Wenn doch etwas klemmt
 
 Alle Riegel sind über die Umgebung steuerbar, ohne neues Image:
-`RATE_LIMIT=off`, `MAX_BODY_BYTES=…`, `BACKUP=off`. Die CSP ist bewusst *nicht*
+`RATE_LIMIT=off`, `MAX_BODY_BYTES=…`, `BACKUP=off`, `VERGABE=off` (dann wird
+niemand mehr von selbst gefragt). Die CSP ist bewusst *nicht*
 abschaltbar — sie gehört zum Auslieferungszustand der Seiten.

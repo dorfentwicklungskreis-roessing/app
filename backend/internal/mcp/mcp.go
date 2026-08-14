@@ -18,6 +18,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
 
 const protocolVersion = "2025-03-26"
@@ -122,7 +123,8 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request, u auth.User)
 			"serverInfo":      map[string]any{"name": "dorf-app", "version": "0.1.0"},
 			"instructions": "Verwaltung des Bereichs „Mithelfen“ der Dorf-App Rössing — was " +
 				"gerade im Dorf ansteht: Orte (Blumenkästen, Beete) mit Pflegeaufgaben " +
-				"(Gießen, Jäten) und Ampel-Status (green/yellow/red).",
+				"(Gießen, Jäten), Ampel-Status (green/yellow/red) und die Vergabe an die " +
+				"Angemeldeten (wer wurde gefragt, wer hat zugesagt).",
 		}
 	case "ping":
 		resp.Result = map[string]any{}
@@ -324,6 +326,22 @@ func (s *Server) registerTools() {
 				"limit": integer("Wie viele Plätze ausgeben (Standard 25)"),
 			}),
 			Handler: s.toolLeaderboard,
+		},
+		{
+			Name: "vergabe_stand",
+			Description: "Zeigt, wie die Vergabe einer Pflegeaufgabe steht: wer für den Ort " +
+				"angemeldet ist, wer wann gefragt wurde, wer zugesagt hat und bis wann. " +
+				"Die Aufgaben-IDs stehen in orte_liste.",
+			Schema:  obj([]string{"taskId"}, map[string]any{"taskId": integer("ID der Aufgabe")}),
+			Handler: s.toolAssignmentState,
+		},
+		{
+			Name: "zusage_aufheben",
+			Description: "Hebt die Zusage zu einer Pflegeaufgabe auf (z.B. wenn jemand krank " +
+				"geworden ist). Die betroffene Person bekommt einen Hinweis, und die " +
+				"Warteschlange fragt sofort weiter.",
+			Schema:  obj([]string{"taskId"}, map[string]any{"taskId": integer("ID der Aufgabe")}),
+			Handler: s.toolRevokeClaim,
 		},
 		{
 			Name: "hitzefaktor_setzen",
@@ -531,6 +549,41 @@ func (s *Server) toolLeaderboard(args json.RawMessage, u auth.User) (any, error)
 		return nil, err
 	}
 	return api.AssembleLeaderboard(s.DB, s.now(), period, in.Limit, u)
+}
+
+// vergabe liefert die Vergabe mit der Zeitquelle dieses Servers.
+func (s *Server) vergabe() *vergabe.Engine {
+	return vergabe.New(s.DB, vergabe.Config{Now: s.now})
+}
+
+func (s *Server) toolAssignmentState(args json.RawMessage, _ auth.User) (any, error) {
+	var in struct {
+		TaskID int64 `json:"taskId"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return nil, err
+	}
+	return s.vergabe().Stand(in.TaskID)
+}
+
+// toolRevokeClaim hebt die Zusage auf. Über MCP ist ohnehin nur die
+// Verwaltung unterwegs (siehe auth.go), deshalb immer als Admin.
+func (s *Server) toolRevokeClaim(args json.RawMessage, u auth.User) (any, error) {
+	var in struct {
+		TaskID int64 `json:"taskId"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return nil, err
+	}
+	e := s.vergabe()
+	stand, err := e.Stand(in.TaskID)
+	if err != nil {
+		return nil, err
+	}
+	if stand.Vorgang == nil || stand.Vorgang.ClaimedBy == "" {
+		return nil, fmt.Errorf("Für diese Aufgabe liegt gerade keine Zusage vor, die sich aufheben ließe")
+	}
+	return e.Zurueckgeben(stand.Vorgang.ID, u.Sub, true)
 }
 
 func (s *Server) toolSetFactor(args json.RawMessage, u auth.User) (any, error) {

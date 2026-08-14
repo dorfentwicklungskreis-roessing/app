@@ -244,6 +244,34 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     await expect(page.locator('#anzeige-hitzefaktor')).toHaveText('0.5');
   });
 
+  await test.step('Vergabe: Einstellungen setzen und Stand auf der Ortsseite sehen', async () => {
+    await page.goto('/admin/mithelfen/einstellungen');
+    await page.locator('#feld-abstand').fill('45');
+    await page.locator('#feld-zusagefrist').fill('18');
+    await page.locator('#feld-ruhe-von').fill('22');
+    await page.locator('#feld-ruhe-bis').fill('6');
+    await page.locator('#hitzefaktor-speichern').click();
+    await expect(page).toHaveURL(`${BASE_URL}/admin/mithelfen/einstellungen`);
+    await expect(page.locator('#feld-abstand')).toHaveValue('45');
+    await expect(page.locator('#feld-zusagefrist')).toHaveValue('18');
+    await expect(page.locator('#feld-ruhe-von')).toHaveValue('22');
+
+    // Unsinn wird mit Erklärung abgewiesen und nicht gespeichert.
+    await page.locator('#feld-abstand').fill('0');
+    await page.locator('#hitzefaktor-speichern').click();
+    await expect(page.locator('#formularfehler')).toBeVisible();
+    await page.goto('/admin/mithelfen/einstellungen');
+    await expect(page.locator('#feld-abstand')).toHaveValue('45');
+
+    // Die Ortsseite zeigt je Aufgabe, wie die Vergabe steht.
+    await page.goto(ortURL);
+    const vergabe = page.locator('[data-vergabe]').first();
+    await expect(vergabe).toBeVisible();
+    await expect(vergabe).toContainText('Vergabe');
+    await expect(vergabe).toContainText('Niemand angemeldet');
+    await expect(vergabe.locator('[data-kein-vorgang]')).toBeVisible();
+  });
+
   await test.step('Löschen läuft über eine Bestätigungsseite, kein Popup', async () => {
     await page.goto(ortURL);
     await page.locator('#ort-loeschen').click();

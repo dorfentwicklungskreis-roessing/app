@@ -45,6 +45,7 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 	api.HandleFunc("POST /api/v1/tasks/{id}/completions", s.handleCreateCompletion)
 	api.HandleFunc("DELETE /api/v1/completions/{id}", s.handleDeleteCompletion)
 	api.HandleFunc("GET /api/v1/stats/leaderboard", s.handleLeaderboard)
+	s.registerVergabe(api)
 	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
 	api.HandleFunc("PUT /api/v1/settings", s.adminOnly(s.handlePutSettings))
 
@@ -125,6 +126,10 @@ func AssemblePlaces(d *db.DB, now time.Time) ([]model.PlaceWithStatus, float64, 
 		}
 		out = append(out, pws)
 	}
+	// Vergabestand je Aufgabe: wer hat zugesagt, wie viele helfen hier mit.
+	if err := ergaenzeVergabe(d, out, namen); err != nil {
+		return nil, 0, err
+	}
 	return out, factor, nil
 }
 
@@ -179,6 +184,13 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListPlaces(w http.ResponseWriter, r *http.Request) {
 	places, factor, err := AssemblePlaces(s.DB, s.now())
 	if err != nil {
+		writeInternal(w, r, err)
+		return
+	}
+	// „Bin ich hier angemeldet?" hängt an der abrufenden Person und kommt
+	// deshalb erst hier dazu.
+	u, _ := auth.FromContext(r.Context())
+	if err := markiereEigeneAnmeldungen(s.DB, places, u.Sub); err != nil {
 		writeInternal(w, r, err)
 		return
 	}
@@ -498,24 +510,53 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"wateringFactor": factor})
+	regeln, err := s.DB.AssignmentRules()
+	if err != nil {
+		writeInternal(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"wateringFactor": factor,
+		"assignment":     assignmentSettingsVon(regeln),
+	})
 }
 
+// handlePutSettings ändert Hitzefaktor und/oder die Vergabe-Einstellungen.
+// Beide Blöcke sind einzeln zu schicken — wer nur den Hitzefaktor setzt,
+// lässt die Vergabe unberührt (und umgekehrt).
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		WateringFactor float64 `json:"wateringFactor"`
+		WateringFactor *float64            `json:"wateringFactor"`
+		Assignment     *AssignmentSettings `json:"assignment"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, "ungültiges JSON")
 		return
 	}
-	if in.WateringFactor <= 0 || in.WateringFactor > 4 {
-		writeErr(w, http.StatusBadRequest, "wateringFactor muss zwischen 0 und 4 liegen")
+	if in.WateringFactor == nil && in.Assignment == nil {
+		writeErr(w, http.StatusBadRequest, "es wurde nichts zum Ändern geschickt")
 		return
 	}
-	if err := s.DB.SetWateringFactor(in.WateringFactor); err != nil {
-		writeInternal(w, r, err)
-		return
+	if in.WateringFactor != nil {
+		if *in.WateringFactor <= 0 || *in.WateringFactor > 4 {
+			writeErr(w, http.StatusBadRequest, "wateringFactor muss zwischen 0 und 4 liegen")
+			return
+		}
+		if err := s.DB.SetWateringFactor(*in.WateringFactor); err != nil {
+			writeInternal(w, r, err)
+			return
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"wateringFactor": in.WateringFactor})
+	if in.Assignment != nil {
+		regeln := in.Assignment.Rules()
+		if err := regeln.Validate(); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := s.DB.SetAssignmentRules(regeln); err != nil {
+			writeInternal(w, r, err)
+			return
+		}
+	}
+	s.handleGetSettings(w, r)
 }

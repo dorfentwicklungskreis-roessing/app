@@ -244,6 +244,9 @@ func TestEndToEnd(t *testing.T) {
 		"DB_PATH="+filepath.Join(t.TempDir(), "e2e.sqlite"),
 		"AUTH_ISSUER="+issuer,
 		"PUBLIC_URL="+backendAddr,
+		// Der Takt der Vergabe läuft im Betrieb jede Minute; im Test soll er
+		// nicht bremsen. Die Regeln selbst bleiben unverändert.
+		"VERGABE_TAKT=1s",
 	)
 	srv.Stdout, srv.Stderr = os.Stderr, os.Stderr
 	if err := srv.Start(); err != nil {
@@ -700,6 +703,146 @@ func TestEndToEnd(t *testing.T) {
 		}
 	})
 
+	// --- Vergabe ---
+	// Der ganze Weg am echten Server: anmelden, gefragt werden, zusagen,
+	// und die Erledigung durch jemand anderen beendet den Vorgang sofort.
+	t.Run("Vergabe: anmelden, gefragt werden, zusagen", func(t *testing.T) {
+		resp, ort := request(t, "POST", "/api/v1/places", adminToken,
+			map[string]any{"name": "E2E-Vergabe-Kasten", "kind": "blumenkasten", "lat": 52.212, "lon": 9.871})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Ort: HTTP %d: %v", resp.StatusCode, ort)
+		}
+		vergabeOrt := ort["id"].(float64)
+		resp, aufgabe := request(t, "POST", fmt.Sprintf("/api/v1/places/%.0f/tasks", vergabeOrt), adminToken,
+			map[string]any{"kind": "giessen", "liters": 10, "intervalDays": 7, "redAfterDays": 14})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Aufgabe: HTTP %d: %v", resp.StatusCode, aufgabe)
+		}
+		vergabeAufgabe := aufgabe["id"].(float64)
+
+		// Ohne Angemeldete passiert nichts — auch wenn die Aufgabe fällig
+		// ist. Fällig wird sie durch einen Nachtrag von vor acht Tagen.
+		resp, nachtrag := request(t, "POST", fmt.Sprintf("/api/v1/tasks/%.0f/completions", vergabeAufgabe), adminToken,
+			map[string]any{"force": true, "doneAt": time.Now().Add(-8 * 24 * time.Hour).Format(time.RFC3339)})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Nachtrag: HTTP %d: %v", resp.StatusCode, nachtrag)
+		}
+		time.Sleep(2 * time.Second)
+		if _, offen := request(t, "GET", "/api/v1/me/notifications", memberToken, nil); len(offen["notifications"].([]any)) != 0 {
+			t.Fatalf("Anfrage ohne Anmeldung: %v", offen["notifications"])
+		}
+
+		// Jetzt meldet sich das Mitglied an und wird gefragt.
+		resp, angemeldet := request(t, "POST", fmt.Sprintf("/api/v1/places/%.0f/signup", vergabeOrt), memberToken, nil)
+		if resp.StatusCode != 201 {
+			t.Fatalf("Anmelden: HTTP %d: %v", resp.StatusCode, angemeldet)
+		}
+		anfrage := warteAufAnfrage(t, memberToken, vergabeAufgabe)
+		for _, feld := range []string{"placeName", "taskName", "title", "text", "expiresAt"} {
+			if anfrage[feld] == nil || anfrage[feld] == "" {
+				t.Errorf("Anfrage ohne %s: %v", feld, anfrage)
+			}
+		}
+
+		// Empfang bestätigen und zusagen.
+		resp, _ = request(t, "POST", fmt.Sprintf("/api/v1/me/notifications/%.0f/ack", anfrage["id"].(float64)), memberToken, nil)
+		if resp.StatusCode != 204 {
+			t.Fatalf("Empfang bestätigen: HTTP %d", resp.StatusCode)
+		}
+		vorgang := anfrage["assignmentId"].(float64)
+		resp, zusage := request(t, "POST", fmt.Sprintf("/api/v1/assignments/%.0f/claim", vorgang), memberToken, nil)
+		if resp.StatusCode != 200 {
+			t.Fatalf("Zusage: HTTP %d: %v", resp.StatusCode, zusage)
+		}
+		if zusage["claimedUntil"] == nil {
+			t.Fatalf("Zusage ohne Frist: %v", zusage)
+		}
+		// Ein zweiter Zugriff prallt ab — auch der des Admins.
+		resp, konflikt := request(t, "POST", fmt.Sprintf("/api/v1/assignments/%.0f/claim", vorgang), adminToken, nil)
+		if resp.StatusCode != 409 {
+			t.Fatalf("zweite Zusage: HTTP %d, erwartet 409: %v", resp.StatusCode, konflikt)
+		}
+
+		// Die Orts-Liste zeigt „übernommen von … bis …".
+		_, liste := request(t, "GET", "/api/v1/places", adminToken, nil)
+		if a := vergabeStandVon(t, liste, vergabeAufgabe); a == nil || a["claimedBy"] != memberUser.UserID {
+			t.Fatalf("Vergabestand = %v", a)
+		}
+
+		// Und die Verwaltung sieht, wer angemeldet ist.
+		_, angemeldete := request(t, "GET", fmt.Sprintf("/api/v1/places/%.0f/signups", vergabeOrt), adminToken, nil)
+		if len(angemeldete["signups"].([]any)) != 1 {
+			t.Fatalf("Anmeldungen in der Verwaltung: %v", angemeldete)
+		}
+		resp, _ = request(t, "GET", fmt.Sprintf("/api/v1/places/%.0f/signups", vergabeOrt), memberToken, nil)
+		if resp.StatusCode != 403 {
+			t.Fatalf("Mitglied sieht fremde Anmeldungen: HTTP %d", resp.StatusCode)
+		}
+
+		// Jemand anderes gießt: Der Vorgang endet sofort, offene Anfragen
+		// erlöschen, und niemand wird mehr gefragt.
+		resp, erledigt := request(t, "POST", fmt.Sprintf("/api/v1/tasks/%.0f/completions", vergabeAufgabe), adminToken,
+			map[string]any{"force": true, "name": "Nachbarschaftshilfe"})
+		if resp.StatusCode != 201 {
+			t.Fatalf("fremde Erledigung: HTTP %d: %v", resp.StatusCode, erledigt)
+		}
+		time.Sleep(2 * time.Second)
+		_, liste = request(t, "GET", "/api/v1/places", adminToken, nil)
+		if a := vergabeStandVon(t, liste, vergabeAufgabe); a != nil {
+			t.Fatalf("Vorgang läuft nach der Erledigung weiter: %v", a)
+		}
+		_, offen := request(t, "GET", "/api/v1/me/notifications", memberToken, nil)
+		for _, roh := range offen["notifications"].([]any) {
+			n := roh.(map[string]any)
+			if n["taskId"] == vergabeAufgabe && (n["kind"] == "anfrage" || n["kind"] == "rundruf") {
+				t.Fatalf("Anfrage nach der Erledigung noch offen: %v", n)
+			}
+		}
+
+		// Abmelden geht jederzeit.
+		resp, _ = request(t, "DELETE", fmt.Sprintf("/api/v1/places/%.0f/signup", vergabeOrt), memberToken, nil)
+		if resp.StatusCode != 204 {
+			t.Fatalf("Abmelden: HTTP %d", resp.StatusCode)
+		}
+	})
+
+}
+
+// warteAufAnfrage pollt die Benachrichtigungen, bis eine Anfrage zu dieser
+// Aufgabe da ist — der Zeitgeber im Server braucht einen Takt dafür.
+func warteAufAnfrage(t *testing.T, token string, taskID float64) map[string]any {
+	t.Helper()
+	for i := 0; i < 60; i++ {
+		_, offen := request(t, "GET", "/api/v1/me/notifications", token, nil)
+		for _, roh := range offen["notifications"].([]any) {
+			n := roh.(map[string]any)
+			if n["taskId"] == taskID && n["kind"] == "anfrage" {
+				return n
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Fatal("es kam keine Anfrage an")
+	return nil
+}
+
+// vergabeStandVon sucht den Vorgang einer Aufgabe in der Orts-Liste.
+func vergabeStandVon(t *testing.T, liste map[string]any, taskID float64) map[string]any {
+	t.Helper()
+	for _, p := range liste["places"].([]any) {
+		for _, roh := range p.(map[string]any)["tasks"].([]any) {
+			task := roh.(map[string]any)
+			if task["id"] != taskID {
+				continue
+			}
+			if a, ok := task["assignment"].(map[string]any); ok {
+				return a
+			}
+			return nil
+		}
+	}
+	t.Fatalf("Aufgabe %.0f fehlt in der Orts-Liste", taskID)
+	return nil
 }
 
 func waitFor(t *testing.T, url string) {

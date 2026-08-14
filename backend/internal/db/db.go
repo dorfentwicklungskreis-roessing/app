@@ -94,6 +94,57 @@ CREATE TABLE IF NOT EXISTS profiles (
   token_name       TEXT NOT NULL DEFAULT '',
   updated_at       TEXT NOT NULL
 );
+-- Vergabe von Pflegeaufgaben (siehe internal/vergabe). Auch das kommt rein
+-- additiv dazu: Wer sich nirgends anmeldet, merkt von den drei Tabellen
+-- nichts, und an places/care_tasks/completions ändert sich kein Feld.
+--
+-- care_signups: „Ich kümmere mich mit" — Anmeldung für einen Ort, optional
+-- auf eine Aufgabenart eingeschränkt (task_kind leer = alle Aufgaben).
+CREATE TABLE IF NOT EXISTS care_signups (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_sub   TEXT NOT NULL,
+  place_id   INTEGER NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  task_kind  TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_signups_eindeutig ON care_signups(user_sub, place_id, task_kind);
+CREATE INDEX IF NOT EXISTS idx_signups_place ON care_signups(place_id);
+-- care_assignments: ein Vergabe-Vorgang je fälliger Aufgabe. Leere
+-- Zeitfelder heißen „nicht gesetzt"; ended_at='' kennzeichnet die laufenden
+-- Vorgänge, davon darf es je Aufgabe nur einen geben.
+CREATE TABLE IF NOT EXISTS care_assignments (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id       INTEGER NOT NULL REFERENCES care_tasks(id) ON DELETE CASCADE,
+  state         TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  next_offer_at TEXT NOT NULL DEFAULT '',
+  claimed_by    TEXT NOT NULL DEFAULT '',
+  claimed_name  TEXT NOT NULL DEFAULT '',
+  claimed_at    TEXT NOT NULL DEFAULT '',
+  claim_until   TEXT NOT NULL DEFAULT '',
+  ended_at      TEXT NOT NULL DEFAULT '',
+  end_reason    TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_assignments_laufend ON care_assignments(task_id) WHERE ended_at = '';
+CREATE INDEX IF NOT EXISTS idx_assignments_task ON care_assignments(task_id);
+-- care_notifications: die Zustellungen an einzelne Personen (Anfragen und
+-- Hinweise). Sie sind gleichzeitig das Gedächtnis der Warteschlange: Wer
+-- hier steht, wurde schon gefragt.
+CREATE TABLE IF NOT EXISTS care_notifications (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  assignment_id INTEGER NOT NULL REFERENCES care_assignments(id) ON DELETE CASCADE,
+  task_id       INTEGER NOT NULL,
+  place_id      INTEGER NOT NULL,
+  user_sub      TEXT NOT NULL,
+  kind          TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  expires_at    TEXT NOT NULL DEFAULT '',
+  ack_at        TEXT NOT NULL DEFAULT '',
+  closed_at     TEXT NOT NULL DEFAULT '',
+  closed_reason TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_offen ON care_notifications(user_sub, closed_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_vorgang ON care_notifications(assignment_id);
 `)
 	if err != nil {
 		return err

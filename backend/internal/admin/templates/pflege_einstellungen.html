@@ -14,15 +14,49 @@
       Skaliert die Gieß-Schwellen. 1 = normal, 0,5 = Hitzewelle (doppelt so schnell fällig).
       Jäten und andere Aufgaben bleiben unberührt.
     </p>
-    <form method="post" action="/admin/mithelfen/einstellungen" class="mt-2 flex flex-wrap items-end gap-2"
-          id="einstellungen-formular">
+    <form method="post" action="/admin/mithelfen/einstellungen" id="einstellungen-formular">
       <fieldset class="fieldset">
         <label class="fieldset-legend" for="feld-hitzefaktor">Faktor</label>
         <input type="text" inputmode="decimal" name="hitzefaktor" id="feld-hitzefaktor" required
                value="{{.Data.Hitzefaktor}}" class="input w-32">
       </fieldset>
-      <button type="submit" class="btn btn-primary" id="hitzefaktor-speichern">Speichern</button>
-      <a class="btn btn-ghost" href="/admin/mithelfen/">Zurück</a>
+
+      <h2 class="mt-4 font-semibold">Vergabe der Aufgaben</h2>
+      <p class="text-sm text-base-content/70">
+        Wird etwas fällig, werden die Angemeldeten nacheinander gefragt — nicht alle
+        gleichzeitig. Wer zusagt, hält die Aufgabe für die Zusagefrist; danach wird sie
+        wieder freigegeben. In der Ruhezeit wird nichts zugestellt, die Staffelung
+        pausiert dann bis zum Morgen.
+      </p>
+      <fieldset class="fieldset">
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="fieldset-legend" for="feld-abstand">Abstand zwischen zwei Anfragen (Minuten)</label>
+            <input type="text" inputmode="numeric" name="abstand" id="feld-abstand" required
+                   value="{{.Data.Vergabe.Abstand}}" class="input w-full">
+          </div>
+          <div>
+            <label class="fieldset-legend" for="feld-zusagefrist">Zusagefrist (Stunden)</label>
+            <input type="text" inputmode="numeric" name="zusagefrist" id="feld-zusagefrist" required
+                   value="{{.Data.Vergabe.Zusagefrist}}" class="input w-full">
+          </div>
+          <div>
+            <label class="fieldset-legend" for="feld-ruhe-von">Ruhezeit ab (Uhrzeit, volle Stunde)</label>
+            <input type="text" inputmode="numeric" name="ruhe-von" id="feld-ruhe-von" required
+                   value="{{.Data.Vergabe.RuheVon}}" class="input w-full">
+          </div>
+          <div>
+            <label class="fieldset-legend" for="feld-ruhe-bis">Ruhezeit bis (Uhrzeit, volle Stunde)</label>
+            <input type="text" inputmode="numeric" name="ruhe-bis" id="feld-ruhe-bis" required
+                   value="{{.Data.Vergabe.RuheBis}}" class="input w-full">
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <button type="submit" class="btn btn-primary" id="hitzefaktor-speichern">Speichern</button>
+        <a class="btn btn-ghost" href="/admin/mithelfen/">Zurück</a>
+      </div>
     </form>
   </div>
 </div>

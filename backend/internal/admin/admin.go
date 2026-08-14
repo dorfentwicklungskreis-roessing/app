@@ -145,8 +145,11 @@ type view struct {
 var funcs = template.FuncMap{
 	"statusText":  statusText,
 	"statusBadge": statusBadge,
-	"ortsart":     ortsart,
-	"aufgabenart": aufgabenart,
+	// Vergabe: Anlass einer Zustellung und Stand eines Vorgangs im Klartext.
+	"zustellungsArt": zustellungsArt,
+	"vergabeStand":   vergabeStandText,
+	"ortsart":        ortsart,
+	"aufgabenart":    aufgabenart,
 	// Alle Zeiten stehen in der Ortszeit des Dorfes (Europe/Berlin) — der
 	// Server läuft in UTC, gelesen wird die Seite aber in Rössing.
 	"datum":     func(t time.Time) string { return ortszeit(t).Format("02.01.2006") },

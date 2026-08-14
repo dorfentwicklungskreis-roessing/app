@@ -21,6 +21,7 @@
 //	RATE_LIMIT, RATE_LIMIT_BURST, RATE_LIMIT_PER_MINUTE
 //	MAX_BODY_BYTES   Obergrenze je Anfrage (Standard 1 MiB)
 //	BACKUP, BACKUP_DIR, BACKUP_KEEP, BACKUP_INTERVAL
+//	VERGABE, VERGABE_TAKT   Takt der Aufgaben-Vergabe (VERGABE=off schaltet ab)
 //	LOG_FORMAT       "json" (Standard) oder "text"
 package main
 
@@ -46,6 +47,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/httpx"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mcp"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
 
 // Zeitschranken des HTTP-Servers. Ohne sie hält eine einzige langsame
@@ -142,10 +144,12 @@ func main() {
 		httpx.SameOrigin(httpx.SameOriginConfig{Origin: publicURL, Prefixes: []string{"/admin"}}),
 	)
 
-	// Hintergrund: tägliche Sicherung der SQLite-Datei ins PVC.
+	// Hintergrund: tägliche Sicherung der SQLite-Datei ins PVC und der Takt
+	// der Aufgaben-Vergabe (Anfragen freischalten, Zusagen verfallen lassen).
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	backupFertig := backupStarten(ctx, database, dbPath)
+	vergabeFertig := vergabeStarten(ctx, database)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -182,13 +186,8 @@ func main() {
 	if err := server.Shutdown(abschalt); err != nil {
 		slog.Warn("Herunterfahren nicht sauber beendet", "err", err)
 	}
-	if backupFertig != nil {
-		select {
-		case <-backupFertig:
-		case <-time.After(5 * time.Second):
-			slog.Warn("Backup-Zeitplan hat sich nicht rechtzeitig beendet")
-		}
-	}
+	warteAufHintergrund("Backup-Zeitplan", backupFertig)
+	warteAufHintergrund("Vergabe-Zeitgeber", vergabeFertig)
 	slog.Info("Server gestoppt")
 }
 
@@ -256,6 +255,32 @@ func backupStarten(ctx context.Context, database *db.DB, dbPath string) <-chan s
 	}
 	slog.Info("Backup-Zeitplan aktiv", "verzeichnis", cfg.Dir, "abstand", cfg.Interval.String(), "aufbewahrt", cfg.Keep)
 	return backup.Start(ctx, database, cfg)
+}
+
+// vergabeStarten richtet den Takt der Aufgaben-Vergabe ein. Er läuft im
+// Server und nicht als eigener Dienst — aus demselben Grund wie die
+// Sicherung: Es gibt genau einen Pod mit genau einer Schreibverbindung zur
+// SQLite-Datenbank.
+func vergabeStarten(ctx context.Context, database *db.DB) <-chan struct{} {
+	cfg, an := vergabe.FromEnv()
+	if !an {
+		slog.Warn("Vergabe abgeschaltet (VERGABE=off) — es werden keine Anfragen zugestellt")
+		return nil
+	}
+	slog.Info("Vergabe-Zeitgeber aktiv", "takt", cfg.Takt.String())
+	return vergabe.Start(ctx, database, cfg)
+}
+
+// warteAufHintergrund gibt einer Hintergrund-Schleife Zeit, sauber zu enden.
+func warteAufHintergrund(name string, fertig <-chan struct{}) {
+	if fertig == nil {
+		return
+	}
+	select {
+	case <-fertig:
+	case <-time.After(5 * time.Second):
+		slog.Warn("Hintergrund-Aufgabe hat sich nicht rechtzeitig beendet", "name", name)
+	}
 }
 
 // seed legt die beiden Kästen „Unter den Eichen" mit Gießplan an, falls die

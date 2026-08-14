@@ -85,6 +85,53 @@
           {{else}}Der Ort ist deaktiviert und nimmt keine Meldungen an.{{end}}
         </div>
         {{end}}
+        {{/* Vergabe: wer hilft hier mit, wer wurde gefragt, wer hat zugesagt.
+             Der Stand kommt je Aufgabe aus .Data.Vergabe. */}}
+        {{with index $.Data.Vergabe .ID}}
+        <div class="mt-2 rounded-box bg-base-200 p-3 text-sm" data-vergabe="{{.Task.ID}}">
+          <div class="font-medium">Vergabe</div>
+          <div data-angemeldete="{{len .Angemeldete}}">
+            {{if .Angemeldete}}
+              {{len .Angemeldete}} angemeldet:
+              {{range $i, $s := .Angemeldete}}{{if $i}}, {{end}}{{$s.UserName}}{{end}}
+            {{else}}
+              Niemand angemeldet — hier wird von selbst niemand gefragt.
+            {{end}}
+          </div>
+
+          {{if .Vorgang}}
+            <div class="mt-1 flex flex-wrap items-center gap-2">
+              <span class="badge badge-sm" data-vorgang-stand="{{.Vorgang.State}}">{{vergabeStand .Vorgang.State}}</span>
+              <span class="text-base-content/70">seit {{datumZeit .Vorgang.CreatedAt}}</span>
+            </div>
+            {{if .Vorgang.ClaimedBy}}
+              <div class="mt-1 text-success" data-uebernommen="{{.Vorgang.ClaimedBy}}">
+                übernommen von {{.Vorgang.ClaimedByName}} bis {{datumZeitOpt .Vorgang.ClaimedUntil}}
+              </div>
+              <a class="btn btn-outline btn-error btn-xs mt-1 zusage-aufheben"
+                 href="/admin/mithelfen/vorgaenge/{{.Vorgang.ID}}/zusage-aufheben">Zusage aufheben</a>
+            {{else}}
+              <div class="mt-1 text-base-content/70" data-offen>
+                Noch keine Zusage.
+                {{if .Vorgang.NextOfferAt}}Nächste Anfrage ab {{datumZeitOpt .Vorgang.NextOfferAt}}.{{end}}
+              </div>
+            {{end}}
+            <ul class="mt-1 list-disc pl-5 text-base-content/70" data-zustellungen="{{len .Zustellungen}}">
+              {{range .Zustellungen}}
+              <li>{{.Title}} — {{zustellungsArt .Kind}} am {{datumZeit .CreatedAt}}
+                {{if .AcknowledgedAt}}· gelesen{{end}}
+                {{if .ClosedAt}}· {{.ClosedReason}}{{end}}
+              </li>
+              {{else}}
+              <li>Noch niemand gefragt.</li>
+              {{end}}
+            </ul>
+          {{else}}
+            <div class="mt-1 text-base-content/70" data-kein-vorgang>Gerade läuft kein Vorgang.</div>
+          {{end}}
+        </div>
+        {{end}}
+
         <div class="mt-2 flex flex-wrap items-center gap-2">
           {{if and $.Data.Ort.Active .Active}}
           <a class="btn btn-success btn-sm erledigt-melden"

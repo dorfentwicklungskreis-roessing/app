@@ -16,6 +16,8 @@ var eigeneHaken = map[string]bool{
 	// Kennzeichnet Angaben, die nur Verwaltende sehen. Die Optik macht das
 	// daneben stehende badge — die Klasse ist reiner Testanker.
 	"nur-verwaltung": true,
+	// Anker für den Knopf, mit dem eine Zusage aufgehoben wird.
+	"zusage-aufheben": true,
 }
 
 var (
