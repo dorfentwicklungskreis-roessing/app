@@ -44,6 +44,43 @@ class ApiPlacesRepository(private val api: DorfApi) : PlacesRepository {
         api.completions(taskId).completions
 }
 
+/**
+ * Das Backend hat die Profiländerung abgewiesen (HTTP 400) und nennt den
+ * Grund im Klartext. Der Grund ist für die Person gedacht — die Prüfung
+ * sitzt bewusst im Backend, nicht in der App.
+ */
+class ProfileValidationException(val grund: String) : RuntimeException(grund)
+
+/** Zugriff auf das eigene Profil und die Dorfbewohner-Liste. */
+interface ProfileRepository {
+    suspend fun profile(): ProfileDto
+    suspend fun saveProfile(input: ProfileInput): ProfileDto
+
+    /** Liefert die Liste und ob sie in der Verwaltungs-Sicht kam. */
+    suspend fun members(): Pair<List<MemberDto>, Boolean>
+}
+
+class ApiProfileRepository(private val api: DorfApi) : ProfileRepository {
+    override suspend fun profile(): ProfileDto = api.me().profile ?: ProfileDto()
+
+    override suspend fun saveProfile(input: ProfileInput): ProfileDto =
+        try {
+            api.saveProfile(input)
+        } catch (e: HttpException) {
+            if (e.code() == 400) throw ProfileValidationException(fehlertextAus(e)) else throw e
+        }
+
+    override suspend fun members(): Pair<List<MemberDto>, Boolean> {
+        val antwort = api.members()
+        return antwort.members to antwort.adminView
+    }
+
+    private fun fehlertextAus(e: HttpException): String = runCatching {
+        val roh = e.response()?.errorBody()?.string().orEmpty()
+        Json { ignoreUnknownKeys = true }.decodeFromString<ApiErrorDto>(roh).error
+    }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Die Eingabe wurde abgelehnt."
+}
+
 /** Zugriff auf die Auswertungen (Rangliste). */
 interface StatsRepository {
     suspend fun leaderboard(period: String): LeaderboardDto

@@ -25,6 +25,7 @@ import de.roessing.app.ui.HomeScreen
 import de.roessing.app.ui.LeaderboardViewModel
 import de.roessing.app.ui.LoginScreen
 import de.roessing.app.ui.PlacesViewModel
+import de.roessing.app.ui.ProfileViewModel
 import de.roessing.app.ui.theme.DorfAppTheme
 import kotlinx.coroutines.launch
 
@@ -83,9 +84,11 @@ private fun Root() {
             val factory = viewModelFactory(container)
             val vm: PlacesViewModel = viewModel(factory = factory)
             val rangVm: LeaderboardViewModel = viewModel(factory = factory)
+            val profilVm: ProfileViewModel = viewModel(factory = factory)
             HomeScreen(
                 viewModel = vm,
                 leaderboardViewModel = rangVm,
+                profileViewModel = profilVm,
                 onLogout = { scope.launch { container.authManager.logout() } },
             )
         }
@@ -101,6 +104,9 @@ private fun viewModelFactory(container: AppContainer) =
 
             modelClass.isAssignableFrom(LeaderboardViewModel::class.java) ->
                 LeaderboardViewModel(container.statsRepository) as T
+
+            modelClass.isAssignableFrom(ProfileViewModel::class.java) ->
+                ProfileViewModel(container.profileRepository) as T
 
             else -> error("Unbekanntes ViewModel: ${modelClass.name}")
         }

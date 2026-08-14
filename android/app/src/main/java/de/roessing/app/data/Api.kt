@@ -9,6 +9,7 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
@@ -28,6 +29,12 @@ interface DorfApi {
 
     @GET("api/v1/stats/leaderboard")
     suspend fun leaderboard(@Query("period") period: String): LeaderboardDto
+
+    @PUT("api/v1/me/profile")
+    suspend fun saveProfile(@Body input: ProfileInput): ProfileDto
+
+    @GET("api/v1/members")
+    suspend fun members(): MembersResponse
 
     companion object {
         private val json = Json {

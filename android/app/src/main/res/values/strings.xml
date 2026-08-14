@@ -60,4 +60,32 @@
     <!-- Spielschutz -->
     <string name="task_locked">Wieder ab %1$s</string>
     <string name="completion_locked">Schon erledigt — wieder ab %1$s</string>
+    <!-- Profil und Dorfbewohner -->
+    <string name="profile_title">Mein Profil</string>
+    <string name="members_title">Dorfbewohner</string>
+    <string name="profile_visibility_headline">Das sehen andere</string>
+    <string name="profile_visibility_text">Alles, was du hier auf „Für alle sichtbar" stellst, können alle angemeldeten Dorfbewohner lesen — auch Telefonnummer und E-Mail-Adresse. Was ausgeschaltet bleibt, sehen nur die Verwaltenden der Dorf-App.</string>
+    <string name="profile_visibility_name_hint">Dein Anzeigename bzw. Nickname steht immer in Rangliste und Erledigungen — darunter bist du im Dorf unterwegs.</string>
+    <string name="profile_visibility_now">Für alle sichtbar: %1$s</string>
+    <string name="profile_visibility_none">Für alle sichtbar: nichts. Nur die Verwaltenden sehen deine Angaben.</string>
+    <string name="profile_display_name">Anzeigename</string>
+    <string name="profile_display_name_hint">Vorbelegt aus deiner Rössing-ID.</string>
+    <string name="profile_nickname">Nickname für die Rangliste</string>
+    <string name="profile_nickname_hint">Steht statt des Anzeigenamens in Rangliste und Erledigungen. Leer lassen = Anzeigename.</string>
+    <string name="profile_phone">Telefon (freiwillig)</string>
+    <string name="profile_phone_hint">Nur ausfüllen, wenn du erreichbar sein möchtest.</string>
+    <string name="profile_email">E-Mail (freiwillig)</string>
+    <string name="profile_email_hint">Vorbelegt aus deiner Rössing-ID, überschreibbar.</string>
+    <string name="profile_note">Notiz (freiwillig)</string>
+    <string name="profile_note_hint">Ein kurzer Hinweis, z.B. „erreichbar abends".</string>
+    <string name="profile_public_switch">Für alle Dorfbewohner sichtbar</string>
+    <string name="profile_saved">Profil gespeichert.</string>
+    <string name="profile_save">Profil speichern</string>
+    <string name="members_intro">Wer in der Dorf-App mitmacht — mit den Angaben, die freigegeben wurden.</string>
+    <string name="members_empty">Noch niemand hat ein Profil ausgefüllt.</string>
+    <string name="members_admin_hint">Du siehst als Verwaltende auch Angaben, die nicht freigegeben sind. Sie sind gekennzeichnet.</string>
+    <string name="members_only_admins">nur Verwaltende</string>
+    <string name="members_call">Anrufen</string>
+    <string name="members_mail">E-Mail schreiben</string>
+    <string name="back">Zurück</string>
 </resources>

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Map
@@ -43,16 +44,25 @@ import androidx.compose.ui.res.stringResource
 import de.roessing.app.R
 import de.roessing.app.data.DeviceLocation
 
+/**
+ * Die Seiten hinter dem Konto-Symbol. NONE = die gewohnten Reiter
+ * (Karte, Liste, Rangliste).
+ */
+enum class KontoSeite { NONE, PROFIL, DORFBEWOHNER }
+
 /** Hauptbildschirm: Karte/Liste der Pflege-Orte mit Detail-Sheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: PlacesViewModel,
     leaderboardViewModel: LeaderboardViewModel,
+    profileViewModel: ProfileViewModel,
     onLogout: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
     val leaderboard by leaderboardViewModel.state.collectAsState()
+    val profil by profileViewModel.state.collectAsState()
+    var kontoSeite by rememberSaveable { mutableStateOf(KontoSeite.NONE) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(0) }
@@ -103,11 +113,44 @@ fun HomeScreen(
     LaunchedEffect(tab) {
         if (tab == 2) leaderboardViewModel.refresh()
     }
+    // Die Dorfbewohner-Liste wird beim Öffnen frisch geholt.
+    LaunchedEffect(kontoSeite) {
+        if (kontoSeite == KontoSeite.DORFBEWOHNER) profileViewModel.loadMembers()
+    }
+    val profilGespeichert = stringResource(R.string.profile_saved)
+    LaunchedEffect(Unit) {
+        profileViewModel.events.collect { event ->
+            when (event) {
+                ProfileEvent.Saved -> snackbar.showSnackbar(profilGespeichert)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.map_title)) },
+                title = {
+                    Text(
+                        when (kontoSeite) {
+                            KontoSeite.PROFIL -> stringResource(R.string.profile_title)
+                            KontoSeite.DORFBEWOHNER -> stringResource(R.string.members_title)
+                            KontoSeite.NONE -> stringResource(R.string.map_title)
+                        },
+                    )
+                },
+                navigationIcon = {
+                    if (kontoSeite != KontoSeite.NONE) {
+                        IconButton(
+                            onClick = { kontoSeite = KontoSeite.NONE },
+                            modifier = Modifier.testTag("zurueck"),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                            )
+                        }
+                    }
+                },
                 actions = {
                     IconButton(
                         onClick = {
@@ -126,6 +169,16 @@ fun HomeScreen(
                             DropdownMenuItem(text = { Text(it.name) }, onClick = {}, enabled = false)
                         }
                         DropdownMenuItem(
+                            text = { Text(stringResource(R.string.profile_title)) },
+                            onClick = { menuOpen = false; kontoSeite = KontoSeite.PROFIL },
+                            modifier = Modifier.testTag("menu-profil"),
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.members_title)) },
+                            onClick = { menuOpen = false; kontoSeite = KontoSeite.DORFBEWOHNER },
+                            modifier = Modifier.testTag("menu-dorfbewohner"),
+                        )
+                        DropdownMenuItem(
                             text = { Text(stringResource(R.string.logout)) },
                             onClick = { menuOpen = false; onLogout() },
                             modifier = Modifier.testTag("logout"),
@@ -135,7 +188,9 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            NavigationBar {
+            // Auf den Konto-Seiten führt der Weg über den Zurück-Pfeil,
+            // die Reiter blenden sich so lange aus.
+            if (kontoSeite == KontoSeite.NONE) NavigationBar {
                 NavigationBarItem(
                     selected = tab == 0, onClick = { tab = 0 },
                     icon = { Icon(Icons.Filled.Map, contentDescription = null) },
@@ -158,7 +213,7 @@ fun HomeScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            if (tab == 0) {
+            if (tab == 0 && kontoSeite == KontoSeite.NONE) {
                 FloatingActionButton(
                     onClick = {
                         if (darfStandort) fokusZaehler++ else standortFrage.launch(DeviceLocation.PERMISSIONS)
@@ -170,7 +225,30 @@ fun HomeScreen(
             }
         },
     ) { padding ->
-        Column(Modifier.padding(padding)) {
+        // Die Konto-Seiten ersetzen den Reiter-Inhalt vollständig.
+        when (kontoSeite) {
+            KontoSeite.PROFIL -> ProfileScreen(
+                state = profil,
+                modifier = Modifier.padding(padding),
+                onDisplayName = profileViewModel::setDisplayName,
+                onNickname = profileViewModel::setNickname,
+                onPhone = profileViewModel::setPhone,
+                onEmail = profileViewModel::setEmail,
+                onNote = profileViewModel::setNote,
+                onDisplayNamePublic = profileViewModel::setDisplayNamePublic,
+                onNicknamePublic = profileViewModel::setNicknamePublic,
+                onPhonePublic = profileViewModel::setPhonePublic,
+                onEmailPublic = profileViewModel::setEmailPublic,
+                onNotePublic = profileViewModel::setNotePublic,
+                onSave = profileViewModel::save,
+            )
+
+            KontoSeite.DORFBEWOHNER -> MembersScreen(
+                state = profil,
+                modifier = Modifier.padding(padding),
+            )
+
+            KontoSeite.NONE -> Column(Modifier.padding(padding)) {
             if (!darfStandort) {
                 LocationHint(onRequest = { standortFrage.launch(DeviceLocation.PERMISSIONS) })
             }
@@ -200,11 +278,12 @@ fun HomeScreen(
                     onSelectPeriod = { leaderboardViewModel.select(it) },
                 )
             }
+            }
         }
     }
 
     val selected = state.places.find { it.id == selectedPlaceId }
-    if (selected != null) {
+    if (selected != null && kontoSeite == KontoSeite.NONE) {
         ModalBottomSheet(
             onDismissRequest = { selectedPlaceId = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),

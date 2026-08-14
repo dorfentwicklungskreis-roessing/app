@@ -4,9 +4,11 @@ import android.app.Application
 import android.content.Context
 import de.roessing.app.auth.AuthManager
 import de.roessing.app.data.ApiPlacesRepository
+import de.roessing.app.data.ApiProfileRepository
 import de.roessing.app.data.ApiStatsRepository
 import de.roessing.app.data.DorfApi
 import de.roessing.app.data.PlacesRepository
+import de.roessing.app.data.ProfileRepository
 import de.roessing.app.data.StatsRepository
 
 /**
@@ -28,6 +30,7 @@ class AppContainer(context: Context) {
     private val api = DorfApi.create(BuildConfig.API_BASE_URL) { authManager.freshAccessToken() }
     val repository: PlacesRepository = ApiPlacesRepository(api)
     val statsRepository: StatsRepository = ApiStatsRepository(api)
+    val profileRepository: ProfileRepository = ApiProfileRepository(api)
 }
 
 val Context.appContainer: AppContainer

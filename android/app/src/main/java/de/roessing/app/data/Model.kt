@@ -87,6 +87,95 @@ data class MeDto(
     val email: String = "",
     val roles: List<String> = emptyList(),
     val isAdmin: Boolean = false,
+    /** Das eigene Profil — liefert das Backend beim Anmelden gleich mit. */
+    val profile: ProfileDto? = null,
+)
+
+/**
+ * Sichtbarkeit je Profilfeld. Werte des Backends: "dorf" (alle angemeldeten
+ * Dorfbewohner) oder "verwaltung" (nur Verwaltende).
+ *
+ * Die Vorbelegung entspricht der des Backends: Kontaktdaten bleiben bei der
+ * Verwaltung, bis jemand sie bewusst freigibt. Ein Wert, den diese
+ * App-Version nicht kennt, gilt vorsichtshalber als nicht öffentlich.
+ */
+@Serializable
+data class ProfileVisibilityDto(
+    val displayName: String = SICHTBAR_DORF,
+    val nickname: String = SICHTBAR_DORF,
+    val phone: String = SICHTBAR_VERWALTUNG,
+    val email: String = SICHTBAR_VERWALTUNG,
+    val note: String = SICHTBAR_VERWALTUNG,
+) {
+    val displayNameIsPublic: Boolean get() = displayName == SICHTBAR_DORF
+    val nicknameIsPublic: Boolean get() = nickname == SICHTBAR_DORF
+    val phoneIsPublic: Boolean get() = phone == SICHTBAR_DORF
+    val emailIsPublic: Boolean get() = email == SICHTBAR_DORF
+    val noteIsPublic: Boolean get() = note == SICHTBAR_DORF
+
+    companion object {
+        const val SICHTBAR_DORF = "dorf"
+        const val SICHTBAR_VERWALTUNG = "verwaltung"
+
+        /** Wandelt einen Schalter der Oberfläche in den Backend-Wert. */
+        fun wert(oeffentlich: Boolean): String =
+            if (oeffentlich) SICHTBAR_DORF else SICHTBAR_VERWALTUNG
+    }
+}
+
+/** Das eigene Profil. */
+@Serializable
+data class ProfileDto(
+    val userSub: String = "",
+    val displayName: String = "",
+    val nickname: String = "",
+    val phone: String = "",
+    val email: String = "",
+    val note: String = "",
+    val visibility: ProfileVisibilityDto = ProfileVisibilityDto(),
+    val updatedAt: String = "",
+)
+
+/** Eingabe von PUT /api/v1/me/profile. */
+@Serializable
+data class ProfileInput(
+    val displayName: String = "",
+    val nickname: String = "",
+    val phone: String = "",
+    val email: String = "",
+    val note: String = "",
+    val visibility: ProfileVisibilityDto = ProfileVisibilityDto(),
+)
+
+/**
+ * Eine Person in der Dorfbewohner-Liste — mit genau den Feldern, die sie
+ * freigegeben hat. Nicht freigegebene Felder kommen gar nicht erst mit.
+ */
+@Serializable
+data class MemberDto(
+    val userSub: String = "",
+    /** Name in Rangliste und Erledigungen (Nickname, sonst Anzeigename). */
+    val name: String = "",
+    val displayName: String = "",
+    val nickname: String = "",
+    val phone: String = "",
+    val email: String = "",
+    val note: String = "",
+    /**
+     * Felder, die nur Verwaltende sehen, weil die Person sie nicht
+     * freigegeben hat. Für gewöhnliche Mitglieder immer leer.
+     */
+    val restricted: List<String> = emptyList(),
+) {
+    fun nurFuerVerwaltung(feld: String): Boolean = feld in restricted
+    val hasContact: Boolean get() = phone.isNotBlank() || email.isNotBlank() || note.isNotBlank()
+}
+
+@Serializable
+data class MembersResponse(
+    val members: List<MemberDto> = emptyList(),
+    /** true, wenn die Liste alles zeigt, weil der Abruf von Verwaltenden kam. */
+    val adminView: Boolean = false,
 )
 
 @Serializable
