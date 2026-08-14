@@ -368,8 +368,12 @@ test('Verwaltung: Profil pflegen, Sichtbarkeit setzen, Mitgliederliste', async (
     await expect(page.locator('#sicht_nickname')).toBeChecked();
   });
 
-  await test.step('Unsinnige Eingaben werden abgewiesen, ohne etwas zu speichern', async () => {
-    await page.locator('#feld-email').fill('keine-adresse');
+  await test.step('Das Backend hat das letzte Wort, auch wenn der Browser durchlässt', async () => {
+    // „erna@localhost" besteht die HTML5-Prüfung des Browsers (type=email
+    // verlangt keinen Punkt in der Domain) und wird deshalb wirklich
+    // abgeschickt. Zurückgewiesen wird sie erst im Backend — genau das soll
+    // dieser Schritt beweisen: Die Prüfung sitzt im Server, nicht im Feld.
+    await page.locator('#feld-email').fill('erna@localhost');
     await page.locator('#profil-speichern').click();
     await expect(page.locator('#formularfehler')).toBeVisible();
     await expect(page.locator('#formularfehler')).toContainText('E-Mail');
@@ -404,17 +408,34 @@ test('Verwaltung: Profil pflegen, Sichtbarkeit setzen, Mitgliederliste', async (
   });
 
   await test.step('Die Rangliste nutzt den Nickname aus dem Profil', async () => {
-    // Erst etwas melden, damit es eine Zeile gibt.
-    await page.goto('/admin/dorfpflege/');
-    await page.locator('#orte-tabelle tbody tr').first().getByRole('link').first().click();
+    // Eigener Ort mit eigener Aufgabe: So hängt der Schritt an nichts, was
+    // ein anderer Test angelegt, gemeldet oder gelöscht hat.
+    await page.goto('/admin/dorfpflege/orte/neu');
+    await page.locator('#feld-name').fill(`Profil-E2E ${Date.now()}`);
+    await page.locator('#feld-lat').fill('52.2105');
+    await page.locator('#feld-lon').fill('9.8695');
+    await page.locator('#ort-speichern').click();
     await expect(page).toHaveURL(/\/admin\/dorfpflege\/orte\/\d+$/);
+    const ortURL = page.url();
+
+    await page.locator('#neue-aufgabe').click();
+    await page.locator('#feld-intervall').fill('7');
+    await page.locator('#feld-rot').fill('14');
+    await page.locator('#aufgabe-speichern').click();
+    await expect(page).toHaveURL(ortURL);
+
     await page.locator('.erledigt-melden').first().click();
-    // Läuft noch eine Sperrfrist, wird sie hier bewusst übergangen.
-    const uebergehen = page.locator('#feld-uebergehen');
-    if (await uebergehen.count() && await uebergehen.isVisible()) await uebergehen.check();
     await page.locator('#erledigt-bestaetigen').click();
+    await expect(page.locator('#ort-status')).toHaveAttribute('data-status', 'green');
+
+    // Die Historie des Ortes zeigt den Nickname, nicht den Anmeldenamen.
+    await expect(page.locator('#historie')).toContainText(nickname);
 
     await page.goto('/admin/dorfpflege/rangliste?zeitraum=gesamt');
     await expect(page.locator('#rangliste-tabelle')).toContainText(nickname);
+
+    // Aufräumen: Der Ort war nur für diesen Test da.
+    await page.goto(`${ortURL}/loeschen`);
+    await page.locator('#loeschen-bestaetigen').click();
   });
 });
