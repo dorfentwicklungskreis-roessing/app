@@ -2,6 +2,7 @@ package de.roessing.app
 
 import de.roessing.app.data.DeviceRepository
 import de.roessing.app.push.Anmeldespeicher
+import de.roessing.app.push.Anmeldevermutung
 import de.roessing.app.push.Benachrichtigungserlaubnis
 import de.roessing.app.push.Geraeteabgleich
 import kotlinx.coroutines.test.runTest
@@ -37,11 +38,16 @@ class GeraeteabgleichTest {
     private var kennungAbgefragt = 0
     private var kennungVerworfen = 0
 
+    /** Wie Firebase gestellt wurde, der Reihe nach: scharf (true), still (false). */
+    private val firebase = mutableListOf<Boolean>()
+    private val firebaseScharf: Boolean? get() = firebase.lastOrNull()
+
     private fun abgleich(kennung: String? = "kennung-123") = Geraeteabgleich(
         speicher = speicher,
         geraete = geraete,
         kennung = { kennungAbgefragt++; kennung },
         kennungVerwerfen = { kennungVerworfen++ },
+        firebaseBereit = { firebase += it },
     )
 
     @Test
@@ -133,6 +139,69 @@ class GeraeteabgleichTest {
             assertTrue("Sonst bliebe die Kennung für immer im Backend", speicher.wert)
             assertEquals("Ohne bestätigte Löschung bleibt die Kennung nutzbar", 0, kennungVerworfen)
         }
+
+    // --- Firebase selbst -----------------------------------------------------
+
+    @Test
+    fun `ohne Erlaubnis bleibt Firebase still`() = runTest {
+        abgleich().abgleichen(erlaubt = false)
+
+        // Firebase Cloud Messaging meldet das Gerät sonst beim ersten Start
+        // von sich aus bei Google an (Auto-Init) und legt dabei eine Kennung
+        // an — ganz ohne Zutun der App. Genau das darf ohne Einwilligung
+        // nicht passieren.
+        assertEquals(
+            "Firebase muss ohne Erlaubnis ausdrücklich stillgestellt werden",
+            false,
+            firebaseScharf,
+        )
+    }
+
+    @Test
+    fun `mit Erlaubnis wird Firebase scharf gestellt`() = runTest {
+        abgleich().abgleichen(erlaubt = true)
+
+        assertEquals(true, firebaseScharf)
+    }
+
+    @Test
+    fun `nach dem Abmelden ist Firebase wieder still`() = runTest {
+        speicher.wert = true
+
+        abgleich().abmelden()
+
+        assertEquals(false, firebaseScharf)
+        assertEquals("Erst löschen, dann stillstellen", 1, kennungVerworfen)
+    }
+
+    @Test
+    fun `zum Löschen wird Firebase kurz ansprechbar und danach wieder still`() = runTest {
+        speicher.wert = true
+
+        abgleich().abmelden()
+
+        // Ohne den kurzen Moment käme man an eine vorhandene Kennung gar nicht
+        // mehr heran, um sie zu löschen. Angelegt wird dabei nichts, was es
+        // nicht schon gibt — die Merkung sagt ja, dass es sie gibt.
+        assertEquals(listOf(true, false), firebase)
+    }
+
+    // --- Bestandsgeräte aus 0.1.7 --------------------------------------------
+
+    @Test
+    fun `nach einem Update gilt das Gerät als angemeldet`() {
+        // Bis 0.1.7 meldete sich jede Installation bei jedem Start an. Wer die
+        // App aktualisiert, hat also eine Kennung im Backend liegen — auch
+        // ohne erteilte Erlaubnis. Genau die muss weg.
+        assertTrue(Anmeldevermutung.beiFehlenderMerkung(istAktualisierung = true))
+    }
+
+    @Test
+    fun `bei einer Neuinstallation gilt es nicht als angemeldet`() {
+        // Sonst fragte die App Firebase nach einer Kennung, nur um sie zu
+        // löschen — und legte sie damit erst an.
+        assertFalse(Anmeldevermutung.beiFehlenderMerkung(istAktualisierung = false))
+    }
 
     // --- Wann gilt die Erlaubnis als erteilt? --------------------------------
 

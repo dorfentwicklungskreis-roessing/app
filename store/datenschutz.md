@@ -59,7 +59,9 @@ als Push-Nachricht. Dafür vergibt **Google (Firebase Cloud Messaging)** eine
 Kennung dieser App-Installation; die App meldet sie dem Dorfserver, damit er
 Nachrichten an dieses Gerät schicken kann. **Diese Kennung entsteht erst, wenn
 Benachrichtigungen erlaubt sind** — wer sie ablehnt oder in den
-Android-Einstellungen abschaltet, für dessen Gerät wird gar keine vergeben.
+Android-Einstellungen abschaltet, für dessen Gerät wird gar keine vergeben —
+auch das Firebase-SDK selbst bleibt bis dahin stumm und meldet sich nicht von
+sich aus bei Google an.
 An Google gehen dabei:
 
 - die Kennung der App-Installation,

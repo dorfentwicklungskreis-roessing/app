@@ -184,12 +184,25 @@ Benachrichtigungen abgelehnt hatte.
   abgedreht.
 - Ohne Erlaubnis wird Firebase **gar nicht erst nach einer Kennung gefragt** —
   das Fragen selbst legt sie an.
+- **Auch Firebase selbst bleibt still.** Ohne Zutun meldet das FCM-SDK das
+  Gerät beim ersten Start von sich aus bei Google an (Auto-Init) und legt
+  dabei eine Installations-Kennung an. `firebase_messaging_auto_init_enabled`
+  und `firebase_data_collection_default_enabled` stehen im Manifest deshalb
+  auf `false`; scharf gestellt wird ausdrücklich erst bei erteilter Erlaubnis,
+  beim Entzug geht es wieder aus.
 - Wird die Erlaubnis später entzogen, löscht die App die Kennung beim nächsten
   Start bzw. bei der Rückkehr in den Vordergrund (`DELETE /api/v1/me/devices`)
   und wirft sie danach auch bei Firebase weg. Dasselbe beim Abmelden aus der
   App.
 - Auch die Erneuerung der Kennung (`onNewToken`) läuft nur bei erteilter
   Erlaubnis.
+
+**Bestandsgeräte:** Wer von 0.1.7 aktualisiert, hat eine Kennung im Backend
+liegen — die Merkung, ob angemeldet wurde, gibt es ja erst seit 0.1.8. Ein
+aktualisiertes Gerät gilt deshalb zunächst als angemeldet und wird beim ersten
+Start ohne Erlaubnis aufgeräumt (`Anmeldevermutung`). Bei einer
+Neuinstallation gilt das ausdrücklich nicht — sonst fragte die App Firebase
+nach einer Kennung, nur um sie zu löschen.
 
 Belegt durch `android/app/src/test/java/de/roessing/app/GeraeteabgleichTest.kt`
 sowie den Instrumentierungstest

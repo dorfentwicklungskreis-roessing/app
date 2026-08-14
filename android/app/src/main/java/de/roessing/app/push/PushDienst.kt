@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -175,7 +176,26 @@ object Geraeteanmeldung {
         geraete = context.appContainer.deviceRepository,
         kennung = { kennung() },
         kennungVerwerfen = { FirebaseMessaging.getInstance().deleteToken() },
+        firebaseBereit = { bereit -> firebaseBereit(context, bereit) },
     )
+
+    /**
+     * Stellt das Firebase-SDK scharf oder still.
+     *
+     * Nötig, weil sich Firebase Cloud Messaging beim ersten Start sonst von
+     * selbst bei Google anmeldet (Auto-Init) und dabei eine Kennung anlegt —
+     * ohne Zutun der App und damit vor jeder Einwilligung. Im Manifest steht
+     * beides deshalb auf `false`; hier wird es bei erteilter Erlaubnis
+     * eingeschaltet und beim Entzug wieder aus. Firebase merkt sich die
+     * Einstellung selbst, sie übersteht also den Neustart.
+     */
+    private fun firebaseBereit(context: Context, bereit: Boolean) {
+        // Die Boolean?-Überladung ist die aktuelle; die auf Boolean gilt als
+        // überholt. null hieße dort „zurück auf den Wert aus dem Manifest".
+        val wert: Boolean? = bereit
+        FirebaseApp.getInstance().setDataCollectionDefaultEnabled(wert)
+        FirebaseMessaging.getInstance().isAutoInitEnabled = bereit
+    }
 
     /**
      * Ob diese Installation angemeldet ist, steht in einer eigenen kleinen
@@ -186,7 +206,10 @@ object Geraeteanmeldung {
         private val prefs =
             context.applicationContext.getSharedPreferences(DATEI, Context.MODE_PRIVATE)
 
-        override suspend fun angemeldet(): Boolean = prefs.getBoolean(SCHLUESSEL, false)
+        override suspend fun angemeldet(): Boolean = prefs.getBoolean(
+            SCHLUESSEL,
+            Anmeldevermutung.beiFehlenderMerkung(Anmeldevermutung.istAktualisierung(context)),
+        )
 
         override suspend fun merken(wert: Boolean) {
             prefs.edit().putBoolean(SCHLUESSEL, wert).apply()

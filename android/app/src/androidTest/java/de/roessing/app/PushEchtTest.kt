@@ -66,6 +66,14 @@ class PushEchtTest {
     private fun geraeteKennung(): String? {
         val ergebnis = arrayOfNulls<String>(1)
         val fertig = java.util.concurrent.CountDownLatch(1)
+        // Firebase steht im Manifest bewusst still (siehe Geraeteabgleich):
+        // ohne erlaubte Mitteilungen soll gar keine Kennung entstehen. Für
+        // diesen Test wird es ausdrücklich scharf gestellt.
+        runCatching {
+            com.google.firebase.FirebaseApp.getInstance()
+                .setDataCollectionDefaultEnabled(true as Boolean?)
+            FirebaseMessaging.getInstance().isAutoInitEnabled = true
+        }
         runCatching {
             FirebaseMessaging.getInstance().token
                 .addOnSuccessListener { ergebnis[0] = it; fertig.countDown() }
