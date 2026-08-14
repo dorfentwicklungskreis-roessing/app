@@ -67,6 +67,34 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (System.getenv("KEYSTORE_FILE") != null)
                 signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+
+            // Native Debug-Symbole ins AAB legen (BUNDLE-METADATA/…/debugsymbols/),
+            // damit die Play Console Abstürze in nativem Code mit Funktionsnamen
+            // statt mit Speicheradressen anzeigt.
+            //
+            // Gewählt: SYMBOL_TABLE. Gemessen wurde beides mit `bundleRelease`
+            // (AGP 8.7.3, NDK 27.0.12077973); die AAB-Größe war in allen drei
+            // Fällen identisch 18.869.701 Bytes — ohne die Einstellung, mit
+            // SYMBOL_TABLE und mit FULL. Grund: alle mitgelieferten .so-Dateien
+            // (libmaplibre.so, libandroidx.graphics.path.so,
+            // libdatastore_shared_counter.so) kommen bereits vollständig
+            // gestrippt aus ihren AARs — weder .symtab noch .debug_*. AGP meldet
+            // dazu je Datei „Unable to extract native debug metadata … because
+            // the native debug metadata has already been stripped." und schreibt
+            // nichts ins Bundle. Die Einstellung ist heute also wirkungslos, aber
+            // kostenlos; sobald eine Abhängigkeit ungestrippte Bibliotheken
+            // liefert oder eigener nativer Code dazukommt, greift sie von selbst.
+            // SYMBOL_TABLE statt FULL, weil dann nur die Symboltabelle (lesbare
+            // Stapelspuren) statt zusätzlicher DWARF-Daten ins Bundle wandert.
+            //
+            // Für MapLibre selbst gibt es Symbole nur außerhalb von Maven:
+            // https://github.com/maplibre/maplibre-native/releases/tag/android-v11.7.1
+            // („debug-symbols-maplibre-android-opengl-…tar.gz"). Die lassen sich
+            // von Hand in der Play Console unter „App-Bundle-Explorer →
+            // Downloads → Assets" zum jeweiligen Bundle nachreichen. Bewusst
+            // nicht automatisiert: das Archiv ist ~207 MB und müsste bei jedem
+            // Release-Build geladen werden.
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
         }
     }
 
