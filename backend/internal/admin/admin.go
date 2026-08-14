@@ -118,6 +118,7 @@ func (a *App) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/logout", a.handleLogout)
 
 	a.registerDorfpflege(mux)
+	a.registerDorfbewohner(mux)
 }
 
 // cacheAssets markiert die mitgelieferten Assets als cachebar.

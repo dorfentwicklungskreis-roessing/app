@@ -338,3 +338,83 @@ test('Verwaltung funktioniert vollständig ohne JavaScript', async ({ browser })
   }
   expect(fehler, `Browser-Fehler ohne JavaScript:\n${fehler.join('\n')}`).toEqual([]);
 });
+
+// Profilverwaltung: eigenes Profil pflegen, Sichtbarkeit steuern und die
+// Wirkung in der Rangliste sehen. Echter Login, echtes Backend, echte Seiten.
+test('Verwaltung: Profil pflegen, Sichtbarkeit setzen, Mitgliederliste', async ({ page }) => {
+  const { admin } = state();
+  const nickname = `Gießmeister ${Date.now()}`;
+
+  await anmelden(page, admin.userName, admin.password);
+  await expect(page.locator('#bereich-dorfbewohner')).toBeVisible();
+
+  await test.step('Echter Seitenwechsel in den Bereich Dorfbewohner', async () => {
+    await page.locator('#bereich-dorfbewohner').getByRole('link', { name: 'Öffnen' }).click();
+    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfbewohner/`);
+    await expect(page.locator('#seitentitel')).toHaveText('Dorfbewohner');
+  });
+
+  await test.step('Der Hinweis auf die Sichtbarkeit steht groß auf der Profilseite', async () => {
+    await page.getByRole('link', { name: 'Mein Profil' }).first().click();
+    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfbewohner/profil`);
+    const hinweis = page.locator('#sichtbarkeitshinweis');
+    await expect(hinweis).toBeVisible();
+    await expect(hinweis).toContainText('Das sehen andere');
+    // Anzeigename ist aus der Rössing-ID vorbelegt.
+    await expect(page.locator('#feld-anzeigename')).toHaveValue(admin.userName);
+    // Vorbelegung: Kontaktdaten sind NICHT freigegeben.
+    await expect(page.locator('#sicht_telefon')).not.toBeChecked();
+    await expect(page.locator('#sicht_email')).not.toBeChecked();
+    await expect(page.locator('#sicht_nickname')).toBeChecked();
+  });
+
+  await test.step('Unsinnige Eingaben werden abgewiesen, ohne etwas zu speichern', async () => {
+    await page.locator('#feld-email').fill('keine-adresse');
+    await page.locator('#profil-speichern').click();
+    await expect(page.locator('#formularfehler')).toBeVisible();
+    await expect(page.locator('#formularfehler')).toContainText('E-Mail');
+  });
+
+  await test.step('Profil speichern und Telefon bewusst freigeben', async () => {
+    await page.locator('#feld-email').fill('e2e@example.org');
+    await page.locator('#feld-nickname').fill(nickname);
+    await page.locator('#feld-telefon').fill('05066 123456');
+    await page.locator('#feld-notiz').fill('erreichbar abends');
+    await page.locator('#sicht_telefon').check();
+    await page.locator('#profil-speichern').click();
+    await expect(page).toHaveURL(`${BASE_URL}/admin/dorfbewohner/profil`);
+    await expect(page.locator('#meldung')).toHaveAttribute('data-art', 'success');
+    await expect(page.locator('#feld-nickname')).toHaveValue(nickname);
+    await expect(page.locator('#sicht_telefon')).toBeChecked();
+    // Die Notiz blieb ungefragt bei der Verwaltung.
+    await expect(page.locator('#sicht_notiz')).not.toBeChecked();
+  });
+
+  await test.step('Mitgliederliste zeigt die Angaben und kennzeichnet Gesperrtes', async () => {
+    await page.goto('/admin/dorfbewohner/');
+    const koerper = page.locator('body');
+    await expect(koerper).toContainText(nickname);
+    await expect(koerper).toContainText('05066 123456');
+    await expect(koerper).toContainText('erreichbar abends');
+    // Die Notiz ist nicht freigegeben — das muss dranstehen.
+    await expect(page.locator('.nur-verwaltung').first()).toBeVisible();
+    // Kontaktdaten sind anwählbar.
+    await expect(page.locator('a[href^="tel:"]').first()).toBeVisible();
+    await expect(page.locator('a[href^="mailto:"]').first()).toBeVisible();
+  });
+
+  await test.step('Die Rangliste nutzt den Nickname aus dem Profil', async () => {
+    // Erst etwas melden, damit es eine Zeile gibt.
+    await page.goto('/admin/dorfpflege/');
+    await page.locator('#orte-tabelle tbody tr').first().getByRole('link').first().click();
+    await expect(page).toHaveURL(/\/admin\/dorfpflege\/orte\/\d+$/);
+    await page.locator('.erledigt-melden').first().click();
+    // Läuft noch eine Sperrfrist, wird sie hier bewusst übergangen.
+    const uebergehen = page.locator('#feld-uebergehen');
+    if (await uebergehen.count() && await uebergehen.isVisible()) await uebergehen.check();
+    await page.locator('#erledigt-bestaetigen').click();
+
+    await page.goto('/admin/dorfpflege/rangliste?zeitraum=gesamt');
+    await expect(page.locator('#rangliste-tabelle')).toContainText(nickname);
+  });
+});

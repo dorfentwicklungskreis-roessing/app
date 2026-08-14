@@ -13,6 +13,9 @@ var eigeneHaken = map[string]bool{
 	"erledigt-melden":    true,
 	"aufgabe-bearbeiten": true,
 	"aufgabe-loeschen":   true,
+	// Kennzeichnet Angaben, die nur Verwaltende sehen. Die Optik macht das
+	// daneben stehende badge — die Klasse ist reiner Testanker.
+	"nur-verwaltung": true,
 }
 
 var (

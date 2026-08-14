@@ -593,6 +593,113 @@ func TestEndToEnd(t *testing.T) {
 			t.Fatalf("rangliste: isErr=%v, text=%s", isErr, text)
 		}
 	})
+
+	// --- Profilverwaltung ---
+	//
+	// Echte Tokens der Rössing-ID, echtes Backend: Was hier durchgeht, geht
+	// auch in Produktion durch.
+	t.Run("Profil", func(t *testing.T) {
+		// Das Profil kommt beim ersten /me aus dem Token — Kontaktdaten sind
+		// dabei ausdrücklich noch nicht veröffentlicht.
+		_, me := request(t, "GET", "/api/v1/me", memberToken, nil)
+		profil, ok := me["profile"].(map[string]any)
+		if !ok {
+			t.Fatalf("/me liefert kein Profil: %v", me)
+		}
+		sicht := profil["visibility"].(map[string]any)
+		if sicht["phone"] != "verwaltung" || sicht["email"] != "verwaltung" {
+			t.Fatalf("Kontaktdaten sind in der Vorbelegung sichtbar: %v", sicht)
+		}
+		if sicht["displayName"] != "dorf" {
+			t.Fatalf("Anzeigename ist in der Vorbelegung nicht sichtbar: %v", sicht)
+		}
+
+		// Fremdes Profil ändern ist verboten.
+		resp, _ := request(t, "PUT", "/api/v1/me/profile", memberToken,
+			map[string]any{"userSub": adminUser.UserID, "displayName": "Fremdgeschrieben"})
+		if resp.StatusCode != 403 {
+			t.Fatalf("fremdes Profil ändern: HTTP %d, erwartet 403", resp.StatusCode)
+		}
+
+		// Kaputte Eingaben werden abgewiesen.
+		for name, body := range map[string]map[string]any{
+			"kaputte E-Mail": {"email": "keine-adresse"},
+			"Telefon-Unsinn": {"phone": "ruf mich an"},
+			"Steuerzeichen":  {"nickname": "Gie\u00df\x00meister"},
+			"falsche Sicht":  {"visibility": map[string]any{"phone": "alle-welt", "displayName": "dorf", "nickname": "dorf", "email": "dorf", "note": "dorf"}},
+		} {
+			resp, _ := request(t, "PUT", "/api/v1/me/profile", memberToken, body)
+			if resp.StatusCode != 400 {
+				t.Errorf("%s: HTTP %d, erwartet 400", name, resp.StatusCode)
+			}
+		}
+
+		// Das Mitglied pflegt sein Profil und gibt die Telefonnummer bewusst frei.
+		nickname := fmt.Sprintf("Gie\u00dfmeister-%d", time.Now().UnixNano())
+		resp, gespeichert := request(t, "PUT", "/api/v1/me/profile", memberToken, map[string]any{
+			"displayName": "Mitglied aus dem E2E",
+			"nickname":    nickname,
+			"phone":       "05066 123456",
+			"email":       "mitglied@example.org",
+			"note":        "erreichbar abends",
+			"visibility": map[string]any{
+				"displayName": "dorf", "nickname": "dorf",
+				"phone": "dorf", "email": "verwaltung", "note": "verwaltung",
+			},
+		})
+		if resp.StatusCode != 200 {
+			t.Fatalf("Profil speichern: HTTP %d (%v)", resp.StatusCode, gespeichert)
+		}
+
+		// Die Verwaltung sieht in der Mitgliederliste alles — gekennzeichnet.
+		_, adminSicht := request(t, "GET", "/api/v1/members", adminToken, nil)
+		if adminSicht["adminView"] != true {
+			t.Fatalf("adminView fehlt: %v", adminSicht)
+		}
+		eintrag := mitgliedMit(t, adminSicht, memberUser.UserID)
+		if eintrag["phone"] != "05066 123456" || eintrag["email"] != "mitglied@example.org" {
+			t.Fatalf("Verwaltung sieht nicht alles: %v", eintrag)
+		}
+		gesperrt := map[string]bool{}
+		for _, f := range eintrag["restricted"].([]any) {
+			gesperrt[f.(string)] = true
+		}
+		if !gesperrt["email"] || !gesperrt["note"] {
+			t.Fatalf("restricted = %v, erwartet email und note", eintrag["restricted"])
+		}
+
+		// Mit einem Mitglieds-Token verlässt nur das Freigegebene den
+		// Server — die Filterung hängt an der Rolle, nicht an der Person.
+		_, mitgliedSicht := request(t, "GET", "/api/v1/members", memberToken, nil)
+		if mitgliedSicht["adminView"] != false {
+			t.Fatalf("adminView ist für ein Mitglied gesetzt: %v", mitgliedSicht)
+		}
+		eigen := mitgliedMit(t, mitgliedSicht, memberUser.UserID)
+		if eigen["phone"] != "05066 123456" {
+			t.Fatalf("freigegebene Telefonnummer fehlt: %v", eigen)
+		}
+		if eigen["email"] != nil || eigen["note"] != nil {
+			t.Fatalf("nicht freigegebene Felder wurden ausgeliefert: %v", eigen)
+		}
+		if len(eigen["restricted"].([]any)) != 0 {
+			t.Fatalf("restricted ist für Mitglieder leer, war %v", eigen["restricted"])
+		}
+
+		// Und die Rangliste trägt jetzt den Nickname statt des Namens, der
+		// beim Melden galt.
+		_, liste := request(t, "GET", "/api/v1/stats/leaderboard?period=gesamt", memberToken, nil)
+		gefunden := false
+		for _, roh := range liste["entries"].([]any) {
+			e := roh.(map[string]any)
+			if e["userSub"] == memberUser.UserID && e["userName"] == nickname {
+				gefunden = true
+			}
+		}
+		if !gefunden {
+			t.Fatalf("Rangliste nutzt den Nickname nicht: %v", liste["entries"])
+		}
+	})
+
 }
 
 func waitFor(t *testing.T, url string) {
@@ -613,4 +720,17 @@ func waitFor(t *testing.T, url string) {
 func base64Decode(s string) ([]byte, error) {
 	// Zitadel liefert Standard-Base64.
 	return base64.StdEncoding.DecodeString(s)
+}
+
+// mitgliedMit sucht einen Eintrag der Dorfbewohner-Liste.
+func mitgliedMit(t *testing.T, antwort map[string]any, userSub string) map[string]any {
+	t.Helper()
+	for _, roh := range antwort["members"].([]any) {
+		m := roh.(map[string]any)
+		if m["userSub"] == userSub {
+			return m
+		}
+	}
+	t.Fatalf("Kennung %s fehlt in der Mitgliederliste: %v", userSub, antwort["members"])
+	return nil
 }

@@ -108,6 +108,113 @@ Ein Test liest die Host-Angaben direkt aus `internal/admin/static/karte.js` und
 schlägt an, sobald Karte und Richtlinie auseinanderlaufen
 (`TestCSPPasstZumKartenSkript`).
 
+## Profile: freiwillige Kontaktdaten (Stand 14.08.2026)
+
+Mit der Profilverwaltung speichert das Backend erstmals Daten, die **nicht**
+aus der Rössing-ID stammen und die für andere Angemeldete sichtbar werden
+können. Das ist eine Änderung an der Datenlage, nicht nur am Code —
+**Datenschutzerklärung und die Play-Datensicherheit müssen nachgezogen
+werden** (siehe „Was nachzuziehen ist").
+
+### Was gespeichert wird
+
+Tabelle `profiles`, ein Datensatz je Person, Schlüssel ist die Zitadel-Kennung
+(`user_sub`):
+
+| Feld | Herkunft | Pflicht |
+|---|---|---|
+| `display_name` | vorbelegt aus dem Token der Rössing-ID, überschreibbar | nein |
+| `nickname` | selbst eingetragen; ersetzt den Namen in Rangliste und Historie | nein |
+| `phone` | selbst eingetragen | **freiwillig** |
+| `email` | vorbelegt aus dem Token, überschreibbar | **freiwillig** |
+| `note` | selbst eingetragen, kurzer Freitext („erreichbar abends") | **freiwillig** |
+| `vis_*` | Sichtbarkeit je Feld: `dorf` oder `verwaltung` | — |
+| `token_name` | Name aus der Rössing-ID, intern zur Zuordnung von Bestandsdaten | — |
+| `updated_at` | Zeitstempel der letzten Änderung | — |
+
+Der Datensatz entsteht beim ersten `GET /api/v1/me` aus den Angaben, die
+ohnehin im Token stehen. Telefon und Notiz sind dann leer.
+
+### Wer was sieht
+
+- **Vorbelegung:** Anzeigename und Nickname `dorf`, Telefon, E-Mail und Notiz
+  `verwaltung`. Kontaktdaten werden also **nie still veröffentlicht** — es
+  braucht eine bewusste Entscheidung in der App bzw. der Verwaltung.
+- `GET /api/v1/members` liefert Angemeldeten ausschließlich die auf `dorf`
+  gestellten Felder. Nicht freigegebene Felder verlassen den Server nicht
+  (nicht ausgegraut, nicht leer mitgeschickt — sie sind schlicht nicht in der
+  Antwort). Belegt in
+  `internal/api/profil_test.go: TestMitgliederSehenNurFreigegebenes`.
+- Verwaltende sehen alles, aber gekennzeichnet: `adminView: true` und je
+  Eintrag `restricted: [...]` mit den Feldern, die die Person **nicht**
+  freigegeben hat. Die Verwaltungsoberfläche schreibt „nur Verwaltende"
+  daneben.
+- Wer weder Anzeigenamen noch Nickname freigibt, erscheint für gewöhnliche
+  Mitglieder gar nicht in der Liste
+  (`TestGanzZurueckhaltendeTauchenNichtAuf`).
+- Nur das eigene Profil ist änderbar. `PUT /api/v1/me/profile` mit fremder
+  Kennung im Rumpf antwortet `403` — auch für Admins
+  (`TestFremdesProfilVerboten`).
+- Eingaben werden geprüft: Längen (80/40/40/120/200 Zeichen), Telefonformat
+  großzügig aber plausibel (mindestens fünf Ziffern, keine Buchstaben),
+  E-Mail-Form, und **keine Steuerzeichen** — auch keine Zeilenumbrüche und
+  Tabulatoren (`TestProfilValidierung`).
+
+### Namen in Rangliste und Historie
+
+Erledigungen speichern seit jeher den Namen, der beim Melden galt. Statt diese
+Bestandsdaten anzufassen, wird der Name **beim Anzeigen** aufgelöst
+(`model.NameResolver`):
+
+1. Gibt es kein Profil zur Kennung → gespeicherter Name (Bestandsdaten
+   funktionieren unverändert weiter).
+2. Gehört der gespeicherte Name zu dieser Person — er entspricht dem Namen aus
+   der Rössing-ID, dem Anzeigenamen oder dem Nickname → Profilname
+   (Nickname, sonst Anzeigename).
+3. Sonst bleibt der gespeicherte Name stehen. Das ist der Fall „Verwaltung
+   trägt einen telefonisch gemeldeten Vollzug für jemand anderen ein": Diese
+   Zeile gehört der genannten Person und darf nicht den Nickname der
+   eintragenden Person bekommen (`TestNachtragUnterFremdemNamenBleibt`).
+
+Die SQL-Gruppierung der Rangliste bleibt dabei unangetastet (`user_sub` +
+gespeicherter Name); erst ganz zum Schluss, nach Auszeichnungen und der Suche
+nach dem eigenen Eintrag, wird der Anzeigename ersetzt. Dadurch spaltet sich
+keine Person in zwei Zeilen, wenn sie sich umbenennt.
+
+### Migration
+
+`CREATE TABLE IF NOT EXISTS profiles` — rein additiv. An `places`,
+`care_tasks`, `completions` und `settings` ändert sich nichts, es werden keine
+Daten umgeschrieben. Die laufende Produktionsdatenbank bekommt die Tabelle
+beim nächsten Start einfach dazu; ein Rückschritt auf die vorige Version
+funktioniert weiterhin (die alte Version ignoriert die Tabelle).
+
+### Was nachzuziehen ist (nicht in diesem Repo)
+
+1. **Datenschutzerklärung auf der Website.** Neu aufzunehmen: Kategorie
+   „freiwillig angegebene Kontaktdaten (Telefonnummer, E-Mail-Adresse,
+   Anzeigename, Nickname, kurze Notiz)"; Zweck: Nachbarschaftliche
+   Erreichbarkeit innerhalb der Dorf-App; Rechtsgrundlage: Einwilligung
+   (Art. 6 Abs. 1 lit. a DSGVO), erteilt durch das bewusste Umlegen des
+   Sichtbarkeits-Schalters, jederzeit widerruflich durch Zurückstellen bzw.
+   Leeren des Feldes; Empfänger: alle in der Dorf-App angemeldeten Personen
+   (bei Freigabe „für alle Dorfbewohner") bzw. ausschließlich die
+   Verwaltenden; Speicherdauer: bis zur Änderung oder Löschung durch die
+   Person.
+2. **Play-Datensicherheit (Data Safety).** Bisher wurde „keine Daten erhoben"
+   bzw. nur die Anmeldung gemeldet. Neu zu deklarieren:
+   - *Personal info → Name* (erhoben, geteilt: nein, optional: ja)
+   - *Personal info → Email address* (erhoben, optional: ja)
+   - *Personal info → Phone number* (erhoben, optional: ja)
+   - *Personal info → Other info* (die freie Notiz, optional: ja)
+   jeweils Zweck „App functionality", Übertragung verschlüsselt, Löschung auf
+   Wunsch möglich, Daten sind **nicht** an Dritte weitergegeben (die
+   Sichtbarkeit innerhalb der App ist keine Weitergabe an Dritte im Sinne der
+   Erklärung, wohl aber in der Datenschutzerklärung zu benennen).
+3. **Hinweis in der App selbst** ist bereits umgesetzt: Die Profilseite trägt
+   den Hinweis „Das sehen andere" gut sichtbar über dem Formular, nicht im
+   Kleingedruckten.
+
 ## Wenn doch etwas klemmt
 
 Alle Riegel sind über die Umgebung steuerbar, ohne neues Image:

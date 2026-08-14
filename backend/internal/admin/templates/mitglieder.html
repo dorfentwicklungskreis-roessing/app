@@ -1,0 +1,65 @@
+{{/* Wer macht mit: alle, die sich in der Dorf-App angemeldet haben, mit den
+     Angaben aus ihrem Profil. Die Verwaltung sieht auch das, was für die
+     anderen Dorfbewohner gesperrt ist — deutlich gekennzeichnet. */}}
+{{define "seite"}}
+<div class="flex flex-wrap items-center justify-between gap-2">
+  <h1 class="text-2xl font-bold" id="seitentitel">Dorfbewohner</h1>
+  <a class="btn btn-primary btn-sm" href="/admin/dorfbewohner/profil">Mein Profil</a>
+</div>
+<p class="mt-1 text-base-content/70">
+  Alle, die die Dorf-App schon einmal geöffnet haben. Angaben mit dem Vermerk
+  <span class="badge badge-outline badge-sm">nur Verwaltende</span> hat die Person
+  <strong>nicht</strong> für die anderen Dorfbewohner freigegeben — bitte entsprechend behandeln.
+</p>
+
+{{if not .Data.Mitglieder}}
+  <div class="alert mt-6" id="keine-mitglieder"><span>Noch niemand hat ein Profil.</span></div>
+{{else}}
+<div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+  {{range .Data.Mitglieder}}
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">{{.Name}}</h2>
+        {{if and .DisplayName .Nickname}}
+          <p class="text-sm text-base-content/70">
+            Anzeigename: {{.DisplayName}}
+            {{if index .NurVerwaltung "displayName"}}
+              <span class="badge badge-outline badge-sm nur-verwaltung">nur Verwaltende</span>
+            {{end}}
+          </p>
+        {{end}}
+        <ul class="mt-2 space-y-1 text-sm">
+          {{if .Phone}}
+            <li>
+              📞 <a class="link" href="tel:{{.Phone}}">{{.Phone}}</a>
+              {{if index .NurVerwaltung "phone"}}
+                <span class="badge badge-outline badge-sm nur-verwaltung">nur Verwaltende</span>
+              {{end}}
+            </li>
+          {{end}}
+          {{if .Email}}
+            <li>
+              ✉️ <a class="link" href="mailto:{{.Email}}">{{.Email}}</a>
+              {{if index .NurVerwaltung "email"}}
+                <span class="badge badge-outline badge-sm nur-verwaltung">nur Verwaltende</span>
+              {{end}}
+            </li>
+          {{end}}
+          {{if .Note}}
+            <li>
+              📝 {{.Note}}
+              {{if index .NurVerwaltung "note"}}
+                <span class="badge badge-outline badge-sm nur-verwaltung">nur Verwaltende</span>
+              {{end}}
+            </li>
+          {{end}}
+        </ul>
+        {{if not .UpdatedAt.IsZero}}
+          <p class="mt-2 text-xs text-base-content/60">Stand: {{datum .UpdatedAt}}</p>
+        {{end}}
+      </div>
+    </div>
+  {{end}}
+</div>
+{{end}}
+{{end}}

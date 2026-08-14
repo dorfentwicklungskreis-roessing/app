@@ -61,6 +61,15 @@
           </ul>
           {{end}}
         </li>
+        <li>
+          <a href="/admin/dorfbewohner/" {{if eq .Nav "dorfbewohner"}}class="menu-active"{{end}}>Dorfbewohner</a>
+          {{if eq .Nav "dorfbewohner"}}
+          <ul>
+            <li><a href="/admin/dorfbewohner/">Mitglieder</a></li>
+            <li><a href="/admin/dorfbewohner/profil">Mein Profil</a></li>
+          </ul>
+          {{end}}
+        </li>
       </ul>
     </nav>
   </div>

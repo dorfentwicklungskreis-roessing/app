@@ -181,6 +181,13 @@ func (a *App) zeigeOrt(w http.ResponseWriter, r *http.Request, status int, id in
 		return
 	}
 
+	// Namen kommen aus den Profilen, nicht aus dem, was beim Melden
+	// eingefroren wurde — genau wie in App und API.
+	namen, err := a.db.NameResolver()
+	if err != nil {
+		a.fail(w, r, http.StatusInternalServerError, err)
+		return
+	}
 	historie := []historieEintrag{}
 	for _, t := range ort.Tasks {
 		cs, err := a.db.ListCompletions(t.ID, 20)
@@ -189,6 +196,7 @@ func (a *App) zeigeOrt(w http.ResponseWriter, r *http.Request, status int, id in
 			return
 		}
 		for _, c := range cs {
+			c.UserName = namen.Resolve(c.UserSub, c.UserName)
 			historie = append(historie, historieEintrag{Aufgabe: aufgabenName(t.CareTask), Erledigung: c})
 		}
 	}
@@ -537,6 +545,9 @@ func (a *App) erledigungZuruecknehmenFrage(w http.ResponseWriter, r *http.Reques
 	menge := ""
 	if c.Liters != nil {
 		menge = " (" + zahl(*c.Liters) + " l)"
+	}
+	if namen, err := a.db.NameResolver(); err == nil {
+		c.UserName = namen.Resolve(c.UserSub, c.UserName)
 	}
 	a.render(w, r, http.StatusOK, "bestaetigen", view{
 		Title: "Erledigung zurücknehmen", Nav: "dorfpflege",

@@ -1,0 +1,53 @@
+{{/* Eigenes Profil: Angaben zur Person mit einem Sichtbarkeits-Schalter je
+     Feld. Der Hinweis, wer was sieht, steht groß über dem Formular — nicht
+     im Kleingedruckten. */}}
+{{define "seite"}}
+<div class="breadcrumbs text-sm">
+  <ul><li><a href="/admin/dorfbewohner/">Dorfbewohner</a></li><li>Mein Profil</li></ul>
+</div>
+<h1 class="text-2xl font-bold" id="seitentitel">Mein Profil</h1>
+
+<div role="alert" class="alert alert-warning mt-4 max-w-2xl" id="sichtbarkeitshinweis">
+  <span>
+    <strong>Das sehen andere.</strong>
+    Alles, was hier auf „für alle Dorfbewohner“ steht, können alle angemeldeten
+    Dorfbewohner in der Mitgliederliste lesen — Telefonnummer und E-Mail
+    eingeschlossen. Was auf „nur Verwaltende“ steht, sehen ausschließlich die
+    Verwaltenden der Dorf-App. Anzeigename bzw. Nickname erscheinen außerdem
+    immer in Rangliste und Erledigungs-Historie: darunter bist du im Dorf
+    unterwegs. Telefon, E-Mail und Notiz sind vollständig freiwillig — leer
+    lassen ist völlig in Ordnung.
+  </span>
+</div>
+
+<div class="card mt-4 max-w-2xl bg-base-100 shadow-sm">
+  <div class="card-body">
+    {{if .Data.Fehler}}
+      <div role="alert" class="alert alert-error" id="formularfehler"><span>{{.Data.Fehler}}</span></div>
+    {{end}}
+    <form method="post" action="/admin/dorfbewohner/profil" id="profil-formular">
+      {{range .Data.Felder}}
+        <fieldset class="fieldset border-b border-base-300 pb-3">
+          <label class="fieldset-legend" for="{{.ID}}">{{.Titel}}</label>
+          <input type="{{.Art}}" name="{{.Name}}" id="{{.ID}}" value="{{.Wert}}" class="input w-full">
+          <p class="label">{{.Hinweis}}</p>
+          <label class="fieldset-label mt-1">
+            <input type="checkbox" name="{{.Sicht}}" id="{{.Sicht}}" value="dorf"
+                   class="toggle toggle-primary" {{if .Oeffentlich}}checked{{end}}>
+            Für alle Dorfbewohner sichtbar
+          </label>
+        </fieldset>
+      {{end}}
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-primary" id="profil-speichern">Speichern</button>
+        <a class="btn btn-ghost" href="/admin/dorfbewohner/">Zur Mitgliederliste</a>
+      </div>
+    </form>
+    {{if not .Data.Profil.UpdatedAt.IsZero}}
+      <p class="mt-3 text-sm text-base-content/70" id="zuletzt-geaendert">
+        Zuletzt geändert: {{datumZeit .Data.Profil.UpdatedAt}}
+      </p>
+    {{end}}
+  </div>
+</div>
+{{end}}
