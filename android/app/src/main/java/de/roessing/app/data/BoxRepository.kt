@@ -153,3 +153,65 @@ class ApiDeviceRepository(private val api: DorfApi) : DeviceRepository {
     override suspend fun register(token: String) = api.registerDevice(DeviceInput(token))
     override suspend fun unregister(token: String) = api.unregisterDevice(DeviceInput(token))
 }
+
+/**
+ * Das Backend hat die Eingabe abgewiesen und nennt den Grund im Klartext
+ * (HTTP 400) — oder die Rolle fehlt (403). In beiden Fällen ist der Text des
+ * Backends besser als alles, was die App raten könnte.
+ */
+class VerwaltungAbgelehntException(val grund: String) : RuntimeException(grund)
+
+/**
+ * Verwaltung von Orten und Aufgaben aus der App heraus.
+ *
+ * Der Sinn: am Blumenkasten stehen und dort eintragen, was zu tun ist —
+ * statt später am Rechner. Erlaubt ist das nur der Verwaltung (Rolle
+ * „admin"); durchgesetzt wird das im Backend, nicht hier.
+ */
+interface VerwaltungRepository {
+    suspend fun ortAnlegen(eingabe: PlaceEingabe): PlaceDto
+    suspend fun ortAendern(id: Long, eingabe: PlaceEingabe): PlaceDto
+    suspend fun ortLoeschen(id: Long)
+    suspend fun aufgabeAnlegen(placeId: Long, eingabe: TaskEingabe): TaskDto
+    suspend fun aufgabeAendern(id: Long, eingabe: TaskEingabe): TaskDto
+    suspend fun aufgabeLoeschen(id: Long)
+}
+
+class ApiVerwaltungRepository(private val api: DorfApi) : VerwaltungRepository {
+    override suspend fun ortAnlegen(eingabe: PlaceEingabe): PlaceDto =
+        abgesichert { api.ortAnlegen(eingabe) }
+
+    override suspend fun ortAendern(id: Long, eingabe: PlaceEingabe): PlaceDto =
+        abgesichert { api.ortAendern(id, eingabe) }
+
+    override suspend fun ortLoeschen(id: Long) = abgesichert { api.ortLoeschen(id) }
+
+    override suspend fun aufgabeAnlegen(placeId: Long, eingabe: TaskEingabe): TaskDto =
+        abgesichert { api.aufgabeAnlegen(placeId, eingabe) }
+
+    override suspend fun aufgabeAendern(id: Long, eingabe: TaskEingabe): TaskDto =
+        abgesichert { api.aufgabeAendern(id, eingabe) }
+
+    override suspend fun aufgabeLoeschen(id: Long) = abgesichert { api.aufgabeLoeschen(id) }
+
+    /**
+     * Macht aus einer abgewiesenen Anfrage einen Domänenfehler mit dem
+     * Klartext des Backends. 403 heißt: Diese Person darf nicht verwalten —
+     * das ist keine Panne, sondern die Regel.
+     */
+    private suspend fun <T> abgesichert(aufruf: suspend () -> T): T =
+        try {
+            aufruf()
+        } catch (e: HttpException) {
+            when (e.code()) {
+                400, 403, 404, 409 -> throw VerwaltungAbgelehntException(grundAus(e))
+                else -> throw e
+            }
+        }
+
+    private fun grundAus(e: HttpException): String = runCatching {
+        val roh = e.response()?.errorBody()?.string().orEmpty()
+        Json { ignoreUnknownKeys = true }.decodeFromString<ApiErrorDto>(roh).error
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+        ?: if (e.code() == 403) "Dafür fehlt die Berechtigung." else "Die Eingabe wurde abgelehnt."
+}
