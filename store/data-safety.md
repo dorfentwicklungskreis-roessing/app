@@ -1,7 +1,11 @@
 # Datensicherheit („Data safety") — Antworten für die Play Console
 
-Ausgefüllt auf Basis des tatsächlichen Codes, Stand `versionCode 2` / `0.1.1`.
-Belegstellen sind angegeben, damit sich jede Antwort nachprüfen lässt.
+Ausgefüllt auf Basis des tatsächlichen Codes, Stand `versionCode 1000107` /
+`0.1.7`. Belegstellen sind angegeben, damit sich jede Antwort nachprüfen lässt.
+
+Maßgeblich für die Formulierungen ist die veröffentlichte Erklärung unter
+<https://xn--rssing-wxa.de/app/datenschutz/>; dieses Dokument übersetzt sie in
+die Formularfelder der Play Console.
 
 Ort in der Play Console: **App-Inhalte → Datensicherheit**.
 
@@ -90,15 +94,40 @@ Messaging) — das ist eine Weitergabe und unten als solche deklariert.
 - **Was genau:** Erledigungsmeldungen — welche Pflegeaufgabe, Zeitpunkt
   (`done_at`), gegebenenfalls Litermenge. Für alle angemeldeten Dorfbewohner
   sichtbar (Historie eines Ortes, Rangliste).
+  Seit `0.1.7` fällt hierunter zusätzlich die **Vergabe**: der freiwillige
+  Eintrag als Helfer:in an einem Ort (Kennung, Ort, ggf. Aufgabenart,
+  Zeitpunkt), die daraus entstehenden Anfragen (Kennung, Anlass, Zeitpunkt, ob
+  gelesen) und die Zusagen. Eine Zusage ist mit Namen und Frist für die
+  übrigen Eingetragenen sichtbar — sonst gießen zwei denselben Kasten. Keine
+  neue Play-Kategorie: Es kommen nur Kennung, Ort und Zeitpunkte hinzu.
 - **Beleg:** `POST /api/v1/tasks/{id}/completions` in
-  `backend/internal/api/api.go`, Tabelle `completions` in `db.go`
+  `backend/internal/api/api.go`, Tabelle `completions` in `db.go`;
+  `care_signups`, `care_assignments`, `care_notifications` und
+  `backend/internal/vergabe/vergabe.go`
+
+### App-Aktivitäten → Sonstige nutzergenerierte Inhalte (seit 0.1.7)
+
+- **Erhoben:** ja · **Geteilt:** nein
+- **Pflicht oder optional:** **optional** — die Kachel „Idee vorschlagen" ist
+  ein Angebot; die App funktioniert vollständig, ohne sie je zu öffnen
+- **Zwecke:** App-Funktionalität (Weiterentwicklung nach Wünschen aus dem Dorf)
+- **Nur kurzzeitig verarbeitet:** nein — die Einreichung bleibt in der
+  Ideen-Tabelle stehen, bis die Verwaltung sie löscht
+- **Was genau:** ein frei getippter Wunsch (5–2000 Zeichen), dazu freiwillig
+  Name und E-Mail-Adresse (aus dem Profil vorbelegt, überschreib- und
+  leerbar). Der Text ist **nicht öffentlich**: Er ist nur für die Verwaltung
+  sichtbar und erscheint an keiner Stelle der App für andere Nutzer.
+- **Beleg:** `android/app/src/main/java/de/roessing/app/ui/IdeenScreen.kt`,
+  `data/Ideen.kt`, `POST /api/v1/ideen` in `backend/internal/api/`
 
 ### Geräte- oder andere Kennungen → Gerätekennung (seit 0.1.7)
 
 - **Erhoben:** ja · **Geteilt:** **ja** (an Google/Firebase Cloud Messaging)
-- **Pflicht oder optional:** **optional** — nur, wer Benachrichtigungen
-  erlaubt. Ohne Erlaubnis wird keine Kennung erzeugt und nichts verschickt;
-  die App zeigt die Anfragen dann wie bisher beim Öffnen.
+- **Pflicht oder optional:** gemeint ist **optional** — nur, wer
+  Benachrichtigungen erlaubt; die App zeigt die Anfragen sonst wie bisher
+  beim Öffnen. **Aber:** so, wie der Code heute läuft, entsteht die Kennung
+  auch ohne Erlaubnis. Siehe „Abweichung im Code" unten — davon hängt ab, was
+  hier angekreuzt werden darf.
 - **Zwecke:** App-Funktionalität (Benachrichtigung, dass jemand an der Reihe
   ist)
 - **Nur kurzzeitig verarbeitet:** nein — die Kennung steht bis zum Abmelden
@@ -108,22 +137,68 @@ Messaging) — das ist eine Weitergabe und unten als solche deklariert.
   keiner Antwort der API ausgeliefert und lässt sich nur von der eigenen
   Person abmelden. Meldet Google sie als ungültig (`UNREGISTERED`,
   `INVALID_ARGUMENT`), löscht der Server sie von sich aus.
-- **Was an Google geht:** die Kennung, Titel und Text der Meldung (also
-  Ortsname und Aufgabenart) sowie die internen Kennungen von Ort, Aufgabe und
-  Vorgang. **Namen anderer Personen stehen nie in einer Push-Nachricht.**
+- **Was an Google geht** — vollständige Liste, abgelesen an `Nutzlast()` in
+  `backend/internal/push/fcm.go`:
+  - im `notification`-Teil: **Titel und Text** der Meldung, z.B. „Gießen an
+    ‚Kirchplatz' ist dran" / „Du bist als Nächste(r) an der Reihe: Gießen an
+    ‚Kirchplatz'. Wenn du zusagst, hast du 24 Stunden Zeit."
+  - im `data`-Teil zusätzlich: **Ortsname** (`placeName`), **Aufgabenname**
+    (`taskName`), die internen Nummern von **Ort, Aufgabe, Vorgang und
+    Benachrichtigung** (`placeId`, `taskId`, `assignmentId`,
+    `notificationId`), die **Art** der Nachricht (`kind`, `taskKind`), der
+    Ablaufzeitpunkt einer Anfrage (`expiresAt`) sowie Titel und Text noch
+    einmal als Zeichenkette. Der `data`-Teil sagt der App, wohin ein
+    Fingertipp führen soll.
+  - im `android`-Teil: der Kanal (`anfragen`/`hinweise`) und eine Kennzeichnung
+    je Vorgang, damit sich Meldungen zum selben Vorgang gegenseitig ersetzen.
+  - **Namen anderer Personen stehen nie in einer Push-Nachricht.** Die Texte
+    entstehen in `vergabe.texte()` aus Ortsname, Aufgabenname und Frist; ein
+    Personenname kommt dort nicht vor — auch nicht in der Meldung „schon
+    erledigt".
+- **Wann etwas hinausgeht:** wenn jemand an der Reihe ist, beim **Rundruf** am
+  Ende der Warteschlange, bei abgelaufener oder von der Verwaltung
+  aufgehobener Zusage und wenn eine Aufgabe schon erledigt oder nicht mehr
+  nötig ist. Zwischen **21 und 7 Uhr** wird nichts zugestellt
+  (`model.AssignmentRules.NextDelivery`).
 - **Beleg:** `backend/internal/push/fcm.go` (Nutzlast), `POST/DELETE
   /api/v1/me/devices` in `backend/internal/api/geraete.go`, Tabelle
   `push_devices` in `backend/internal/db/db.go`,
   `android/app/src/main/java/de/roessing/app/push/`
 
-### Nachrichten / sonstige nutzergenerierte Inhalte
+#### ⚠️ Abweichung im Code — vor dem Absenden entscheiden
 
-- **Erhoben:** derzeit **nein**
-- **Begründung:** Das Datenmodell kennt ein Freitextfeld `note` an einer
-  Erledigung, die **Android-App füllt es nicht** — es gibt in der Oberfläche
-  kein Eingabefeld dafür (nur Web-Verwaltung und MCP setzen es).
-- **Achtung bei Änderungen:** Sobald die App ein Notizfeld bekommt, muss hier
-  *App-Aktivitäten → sonstige nutzergenerierte Inhalte* nachgetragen werden.
+Die Angabe „optional" oben setzt voraus, dass ohne Erlaubnis keine Kennung
+entsteht. **Das stimmt derzeit nicht:**
+`android/app/src/main/java/de/roessing/app/ui/HomeScreen.kt` ruft
+`Geraeteanmeldung.anmelden(context)` in einem `LaunchedEffect(Unit)` beim
+Betreten der Startseite auf — ohne vorher `POST_NOTIFICATIONS` zu prüfen. Die
+Erlaubnisfrage kommt erst später und nur, wenn sich jemand irgendwo als
+Helfer:in eingetragen hat. Die Folge: Firebase vergibt die Kennung und der
+Server merkt sie sich auch bei jemandem, der die Benachrichtigungen abgelehnt
+hat; Nachrichten für dieses Gerät laufen dann über Google, Android zeigt sie
+nur nicht an (`PushDienst.kt` prüft die Erlaubnis erst beim Anzeigen).
+
+Zwei Wege, beide vertretbar — der erste ist der bessere:
+
+1. **Code nachziehen** (eigenes Issue): erst anmelden, wenn die Erlaubnis
+   erteilt ist, und beim Widerruf `unregister` schicken. Danach stimmt
+   „optional", und die Einwilligung als Rechtsgrundlage trägt.
+2. **Bis dahin** in der Play Console bei *Geräte-ID* **„Pflicht"**
+   ankreuzen — sonst weicht die Angabe vom beobachtbaren Netzwerkverkehr ab,
+   und genau darauf schaut Googles Prüfung.
+
+### Nachrichten (Chat, E-Mail, SMS)
+
+- **Erhoben:** **nein**
+- **Begründung:** Es gibt keinen Chat, keine Kommentare und keinen Weg, einer
+  anderen Person Text zu schicken. Anfragen und Hinweise erzeugt der Server
+  aus festen Bausteinen. Der freie Ideen-Text ist eine Rückmeldung an den
+  Betreiber und oben unter *sonstige nutzergenerierte Inhalte* deklariert.
+- **Randnotiz `note`:** Das Datenmodell kennt ein Freitextfeld an einer
+  Erledigung; die **Android-App füllt es weiterhin nicht** — es gibt in der
+  Oberfläche kein Eingabefeld dafür (nur Web-Verwaltung und MCP setzen es).
+- **Achtung bei Änderungen:** Sobald die App ein Notizfeld an der Erledigung
+  bekommt, gehört es ebenfalls unter *sonstige nutzergenerierte Inhalte*.
 
 ---
 
@@ -189,8 +264,8 @@ Play fragt zweistufig:
 1. **„Können Nutzer die Löschung ihrer Daten beantragen?" → Ja.**
 2. Zusätzlich verlangt Play für Apps mit Konto eine **öffentlich erreichbare
    Seite zur Löschung von Konto und Daten** (Play Console → *App-Inhalte →
-   Datenlöschung*). Diese Seite gibt es noch nicht.
-   **offen: URL auf roessing.de anlegen und eintragen.**
+   Datenlöschung*). Diese Seite steht:
+   <https://xn--rssing-wxa.de/app/daten-loeschen/>
 
 Was heute schon geht:
 
@@ -205,8 +280,13 @@ Was heute schon geht:
 
 ## 5. Offene Punkte
 
-- [ ] URL der Datenschutzerklärung auf roessing.de
-- [ ] URL der Seite zur Konto-/Datenlöschung auf roessing.de
+- [x] URL der Datenschutzerklärung auf roessing.de —
+      <https://xn--rssing-wxa.de/app/datenschutz/>
+- [x] URL der Seite zur Konto-/Datenlöschung auf roessing.de —
+      <https://xn--rssing-wxa.de/app/daten-loeschen/>
+- [ ] **Gerätekennung ohne Erlaubnis** (siehe „Abweichung im Code"): entweder
+      die Anmeldung hinter die Erlaubnis legen oder in der Console „Pflicht"
+      ankreuzen
 - [ ] Loggt der Reverse-Proxy IP-Adressen? Wenn ja: in der Erklärung nennen
 - [ ] Bei jeder neuen Version prüfen, ob ein neues Feld (z.B. Notiz, Foto,
       Standort) die Antworten oben ändert

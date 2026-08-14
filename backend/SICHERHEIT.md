@@ -262,8 +262,9 @@ folgenden Angaben:
 2. **Play-Datensicherheit** braucht keine neue Kategorie: Es kommen keine
    weiteren personenbezogenen Felder hinzu (nur Kennung, Ort, Zeitpunkte).
    Die bestehende Angabe „App activity → Other actions" deckt die Anmeldung
-   und die Zusagen ab; als Zweck weiterhin „App functionality", keine
-   Weitergabe an Dritte.
+   und die Zusagen ab; als Zweck weiterhin „App functionality". Für **diese
+   Angaben** gibt es keine Weitergabe an Dritte — für die Gerätekennung schon,
+   siehe Punkt 3.
 3. **Push ist da — und damit ist Google beteiligt.** Seit `0.1.7` gibt es
    neben der Abrufliste den Versand über Firebase Cloud Messaging
    (`internal/push`, Zusteller an `vergabe.Zusteller`). Das ändert die Lage in
@@ -281,11 +282,21 @@ folgenden Angaben:
      und Vorgang. Das ist eine **Weitergabe an ein anderes Unternehmen** im
      Sinne der Play-Datensicherheit und in der Datenschutzerklärung zu nennen.
      Namen anderer Personen stehen nie in einer Push-Nachricht.
-   - **Freiwillig bleibt es trotzdem.** Ohne Erlaubnis für Benachrichtigungen
-     (ab Android 13 eine eigene Frage mit Begründung) und ohne
-     `FCM_CREDENTIALS_FILE` im Cluster wird schlicht nicht gepusht; die App
-     holt ihre Anfragen dann wie bisher selbst ab. Diese Rückfallebene läuft
-     immer mit — sie ist kein Notbehelf, sondern der verlässliche Weg.
+   - **Freiwillig ist die Anzeige — die Kennung noch nicht.** Ohne
+     `FCM_CREDENTIALS_FILE` im Cluster wird gar nicht gepusht, und wer die
+     Erlaubnis verweigert (ab Android 13 eine eigene Frage mit Begründung),
+     bekommt nichts angezeigt; die App holt ihre Anfragen dann wie bisher
+     selbst ab. Diese Rückfallebene läuft immer mit — sie ist kein Notbehelf,
+     sondern der verlässliche Weg.
+     **Offener Punkt:** `ui/HomeScreen.kt` meldet die Kennung in einem
+     `LaunchedEffect(Unit)` beim Betreten der Startseite an, **bevor** die
+     Erlaubnis geklärt ist. Damit entsteht die Kennung auch bei jemandem, der
+     ablehnt, und Nachrichten für dieses Gerät laufen über Google, ohne dass
+     sie jemand zu sehen bekommt. Solange das so ist, trägt die Einwilligung
+     als Rechtsgrundlage nicht sauber und die Play-Angabe „optional" ist
+     angreifbar (siehe `store/data-safety.md`, „Abweichung im Code").
+     Richtig wäre: erst anmelden, wenn die Erlaubnis vorliegt, und beim
+     Widerruf `DELETE /api/v1/me/devices` schicken.
 
 ## Ideen-Sammlung (Stand 14.08.2026)
 

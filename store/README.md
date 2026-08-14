@@ -17,9 +17,10 @@ store/
 │           └── phoneScreenshots/  fehlen noch, siehe README dort
 ├── assets/                    SVG-Quellen + render.sh für die Grafiken
 ├── check_metadata.py          prüft Limits, Vollständigkeit und Bildmaße
-├── datenschutz.md             Kurzfassung, Vorlage für die Seite auf roessing.de
+├── datenschutz.md             Arbeitsgrundlage; verbindlich ist die Seite auf roessing.de
 ├── data-safety.md             Antworten für das Formular „Datensicherheit"
 ├── content-rating.md          Antworten für den IARC-Fragebogen
+├── app-inhalte-klickanleitung.md  fertige Antworten zum Durchklicken
 └── veroeffentlichung.md       Schritt für Schritt in der Play Console
 ```
 
@@ -62,17 +63,19 @@ Icons der App, in denselben Farben (`#3B6939`, `#FFF3C4`, `#F9A825`).
 | `ACCESS_NETWORK_STATE` | Von OkHttp/AppAuth erwartet; die App unterscheidet „kein Netz" von „Serverfehler" und zeigt sonst weiter den letzten Stand. |
 | `ACCESS_FINE_LOCATION` | Entfernung zum jeweiligen Blumenkasten und Sortierung „was ist in meiner Nähe". Einzelabfrage im Vordergrund, Position bleibt auf dem Gerät. |
 | `ACCESS_COARSE_LOCATION` | Fällt bei einer Standortfreigabe ohnehin mit an und reicht für die Entfernungsanzeige; wer nur den ungefähren Ort freigibt, kann die Funktion trotzdem nutzen. |
+| `POST_NOTIFICATIONS` (seit `0.1.7`) | Anfragen aus der Aufgaben-Vergabe als Meldung aufs Handy. Ab Android 13 eine eigene Frage; sie wird erst gestellt, wenn sich jemand irgendwo als Helfer:in eingetragen hat. Wer ablehnt, sieht die Anfragen beim nächsten Öffnen der App. |
 
 Kein `ACCESS_BACKGROUND_LOCATION`, keine Kamera, kein Speicherzugriff, keine
-Kontakte, keine Benachrichtigungen. `INTERNET` und `ACCESS_NETWORK_STATE`
-allein reichen **nicht** mehr, seit die Karte die eigene Position zeigt — die
-beiden Standortberechtigungen sind für diese Funktion nötig und in der
-Store-Beschreibung sowie in `data-safety.md` begründet.
+Kontakte. `INTERNET` und `ACCESS_NETWORK_STATE` allein reichen **nicht** mehr,
+seit die Karte die eigene Position zeigt — die beiden Standortberechtigungen
+sind für diese Funktion nötig und in der Store-Beschreibung sowie in
+`data-safety.md` begründet.
 
 ## Offene Änderung am Android-Build: versionCode
 
 **Der `versionCode` steht in `android/app/build.gradle.kts` fest verdrahtet
-(aktuell `2`).** Play nimmt jeden Code nur ein einziges Mal an: Wer zweimal
+(aktuell `1000107` zu `versionName 0.1.7`).** Play nimmt jeden Code nur ein
+einziges Mal an: Wer zweimal
 hintereinander taggt, ohne die Zahl von Hand zu erhöhen, bekommt beim zweiten
 Upload `403 … version code that has already been used`.
 
@@ -114,8 +117,13 @@ schlägt sonst fehl.
 ## Was noch fehlt
 
 - [ ] Telefon-Screenshots (`metadata/android/de-DE/images/phoneScreenshots/`)
-- [ ] Öffentliche Datenschutzerklärung auf roessing.de + URL in der Play Console
-- [ ] Öffentliche Seite zur Konto-/Datenlöschung auf roessing.de
+- [x] Öffentliche Datenschutzerklärung auf roessing.de —
+      <https://xn--rssing-wxa.de/app/datenschutz/>
+- [x] Öffentliche Seite zur Konto-/Datenlöschung auf roessing.de —
+      <https://xn--rssing-wxa.de/app/daten-loeschen/>
+- [ ] Angaben in der Play Console auf `0.1.7` nachziehen: Datensicherheit
+      („geteilt" → Ja) und Altersfreigabe neu absenden, siehe
+      `app-inhalte-klickanleitung.md`
 - [ ] `versionCode`-Automatik (siehe oben)
 - [ ] Play-Console-Konto, Service-Account, Secret `PLAY_SERVICE_ACCOUNT_JSON`
       (Anleitung: `veroeffentlichung.md`)

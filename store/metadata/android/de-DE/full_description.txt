@@ -20,14 +20,23 @@ Wer gegossen oder gejätet hat, meldet das mit zwei Tippern. Vorher fragt die Ap
 Rangliste
 Wer hat wie oft gegossen oder gejätet — für Woche, Monat, Gießsaison, Jahr oder insgesamt. Dazu die Gesamtsumme des ganzen Dorfes und ein paar freundliche Auszeichnungen. Das ist als Ansporn gedacht, nicht als Wettkampf.
 
+Als Helfer:in eintragen
+An jedem Ort kannst du dich eintragen. Steht dort etwas an, fragen wir die Eingetragenen der Reihe nach — nicht alle auf einmal. Wer zusagt, hat 24 Stunden Zeit; die anderen sehen, dass die Aufgabe vergeben ist. Freiwillig und jederzeit widerrufbar.
+
+Benachrichtigungen (freiwillig)
+Auf Wunsch kommt eine Anfrage als Meldung aufs Handy, sonst steht sie beim nächsten Öffnen in der App. Zwischen 21 und 7 Uhr ist Ruhe. Ohne Erlaubnis verpasst du nichts, es dauert nur länger.
+
+Idee vorschlagen
+Was soll die App noch können? Ein Satz reicht. Die Einreichung geht nur an den Dorfentwicklungskreis, sie wird nicht veröffentlicht.
+
 WAS DIE APP NICHT MACHT
-Keine Werbung, kein Tracking, keine Analyse-SDKs. Keine Weitergabe von Daten an Dritte zu Werbezwecken. Kein Kauf in der App. Keine Standortverfolgung im Hintergrund und keine Übertragung der eigenen Position.
+Keine Werbung, kein Tracking, keine Analyse-SDKs. Keine Weitergabe von Daten zu Werbezwecken, nichts wird verkauft. Kein Kauf in der App. Keine Standortverfolgung im Hintergrund und keine Übertragung der eigenen Position.
 
 DATEN
-Beim Anmelden kommen Name und E-Mail-Adresse aus der Rössing-ID. Gespeichert werden auf dem Server des Dorfes nur die Erledigungsmeldungen: Nutzerkennung, angezeigter Name, Zeitpunkt, gegebenenfalls Liter und eine Notiz. Diese Meldungen sind für alle angemeldeten Dorfbewohner sichtbar — das ist der Zweck der gemeinsamen Übersicht. Die Verbindung zum Server läuft verschlüsselt über HTTPS. Das Kartenmaterial kommt von OpenFreeMap (OpenStreetMap-Daten); dabei erfährt dieser Dienst die IP-Adresse des Geräts, wie bei jedem Aufruf einer Internetseite.
+Beim Anmelden kommen Name und E-Mail-Adresse aus der Rössing-ID. Gespeichert werden auf dem Server des Dorfes die Erledigungsmeldungen (Nutzerkennung, angezeigter Name, Zeitpunkt, gegebenenfalls Liter und eine Notiz) sowie der Helfer-Eintrag und die daraus entstehenden Anfragen. Diese Angaben sind für die angemeldeten Dorfbewohner sichtbar — das ist der Zweck der gemeinsamen Übersicht. Die Verbindung zum Server läuft verschlüsselt über HTTPS. Das Kartenmaterial kommt von OpenFreeMap (OpenStreetMap-Daten); dabei erfährt dieser Dienst die IP-Adresse des Geräts, wie bei jedem Aufruf einer Internetseite. Wer Benachrichtigungen erlaubt, dessen Meldungen stellt Firebase Cloud Messaging (Google) zu; Google erfährt dabei eine Kennung dieser App-Installation sowie Titel und Text der Meldung (Ortsname und Aufgabe). Namen anderer Personen kommen darin nie vor.
 
 BETRIEB
 Server und Nutzerkonten betreibt der Dorfentwicklungskreis Rössing selbst. Es steckt kein Unternehmen dahinter und es wird nichts verkauft.
 
 AUSBLICK
-„Mithelfen“ — was gerade im Dorf ansteht — ist der erste Bereich der App. Weitere Bereiche können folgen; versprochen wird hier nichts, was noch nicht da ist.
+„Mithelfen“ — was gerade im Dorf ansteht — ist der erste Bereich der App. Weitere können folgen; versprochen wird nichts, was noch nicht da ist.
