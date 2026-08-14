@@ -148,6 +148,10 @@ fun StartScreen(
                 onClick = { onBereich(Bereich.VERWALTUNG) },
             )
         }
+
+        // Impressum und Datenschutz stehen am Fuß der Startseite — dort, wo
+        // man sie sucht, und dauerhaft erreichbar.
+        Rechtliches()
     }
 }
 
