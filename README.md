@@ -152,6 +152,23 @@ Anfang.
   des Backends im Wortlaut und lässt den getippten Text stehen; nach dem
   Abschicken bleibt nur das Wunschfeld leer, damit die nächste Idee ohne
   Tipparbeit hineinpasst.
+- **Veranstaltungen** („Was ist los in Rössing"): Die Termine kommen von der
+  **Website** (`https://xn--rssing-wxa.de/events.json`) und werden **dort**
+  gepflegt (`src/content/events/` im Repo `roessing.de`) — keine zweite
+  Pflegestelle, kein eigener Bestand im Dorf-Backend, das nichts davon weiß.
+  Die App holt die Datei ohne Anmeldung und **ohne Zugangstoken** (eigener
+  HTTP-Client, die Website ist öffentlich), zeigt kommende Termine zuerst und
+  siebt Vergangenes selbst noch einmal aus — die Datei entsteht beim Bauen der
+  Website und altert zwischen zwei Bauläufen. Ganztägige Termine kommen ohne
+  erfundene Uhrzeit aus; Zeitpunkte tragen ihren Offset (`+01:00`/`+02:00`)
+  und werden in Ortszeit angezeigt. Verweist ein Termin per `url` auf eine
+  **externe Primärquelle**, führt der Tipp dorthin statt auf rössing.de —
+  dieselbe Regel wie auf der Website, damit Inhalte nicht doppelt erzählt
+  werden. Lässt sich nichts laden, steht ein Hinweis über der (womöglich
+  älteren) Liste statt einer leeren Seite. **Kein Push für Termine**: Eine
+  Erinnerung wäre ein eigenes Thema mit eigener Einwilligung.
+  Termine mit Koordinaten sind für die Dorfkarte vorbereitet; Koordinaten
+  pflegt die Website an den Orten (`geo` in `src/data/locations/*.yaml`).
 - **Spielschutz**: Nach einer Erledigung bleibt dieselbe Aufgabe gesperrt —
   50 % des Soll-Intervalls (beim Gießen mit dem Hitzefaktor skaliert, bei
   Jäten & Co. nicht), mindestens 12 Stunden, höchstens das volle Intervall.
