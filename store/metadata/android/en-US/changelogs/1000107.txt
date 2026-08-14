@@ -1,0 +1,9 @@
+New: sign up as a helper at any spot. When something is due there, we
+ask the helpers one after another — not everyone at once. Whoever
+accepts has 24 hours; everyone else can see the task is taken.
+
+Requests and notices appear on the home screen under "Notifications":
+accept with "I'll do it", release with "Give back".
+
+If you like, requests arrive on your phone. Nights (9 pm to 7 am) stay
+quiet.

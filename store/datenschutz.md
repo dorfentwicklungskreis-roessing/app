@@ -45,8 +45,27 @@ und nicht übertragen**, weder an den Dorfserver noch an Dritte; die API der App
 kennt kein Feld dafür. Ohne Freigabe funktioniert die App vollständig, nur ohne
 Entfernungsangaben.
 
+**Mithelfen und Anfragen.** Wer sich an einem Ort als Helfer:in einträgt,
+hinterlegt damit: Kennung, Ort, ggf. Aufgabenart und Zeitpunkt. Steht dort
+etwas an, entsteht daraus eine Anfrage (gespeichert: Kennung, Anlass,
+Zeitpunkt, ob gelesen). Wer zusagt, ist mit Namen und Frist für die übrigen
+Eingetragenen sichtbar — sonst gießen zwei Leute denselben Kasten. Das
+Eintragen ist freiwillig und jederzeit widerrufbar; Anfragen und Vorgänge
+hängen an der Pflegeaufgabe und verschwinden mit ihr.
+
+**Benachrichtigungen aufs Handy (freiwillig).** Wer zustimmt, bekommt Anfragen
+als Push-Nachricht. Dafür vergibt **Google (Firebase Cloud Messaging)** eine
+Kennung dieser App-Installation; die App meldet sie dem Dorfserver, damit er
+Nachrichten an dieses Gerät schicken kann. An Google gehen dabei die Kennung
+sowie Titel und Text der Meldung (Ortsname und Aufgabe) — Namen anderer
+Personen nie. Ohne Zustimmung wird keine Kennung erzeugt und nichts
+verschickt; die Anfragen stehen dann beim Öffnen in der App. Beim Abmelden aus
+der App wird die Kennung gelöscht, ebenso, wenn Google sie als ungültig
+meldet. Zwischen 21 und 7 Uhr wird nichts zugestellt.
+
 **Kein Tracking.** Keine Werbung, keine Analyse- oder Absturz-SDKs, keine
-Werbe-ID, kein Profiling.
+Werbe-ID, kein Profiling. Das Firebase-SDK ist ausschließlich für die
+Benachrichtigungen eingebunden.
 
 ## Empfänger
 
@@ -57,6 +76,14 @@ Werbe-ID, kein Profiling.
   von OpenStreetMap-Daten. Dabei erfährt dieser Dienst die IP-Adresse des Geräts
   und die abgerufenen Kachelbereiche, wie bei jedem Abruf einer Internetseite.
   Kein Vertragsverhältnis, kein Konto, kein API-Schlüssel.
+
+- **Google Ireland Ltd. / Google LLC (Firebase Cloud Messaging)** — nur, wenn
+  Benachrichtigungen erlaubt sind: Google stellt die Nachrichten zu und erfährt
+  dabei die Gerätekennung sowie Titel und Text der Meldung. Rechtsgrundlage ist
+  die Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), erteilt über die
+  Systemabfrage; sie lässt sich jederzeit in den Android-Einstellungen
+  zurücknehmen. Datenübermittlung in die USA auf Grundlage der
+  Standardvertragsklauseln bzw. des EU-US Data Privacy Framework.
 
 Darüber hinaus gibt es keine Weitergabe an Dritte. Nichts wird verkauft.
 

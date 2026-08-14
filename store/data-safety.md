@@ -11,7 +11,7 @@ Ort in der Play Console: **App-Inhalte → Datensicherheit**.
 
 | Frage | Antwort |
 |---|---|
-| Erhebt oder teilt die App Nutzerdaten? | **Ja, erheben. Nein, nicht teilen.** |
+| Erhebt oder teilt die App Nutzerdaten? | **Ja, erheben. Ja, teilen** — seit `0.1.7` geht die Gerätekennung samt Meldungstext an Google (Firebase Cloud Messaging), siehe Abschnitt 2. |
 | Werden Daten bei der Übertragung verschlüsselt? | **Ja** — ausschließlich HTTPS (`https://app.xn--rssing-wxa.de`, `https://id.xn--rssing-wxa.de`, `https://tiles.openfreemap.org`) |
 | Können Nutzer die Löschung ihrer Daten beantragen? | **Ja** — siehe Abschnitt 4 |
 | Unabhängige Sicherheitsprüfung | **Nein** |
@@ -19,7 +19,10 @@ Ort in der Play Console: **App-Inhalte → Datensicherheit**.
 
 „Teilen" im Sinne von Play heißt: Weitergabe an ein *anderes Unternehmen*.
 Dorfserver und Rössing-ID betreibt der Dorfentwicklungskreis selbst — das ist
-keine Weitergabe. Nichts wird verkauft, es gibt keine Werbepartner.
+keine Weitergabe. Nichts wird verkauft, es gibt keine Werbepartner. **Eine
+Ausnahme gibt es seit `0.1.7`:** Wer Benachrichtigungen erlaubt, dessen
+Gerätekennung und der Text der Anfrage laufen über Google (Firebase Cloud
+Messaging) — das ist eine Weitergabe und unten als solche deklariert.
 
 ---
 
@@ -90,6 +93,29 @@ keine Weitergabe. Nichts wird verkauft, es gibt keine Werbepartner.
 - **Beleg:** `POST /api/v1/tasks/{id}/completions` in
   `backend/internal/api/api.go`, Tabelle `completions` in `db.go`
 
+### Geräte- oder andere Kennungen → Gerätekennung (seit 0.1.7)
+
+- **Erhoben:** ja · **Geteilt:** **ja** (an Google/Firebase Cloud Messaging)
+- **Pflicht oder optional:** **optional** — nur, wer Benachrichtigungen
+  erlaubt. Ohne Erlaubnis wird keine Kennung erzeugt und nichts verschickt;
+  die App zeigt die Anfragen dann wie bisher beim Öffnen.
+- **Zwecke:** App-Funktionalität (Benachrichtigung, dass jemand an der Reihe
+  ist)
+- **Nur kurzzeitig verarbeitet:** nein — die Kennung steht bis zum Abmelden
+  in der Tabelle `push_devices`
+- **Was genau:** die von Firebase vergebene Kennung der App-Installation
+  (kein Werbe-Identifikator, keine Hardware-Kennung, kein IMEI). Sie wird in
+  keiner Antwort der API ausgeliefert und lässt sich nur von der eigenen
+  Person abmelden. Meldet Google sie als ungültig (`UNREGISTERED`,
+  `INVALID_ARGUMENT`), löscht der Server sie von sich aus.
+- **Was an Google geht:** die Kennung, Titel und Text der Meldung (also
+  Ortsname und Aufgabenart) sowie die internen Kennungen von Ort, Aufgabe und
+  Vorgang. **Namen anderer Personen stehen nie in einer Push-Nachricht.**
+- **Beleg:** `backend/internal/push/fcm.go` (Nutzlast), `POST/DELETE
+  /api/v1/me/devices` in `backend/internal/api/geraete.go`, Tabelle
+  `push_devices` in `backend/internal/db/db.go`,
+  `android/app/src/main/java/de/roessing/app/push/`
+
 ### Nachrichten / sonstige nutzergenerierte Inhalte
 
 - **Erhoben:** derzeit **nein**
@@ -110,8 +136,9 @@ keine Weitergabe. Nichts wird verkauft, es gibt keine Werbepartner.
 | Gesundheits-/Fitnessdaten | nein | — |
 | Kontakte, Kalender, SMS, Anrufliste | nein | keine entsprechenden Berechtigungen |
 | Fotos, Videos, Audio, Dateien | nein | keine Medienauswahl in der App |
-| Absturzberichte, Diagnosen, Leistungsdaten | nein | kein Crashlytics, kein Analytics-SDK; das Firebase-SDK ist **nicht** eingebunden — Firebase wird nur außerhalb der App zur Verteilung von Testversionen benutzt |
-| Werbe-ID / Geräte-IDs | nein | keine `play-services-ads-identifier`-Abhängigkeit |
+| Absturzberichte, Diagnosen, Leistungsdaten | nein | kein Crashlytics, kein Analytics-SDK. Seit `0.1.7` ist `firebase-messaging` eingebunden — **nur** für Benachrichtigungen; die Analyse-Bibliothek fehlt bewusst (im Log: „Unable to log event: analytics library is missing") |
+| Werbe-ID | nein | keine `play-services-ads-identifier`-Abhängigkeit |
+| Geräte-IDs | **ja, seit 0.1.7** | Kennung der App-Installation für Benachrichtigungen — siehe Abschnitt 2 |
 | Kaufhistorie, Suchverlauf, installierte Apps | nein | — |
 
 ### Sonderfall Standort — warum „nicht erhoben" trotzdem stimmt
