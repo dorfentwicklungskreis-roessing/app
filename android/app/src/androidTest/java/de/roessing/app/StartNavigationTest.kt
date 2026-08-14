@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import de.roessing.app.data.CompletionDto
 import de.roessing.app.data.LeaderboardDto
@@ -94,8 +95,11 @@ class StartNavigationTest {
         compose.onNodeWithTag("tab-map").assertDoesNotExist()
         // Freundlicher Einstieg mit dem Namen aus dem Profil.
         compose.onNodeWithText("Moin, Erna!").assertIsDisplayed()
-        // Kein Versprechen, aber die Einladung, Wünsche zu äußern.
-        compose.onNodeWithTag("weitere-bereiche").assertIsDisplayed()
+        // Kein Versprechen, aber die Einladung, Wünsche zu äußern: Die
+        // Ausblick-Kachel führt inzwischen ins Ideen-Formular. Sie steht ganz
+        // unten und liegt auf kleinen Bildschirmen unter dem sichtbaren
+        // Bereich — deshalb erst scrollen.
+        compose.onNodeWithTag("bereich-ideen").performScrollTo().assertIsDisplayed()
     }
 
     @Test

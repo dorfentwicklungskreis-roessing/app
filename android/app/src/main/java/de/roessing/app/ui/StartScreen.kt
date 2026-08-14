@@ -288,7 +288,7 @@ private fun IdeenKachel(onClick: () -> Unit) {
                 groesse = 44,
             )
             Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f).testTag("weitere-bereiche")) {
+            Column(Modifier.weight(1f)) {
                 Text(
                     stringResource(R.string.area_ideas_title),
                     style = MaterialTheme.typography.titleMedium,

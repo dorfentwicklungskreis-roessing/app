@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -99,8 +100,10 @@ class IdeenUiTest {
     fun nameUndEmailKommenAusDemProfil() {
         zeigeApp(FakeIdeen())
         insFormular()
-        compose.onNodeWithText("Erna Beispiel").assertIsDisplayed()
-        compose.onNodeWithText("erna@example.org").assertIsDisplayed()
+        // Die Felder stehen unter dem Wunschfeld — auf kleinen Bildschirmen
+        // also erst nach einem Scroll im Bild.
+        compose.onNodeWithTag("feld-name").performScrollTo().assertTextContains("Erna Beispiel")
+        compose.onNodeWithTag("feld-email").performScrollTo().assertTextContains("erna@example.org")
     }
 
     @Test
@@ -137,7 +140,8 @@ class IdeenUiTest {
         compose.onNodeWithTag("ideen-fehler").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Die E-Mail-Adresse sieht nicht richtig aus.").assertIsDisplayed()
         // Der Wunsch steht noch da.
-        compose.onNodeWithText("Ein Mitfahrbrett für Fahrten nach Hildesheim.").assertIsDisplayed()
+        compose.onNodeWithTag("feld-wunsch").performScrollTo()
+            .assertTextContains("Ein Mitfahrbrett für Fahrten nach Hildesheim.")
     }
 
     @Test
