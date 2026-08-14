@@ -66,7 +66,7 @@ class StartNavigationTest {
         compose.setContent {
             DorfAppTheme {
                 HomeScreen(
-                    viewModel = PlacesViewModel(FakePlaces(orte)),
+                    viewModel = PlacesViewModel(FakePlaces(orte), FakeVergabeRepo()),
                     leaderboardViewModel = LeaderboardViewModel(FakeStats()),
                     profileViewModel = ProfileViewModel(FakeProfile()),
                     onLogout = {},

@@ -104,4 +104,47 @@
     <string name="members_admin_hint">Du siehst als Verwaltende auch Angaben, die nicht freigegeben sind. Sie sind gekennzeichnet.</string>
     <string name="members_only_admins">nur Verwaltende</string>
     <string name="back">Zurück</string>
+
+    <!-- Vergabe der Pflegeaufgaben: mithelfen, Anfragen, Zusagen -->
+    <string name="signup_title">Hier als Helfer:in eintragen</string>
+    <string name="signup_active">Du hilfst hier mit</string>
+    <string name="signup_hint">Dann fragen wir dich, wenn hier etwas ansteht — der Reihe nach, nicht alle auf einmal.</string>
+    <string name="signup_hint_active">Du wirst gefragt, wenn hier etwas ansteht. Zum Austragen den Schalter umlegen.</string>
+    <string name="signup_kind_all">Alles, was hier ansteht</string>
+    <string name="signup_kind_watering">Nur Gießen</string>
+    <string name="signup_kind_weeding">Nur Jäten</string>
+    <string name="signup_kind_question">Wobei möchtest du mithelfen?</string>
+    <string name="signup_added">Eingetragen — danke!</string>
+    <string name="signup_removed">Ausgetragen. Du wirst hier nicht mehr gefragt.</string>
+    <string name="signup_count">%1$d helfen hier mit</string>
+    <string name="signup_count_one">Eine Person hilft hier mit</string>
+    <string name="assignment_claimed">Übernommen von %1$s bis %2$s</string>
+    <string name="assignment_claimed_by_me">Du hast zugesagt — bis %1$s</string>
+    <string name="assignment_open">Wird gerade angefragt</string>
+    <string name="assignment_broadcast">Gesucht: wer kann?</string>
+    <string name="notifications_title">Benachrichtigungen</string>
+    <string name="notifications_subtitle">Anfragen und Hinweise aus dem Dorf.</string>
+    <string name="notifications_empty">Gerade nichts Neues.</string>
+    <string name="notification_until">Bis %1$s</string>
+    <string name="notification_claim">Ich mache das</string>
+    <string name="notification_release">Zurückgeben</string>
+    <string name="notification_ack">Verstanden</string>
+    <string name="assignment_taken">Das hat gerade jemand anderes übernommen.</string>
+    <string name="assignment_claimed_toast">Zugesagt — die Aufgabe gehört dir.</string>
+    <string name="assignment_released_toast">Zurückgegeben. Jemand anderes wird gefragt.</string>
+    <string name="vergabe_failed">Das hat gerade nicht geklappt. Bitte noch einmal versuchen.</string>
+    <plurals name="home_requests">
+        <item quantity="one">Eine Anfrage wartet auf dich</item>
+        <item quantity="other">%1$d Anfragen warten auf dich</item>
+    </plurals>
+    <!-- Push-Benachrichtigungen -->
+    <string name="push_channel_requests">Anfragen</string>
+    <string name="push_channel_requests_text">Wenn du an der Reihe bist, eine Aufgabe zu übernehmen.</string>
+    <string name="push_channel_hints">Hinweise</string>
+    <string name="push_channel_hints_text">Wenn sich an einer übernommenen Aufgabe etwas ändert.</string>
+    <string name="push_permission_title">Sollen wir dich benachrichtigen?</string>
+    <string name="push_permission_text">Wenn hier etwas ansteht, fragen wir der Reihe nach. Mit Benachrichtigungen merkst du das sofort — sonst erst beim nächsten Öffnen der App. Nachts (21–7 Uhr) ist ohnehin Ruhe.</string>
+    <string name="push_permission_yes">Ja, benachrichtigen</string>
+    <string name="push_permission_no">Später</string>
+    <string name="push_denied">Alles gut — deine Anfragen stehen weiter hier in der App.</string>
 </resources>

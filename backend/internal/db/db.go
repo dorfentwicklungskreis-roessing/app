@@ -145,6 +145,20 @@ CREATE TABLE IF NOT EXISTS care_notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_offen ON care_notifications(user_sub, closed_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_vorgang ON care_notifications(assignment_id);
+-- push_devices: die Gerätekennungen von Firebase, mit denen sich eine
+-- Benachrichtigung auch dann zustellen lässt, wenn die App nicht läuft.
+-- Die Kennung ist eindeutig — dasselbe Gerät gehört immer nur einer Person
+-- (siehe internal/db/geraete.go).
+CREATE TABLE IF NOT EXISTS push_devices (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_sub   TEXT NOT NULL,
+  token      TEXT NOT NULL,
+  platform   TEXT NOT NULL DEFAULT 'android',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_token ON push_devices(token);
+CREATE INDEX IF NOT EXISTS idx_devices_person ON push_devices(user_sub);
 `)
 	if err != nil {
 		return err

@@ -145,7 +145,7 @@ class ScreenshotTest {
         compose.setContent {
             DorfAppTheme {
                 HomeScreen(
-                    viewModel = PlacesViewModel(FakePlaces()),
+                    viewModel = PlacesViewModel(FakePlaces(), FakeVergabeRepo()),
                     leaderboardViewModel = LeaderboardViewModel(FakeStats()),
                     profileViewModel = ProfileViewModel(FakeProfile()),
                     onLogout = {},

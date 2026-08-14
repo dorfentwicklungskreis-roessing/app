@@ -264,11 +264,28 @@ folgenden Angaben:
    Die bestehende Angabe „App activity → Other actions" deckt die Anmeldung
    und die Zusagen ab; als Zweck weiterhin „App functionality", keine
    Weitergabe an Dritte.
-3. **Push kommt später.** Heute holt die App die Benachrichtigungen selbst ab
-   (`GET /api/v1/me/notifications`) — es ist kein Google-Dienst beteiligt und
-   nichts zu deklarieren. Sobald ein Push-Weg danebengesetzt wird (die
-   Schnittstelle `vergabe.Zusteller` ist dafür da), sind Datensicherheit und
-   Datenschutzerklärung erneut anzufassen.
+3. **Push ist da — und damit ist Google beteiligt.** Seit `0.1.7` gibt es
+   neben der Abrufliste den Versand über Firebase Cloud Messaging
+   (`internal/push`, Zusteller an `vergabe.Zusteller`). Das ändert die Lage in
+   drei Punkten:
+   - **Neue Angabe: Gerätekennung.** Die App holt sich von Firebase eine
+     Kennung ihrer Installation und meldet sie an `POST /api/v1/me/devices`
+     (Tabelle `push_devices`: Kennung, Person, Plattform, Zeitstempel). Die
+     Kennung ist ein Schlüssel zum Gerät — sie wird deshalb in **keiner**
+     Antwort ausgeliefert, gehört immer nur einer Person (eindeutiger Index)
+     und lässt sich nur von ihr selbst abmelden (`DELETE …/me/devices`).
+     Was Google als ungültig meldet (`UNREGISTERED`, `INVALID_ARGUMENT`),
+     löscht der Server von sich aus.
+   - **Google sieht mit.** An Firebase gehen Gerätekennung, Titel und Text der
+     Meldung (also Ortsname und Aufgabe) sowie die Kennungen von Ort, Aufgabe
+     und Vorgang. Das ist eine **Weitergabe an ein anderes Unternehmen** im
+     Sinne der Play-Datensicherheit und in der Datenschutzerklärung zu nennen.
+     Namen anderer Personen stehen nie in einer Push-Nachricht.
+   - **Freiwillig bleibt es trotzdem.** Ohne Erlaubnis für Benachrichtigungen
+     (ab Android 13 eine eigene Frage mit Begründung) und ohne
+     `FCM_CREDENTIALS_FILE` im Cluster wird schlicht nicht gepusht; die App
+     holt ihre Anfragen dann wie bisher selbst ab. Diese Rückfallebene läuft
+     immer mit — sie ist kein Notbehelf, sondern der verlässliche Weg.
 
 ## Wenn doch etwas klemmt
 

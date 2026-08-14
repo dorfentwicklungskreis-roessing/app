@@ -161,6 +161,7 @@ fun PlaceListScreen(
                     entfernung = state.userLocation?.let { ich ->
                         formatDistance(distanceMeters(ich, LatLon(place.lat, place.lon)))
                     },
+                    meinSub = state.me?.sub,
                     onTap = { onPlaceTap(place.id) },
                 )
             }
@@ -169,7 +170,12 @@ fun PlaceListScreen(
 }
 
 @Composable
-private fun PlaceCard(place: PlaceDto, entfernung: String?, onTap: () -> Unit) {
+private fun PlaceCard(
+    place: PlaceDto,
+    entfernung: String?,
+    meinSub: String? = null,
+    onTap: () -> Unit,
+) {
     Card(
         onClick = onTap,
         shape = MaterialTheme.shapes.large,
@@ -194,6 +200,19 @@ private fun PlaceCard(place: PlaceDto, entfernung: String?, onTap: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 StatusPill(place.careStatus, statusLabel(place.careStatus))
+                // Der Vergabestand der dringendsten Aufgabe: „übernommen von
+                // … bis …" bzw. „3 helfen hier mit".
+                place.tasks.filter { it.active }
+                    .sortedByDescending { it.careStatus.ordinal }
+                    .firstNotNullOfOrNull { task -> vergabeText(task, meinSub) }
+                    ?.let { stand ->
+                        Text(
+                            stand,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.testTag("vergabe-${place.id}"),
+                        )
+                    }
             }
             if (entfernung != null) {
                 Spacer(Modifier.width(12.dp))

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "152002962039",
+    "project_id": "roessing-7ceb4",
+    "storage_bucket": "roessing-7ceb4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:152002962039:android:9f9bdadd9f236ec21d9c72",
+        "android_client_info": {
+          "package_name": "de.roessing.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyANtrKDcNYoZWuxN2PLN7CY-t90Hu2VM28"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -3,6 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    // Liest app/google-services.json und legt daraus die Firebase-Kennungen
+    // als Ressourcen an. Die Datei enthält nur Projekt- und App-Kennungen
+    // sowie den öffentlichen API-Schlüssel — kein Geheimnis. Der private
+    // Schlüssel für den Versand liegt ausschließlich im Cluster.
+    alias(libs.plugins.google.services)
 }
 
 // Konfigurierbar per Gradle-Property oder Env, damit CI/E2E andere Werte setzen können.
@@ -162,6 +167,9 @@ dependencies {
 
     implementation(libs.appauth)
     implementation(libs.maplibre)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)

@@ -13,11 +13,16 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
 
 type Server struct {
 	DB  *db.DB
 	Now func() time.Time
+	// Zusteller bekommt Benachrichtigungen, die aus einem API-Aufruf
+	// entstehen (z.B. eine von der Verwaltung aufgehobene Zusage). Ohne
+	// Angabe bleibt es bei der Abrufliste — siehe vergabe.Zusteller.
+	Zusteller vergabe.Zusteller
 }
 
 // Handler baut den HTTP-Router. authMW schützt alle /api/v1-Routen.
@@ -46,6 +51,7 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 	api.HandleFunc("DELETE /api/v1/completions/{id}", s.handleDeleteCompletion)
 	api.HandleFunc("GET /api/v1/stats/leaderboard", s.handleLeaderboard)
 	s.registerVergabe(api)
+	s.registerGeraete(api)
 	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
 	api.HandleFunc("PUT /api/v1/settings", s.adminOnly(s.handlePutSettings))
 

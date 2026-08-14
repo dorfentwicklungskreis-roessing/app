@@ -7,7 +7,9 @@ import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.HTTP
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -35,6 +37,38 @@ interface DorfApi {
 
     @GET("api/v1/members")
     suspend fun members(): MembersResponse
+
+    // --- Vergabe der Pflegeaufgaben -----------------------------------------
+
+    /** Trägt mich als Helfer:in für einen Ort ein (taskKind leer = alle Aufgaben). */
+    @POST("api/v1/places/{id}/signup")
+    suspend fun signup(@Path("id") placeId: Long, @Body input: SignupInput)
+
+    @DELETE("api/v1/places/{id}/signup")
+    suspend fun signoff(@Path("id") placeId: Long, @Query("taskKind") taskKind: String?)
+
+    @GET("api/v1/me/notifications")
+    suspend fun notifications(): NotificationsResponse
+
+    @POST("api/v1/me/notifications/{id}/ack")
+    suspend fun ackNotification(@Path("id") id: Long)
+
+    /** Zusagen. Antwortet mit 409, wenn jemand anderes schneller war. */
+    @POST("api/v1/assignments/{id}/claim")
+    suspend fun claim(@Path("id") assignmentId: Long): AssignmentDto
+
+    @POST("api/v1/assignments/{id}/release")
+    suspend fun release(@Path("id") assignmentId: Long): AssignmentDto
+
+    // --- Gerät für Push-Benachrichtigungen ----------------------------------
+
+    @POST("api/v1/me/devices")
+    suspend fun registerDevice(@Body input: DeviceInput)
+
+    // DELETE mit Rumpf: die Kennung ist lang und hat in einer URL nichts zu
+    // suchen (Logs, Verläufe). Das Backend nimmt sie auch als Abfrage an.
+    @HTTP(method = "DELETE", path = "api/v1/me/devices", hasBody = true)
+    suspend fun unregisterDevice(@Body input: DeviceInput)
 
     companion object {
         private val json = Json {

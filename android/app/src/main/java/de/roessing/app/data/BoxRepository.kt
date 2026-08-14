@@ -89,3 +89,67 @@ interface StatsRepository {
 class ApiStatsRepository(private val api: DorfApi) : StatsRepository {
     override suspend fun leaderboard(period: String): LeaderboardDto = api.leaderboard(period)
 }
+
+/**
+ * Jemand anderes war schneller (HTTP 409). Der Grund kommt im Klartext vom
+ * Backend und nennt Namen und Frist — er ist für die Person gedacht.
+ */
+class AssignmentTakenException(val grund: String) : RuntimeException(grund)
+
+/**
+ * Die Vergabe der Pflegeaufgaben: sich als Helfer:in eintragen, Anfragen
+ * abholen, zusagen und zurückgeben.
+ *
+ * Die Regeln stehen alle im Backend (internal/vergabe) — hier wird nur
+ * gefragt und geantwortet. Das ist Absicht: Reihenfolge, Fristen und
+ * Ruhezeiten müssen für alle gleich gelten, auch für alte App-Versionen.
+ */
+interface VergabeRepository {
+    suspend fun notifications(): List<NotificationDto>
+    suspend fun ack(id: Long)
+    suspend fun signup(placeId: Long, taskKind: String?)
+    suspend fun signoff(placeId: Long, taskKind: String?)
+    suspend fun claim(assignmentId: Long): AssignmentDto
+    suspend fun release(assignmentId: Long): AssignmentDto
+}
+
+class ApiVergabeRepository(private val api: DorfApi) : VergabeRepository {
+    override suspend fun notifications(): List<NotificationDto> = api.notifications().notifications
+
+    override suspend fun ack(id: Long) = api.ackNotification(id)
+
+    override suspend fun signup(placeId: Long, taskKind: String?) =
+        api.signup(placeId, SignupInput(taskKind.orEmpty()))
+
+    override suspend fun signoff(placeId: Long, taskKind: String?) =
+        api.signoff(placeId, taskKind?.takeIf { it.isNotBlank() })
+
+    override suspend fun claim(assignmentId: Long): AssignmentDto =
+        try {
+            api.claim(assignmentId)
+        } catch (e: HttpException) {
+            if (e.code() == 409) throw AssignmentTakenException(fehlergrund(e)) else throw e
+        }
+
+    override suspend fun release(assignmentId: Long): AssignmentDto = api.release(assignmentId)
+
+    private fun fehlergrund(e: HttpException): String = runCatching {
+        val roh = e.response()?.errorBody()?.string().orEmpty()
+        Json { ignoreUnknownKeys = true }.decodeFromString<ApiErrorDto>(roh).error
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+        ?: "Das hat gerade jemand anderes übernommen."
+}
+
+/**
+ * An- und Abmeldung des Geräts für Push-Benachrichtigungen. Die Kennung
+ * stammt von Firebase und gehört zu genau dieser Installation.
+ */
+interface DeviceRepository {
+    suspend fun register(token: String)
+    suspend fun unregister(token: String)
+}
+
+class ApiDeviceRepository(private val api: DorfApi) : DeviceRepository {
+    override suspend fun register(token: String) = api.registerDevice(DeviceInput(token))
+    override suspend fun unregister(token: String) = api.unregisterDevice(DeviceInput(token))
+}

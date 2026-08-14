@@ -73,6 +73,20 @@ Anfang.
   Nachtrag, den die Verwaltung unter fremdem Namen eingetragen hat, die
   genannte Person. Die SQL-Gruppierung bleibt unangetastet, ersetzt wird erst
   für die Anzeige. Datenschutz-Folgen: siehe `backend/SICHERHEIT.md`.
+- **Push-Benachrichtigungen**: Neben der Abrufliste (`GET
+  /api/v1/me/notifications`) verschickt der Server Anfragen und Hinweise über
+  **Firebase Cloud Messaging** (`internal/push`, HTTP v1, Zugriffstoken aus
+  dem Dienstkonto selbst erzeugt — keine Fremdbibliothek). Die App meldet ihre
+  Gerätekennung mit `POST /api/v1/me/devices` an und beim Abmelden mit
+  `DELETE /api/v1/me/devices` wieder ab; mehrere Geräte je Person sind
+  vorgesehen. Die Kennung wird nie ausgeliefert, und was Google als ungültig
+  meldet, wirft der Server weg. Ohne `FCM_CREDENTIALS_FILE` (Dienstkonto-
+  Schlüssel, im Cluster als SealedSecret) wird nicht gepusht — der Betrieb
+  läuft dann unverändert über die Abrufliste. In der App gibt es dafür zwei
+  Kanäle („Anfragen", „Hinweise"), die Frage nach der Erlaubnis stellt sich
+  erst, wenn jemand sich als Helfer:in eingetragen hat, und ein Tipp auf die
+  Meldung führt direkt zur Aufgabe. Datenschutz-Folgen: siehe
+  `backend/SICHERHEIT.md`.
 - **Spielschutz**: Nach einer Erledigung bleibt dieselbe Aufgabe gesperrt —
   50 % des Soll-Intervalls (beim Gießen mit dem Hitzefaktor skaliert, bei
   Jäten & Co. nicht), mindestens 12 Stunden, höchstens das volle Intervall.

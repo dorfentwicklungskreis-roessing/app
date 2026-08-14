@@ -4,6 +4,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Benachrichtigungen: ab Android 13 muss die Person zustimmen. Ohne
+         Zustimmung bleibt die Abrufliste in der App der Weg — es geht dann
+         nichts verloren, es dauert nur bis zum nächsten Öffnen. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Standort nur im Vordergrund: für Kartenausschnitt und Entfernungen.
          Er bleibt auf dem Gerät und wird nie ans Backend geschickt. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -39,5 +44,21 @@
         <activity
             android:name="net.openid.appauth.RedirectUriReceiverActivity"
             android:theme="@style/Theme.DorfApp.AuthRedirect" />
+
+        <!-- Push-Benachrichtigungen der Vergabe (Firebase Cloud Messaging). -->
+        <service
+            android:name=".push.DorfMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <!-- Gilt für Nachrichten, die Android im Hintergrund selbst anzeigt. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_dorf" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="hinweise" />
     </application>
 </manifest>

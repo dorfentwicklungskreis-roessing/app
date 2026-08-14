@@ -1,0 +1,21 @@
+<!--
+  Symbol der Systembenachrichtigung. Android färbt es selbst ein und kennt
+  nur „da" oder „nicht da" — deshalb eine einfarbige Silhouette ohne Farben
+  und ohne Verläufe: eine Blüte mit Blatt, wie das App-Symbol.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2c-1.66,0 -3,1.34 -3,3 0,0.55 0.15,1.06 0.41,1.5C8.97,6.19 8.51,6 8,6c-1.66,0 -3,1.34 -3,3s1.34,3 3,3c0.51,0 0.97,-0.19 1.41,-0.5C9.15,11.94 9,12.45 9,13c0,1.66 1.34,3 3,3s3,-1.34 3,-3c0,-0.55 -0.15,-1.06 -0.41,-1.5 0.44,0.31 0.9,0.5 1.41,0.5 1.66,0 3,-1.34 3,-3s-1.34,-3 -3,-3c-0.51,0 -0.97,0.19 -1.41,0.5C14.85,6.06 15,5.55 15,5c0,-1.66 -1.34,-3 -3,-3zM12,7.5c0.83,0 1.5,0.67 1.5,1.5s-0.67,1.5 -1.5,1.5 -1.5,-0.67 -1.5,-1.5 0.67,-1.5 1.5,-1.5z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M11.25,16.5h1.5V22h-1.5z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12.75,19c0,0 0.5,-2.5 3.25,-3 0,0 -0.25,2.75 -3.25,3z" />
+</vector>

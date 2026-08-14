@@ -1,5 +1,6 @@
 package de.roessing.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,23 +27,47 @@ import de.roessing.app.ui.LeaderboardViewModel
 import de.roessing.app.ui.LoginScreen
 import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.ProfileViewModel
+import de.roessing.app.push.PushZiel
 import de.roessing.app.ui.theme.DorfAppTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    /**
+     * Das Ziel eines angetippten Push-Hinweises. Steht als einfache Extras im
+     * Intent — dieselben Felder, die auch von Firebase kamen. Als State,
+     * damit ein Tipp bei laufender App (onNewIntent) sofort ankommt.
+     */
+    private val pushZiel = mutableStateOf<PushZiel?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pushZiel.value = zielAus(intent)
         setContent {
             DorfAppTheme {
-                Root()
+                Root(pushZiel.value) { pushZiel.value = null }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        zielAus(intent)?.let { pushZiel.value = it }
+    }
+
+    /** Liest das Sprungziel aus den Extras (alles Zeichenketten, siehe PushZiel). */
+    private fun zielAus(intent: Intent?): PushZiel? {
+        val extras = intent?.extras ?: return null
+        val daten = extras.keySet().mapNotNull { schluessel ->
+            (extras.getString(schluessel))?.let { schluessel to it }
+        }.toMap()
+        return PushZiel.ausDaten(daten)
     }
 }
 
 @Composable
-private fun Root() {
+private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = {}) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val container = context.appContainer
     val session by container.authManager.session.collectAsState()
@@ -89,7 +114,16 @@ private fun Root() {
                 viewModel = vm,
                 leaderboardViewModel = rangVm,
                 profileViewModel = profilVm,
-                onLogout = { scope.launch { container.authManager.logout() } },
+                pushZiel = pushZiel,
+                onPushZielVerbraucht = onPushZielVerbraucht,
+                onLogout = {
+                    scope.launch {
+                        // Erst das Gerät abmelden, dann die Sitzung beenden —
+                        // danach fehlt das Token für den Aufruf.
+                        de.roessing.app.push.Geraeteanmeldung.abmelden(context)
+                        container.authManager.logout()
+                    }
+                },
             )
         }
     }
@@ -100,7 +134,7 @@ private fun viewModelFactory(container: AppContainer) =
         @Suppress("UNCHECKED_CAST")
         override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T = when {
             modelClass.isAssignableFrom(PlacesViewModel::class.java) ->
-                PlacesViewModel(container.repository) as T
+                PlacesViewModel(container.repository, container.vergabeRepository) as T
 
             modelClass.isAssignableFrom(LeaderboardViewModel::class.java) ->
                 LeaderboardViewModel(container.statsRepository) as T

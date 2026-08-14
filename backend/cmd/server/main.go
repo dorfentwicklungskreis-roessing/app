@@ -22,6 +22,9 @@
 //	MAX_BODY_BYTES   Obergrenze je Anfrage (Standard 1 MiB)
 //	BACKUP, BACKUP_DIR, BACKUP_KEEP, BACKUP_INTERVAL
 //	VERGABE, VERGABE_TAKT   Takt der Aufgaben-Vergabe (VERGABE=off schaltet ab)
+//	FCM_CREDENTIALS_FILE  Dienstkonto-Schlüssel für den Push-Versand über
+//	              Firebase Cloud Messaging. Fehlt er, wird nicht gepusht —
+//	              die App holt ihre Benachrichtigungen dann selbst ab.
 //	LOG_FORMAT       "json" (Standard) oder "text"
 package main
 
@@ -47,6 +50,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/httpx"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mcp"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/push"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
 
@@ -110,7 +114,10 @@ func main() {
 		verifier = v
 	}
 
-	srv := &api.Server{DB: database}
+	// Push-Weg (Firebase). Ohne Schlüssel bleibt es bei der Abrufliste.
+	zusteller := pushEinrichten(database)
+
+	srv := &api.Server{DB: database, Zusteller: zusteller}
 	handler := srv.Handler(auth.Middleware(verifier), func(mux *http.ServeMux) {
 		// MCP: OAuth gegen die Rössing-ID, admin-Rolle erforderlich.
 		// MCP_CLIENT_ID: PKCE-Client, den Dynamic Client Registration
@@ -149,7 +156,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	backupFertig := backupStarten(ctx, database, dbPath)
-	vergabeFertig := vergabeStarten(ctx, database)
+	vergabeFertig := vergabeStarten(ctx, database, zusteller)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -261,14 +268,40 @@ func backupStarten(ctx context.Context, database *db.DB, dbPath string) <-chan s
 // Server und nicht als eigener Dienst — aus demselben Grund wie die
 // Sicherung: Es gibt genau einen Pod mit genau einer Schreibverbindung zur
 // SQLite-Datenbank.
-func vergabeStarten(ctx context.Context, database *db.DB) <-chan struct{} {
+func vergabeStarten(ctx context.Context, database *db.DB, zusteller vergabe.Zusteller) <-chan struct{} {
 	cfg, an := vergabe.FromEnv()
 	if !an {
 		slog.Warn("Vergabe abgeschaltet (VERGABE=off) — es werden keine Anfragen zugestellt")
 		return nil
 	}
+	cfg.Zusteller = zusteller
 	slog.Info("Vergabe-Zeitgeber aktiv", "takt", cfg.Takt.String())
 	return vergabe.Start(ctx, database, cfg)
+}
+
+// pushEinrichten baut den Push-Versand über Firebase Cloud Messaging.
+//
+// Fehlt der Dienstkonto-Schlüssel, ist das kein Fehler: Die App holt ihre
+// Benachrichtigungen ohnehin selbst ab (GET /api/v1/me/notifications). Push
+// ist der schnelle Weg obendrauf — lokal und in Tests gibt es ihn schlicht
+// nicht. Auch ein kaputter Schlüssel hält den Server nicht an; dann bleibt es
+// bei der Abrufliste, und der Grund steht im Log.
+//
+// Der Rückgabewert ist bewusst die Schnittstelle mit echtem nil: Ein
+// getippter Nullzeiger in einer Schnittstelle wäre nicht nil und liefe beim
+// ersten Versand in einen Absturz.
+func pushEinrichten(database *db.DB) vergabe.Zusteller {
+	z, err := push.FromEnv(database)
+	if err != nil {
+		slog.Error("Push-Versand nicht eingerichtet — es bleibt bei der Abrufliste", "err", err)
+		return nil
+	}
+	if z == nil {
+		slog.Warn("FCM_CREDENTIALS_FILE fehlt — kein Push, die App holt ihre Benachrichtigungen ab")
+		return nil
+	}
+	slog.Info("Push über Firebase Cloud Messaging aktiv")
+	return z
 }
 
 // warteAufHintergrund gibt einer Hintergrund-Schleife Zeit, sauber zu enden.

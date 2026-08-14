@@ -57,6 +57,12 @@ fun StartScreen(
     faelligeOrte: Int,
     ladend: Boolean,
     modifier: Modifier = Modifier,
+    notifications: List<de.roessing.app.data.NotificationDto> = emptyList(),
+    pendingAssignments: Set<Long> = emptySet(),
+    meineVorgaenge: Set<Long> = emptySet(),
+    onClaim: (Long) -> Unit = {},
+    onRelease: (Long) -> Unit = {},
+    onAck: (Long) -> Unit = {},
     onBereich: (Bereich) -> Unit,
 ) {
     Column(
@@ -85,7 +91,23 @@ fun StartScreen(
             )
         }
 
-        MithelfenKachel(faelligeOrte = faelligeOrte, ladend = ladend, onClick = { onBereich(Bereich.MITHELFEN) })
+        // Benachrichtigungen stehen oben: Sie sind der Grund, die App
+        // überhaupt zu öffnen — jemand wartet auf eine Antwort.
+        BenachrichtigungenAbschnitt(
+            notifications = notifications,
+            pendingAssignments = pendingAssignments,
+            meineVorgaenge = meineVorgaenge,
+            onClaim = onClaim,
+            onRelease = onRelease,
+            onAck = onAck,
+        )
+
+        MithelfenKachel(
+            faelligeOrte = faelligeOrte,
+            ladend = ladend,
+            offeneAnfragen = notifications.count { it.istAnfrage },
+            onClick = { onBereich(Bereich.MITHELFEN) },
+        )
 
         Row(
             Modifier.height(IntrinsicSize.Min),
@@ -118,7 +140,12 @@ fun StartScreen(
  * heute die meiste Arbeit steckt, aber eben eine Kachel unter mehreren.
  */
 @Composable
-private fun MithelfenKachel(faelligeOrte: Int, ladend: Boolean, onClick: () -> Unit) {
+private fun MithelfenKachel(
+    faelligeOrte: Int,
+    ladend: Boolean,
+    offeneAnfragen: Int,
+    onClick: () -> Unit,
+) {
     Card(
         onClick = onClick,
         shape = MaterialTheme.shapes.extraLarge,
@@ -155,17 +182,19 @@ private fun MithelfenKachel(faelligeOrte: Int, ladend: Boolean, onClick: () -> U
                     modifier = Modifier.size(22.dp),
                 )
             }
-            Statuszeile(faelligeOrte = faelligeOrte, ladend = ladend)
+            Statuszeile(faelligeOrte = faelligeOrte, ladend = ladend, offeneAnfragen = offeneAnfragen)
         }
     }
 }
 
 /** „2 Orte warten auf dich" bzw. „Alles erledigt — danke!" */
 @Composable
-private fun Statuszeile(faelligeOrte: Int, ladend: Boolean) {
+private fun Statuszeile(faelligeOrte: Int, ladend: Boolean, offeneAnfragen: Int) {
     val farben = statusFarben
-    val alles = faelligeOrte == 0 && !ladend
+    val alles = faelligeOrte == 0 && !ladend && offeneAnfragen == 0
     val text = when {
+        // Eine Anfrage an mich geht allem anderen vor: Da wartet jemand.
+        offeneAnfragen > 0 -> anfragenZeile(offeneAnfragen).orEmpty()
         ladend -> stringResource(R.string.area_care_loading)
         alles -> stringResource(R.string.area_care_done)
         else -> pluralStringResource(R.plurals.area_care_due, faelligeOrte, faelligeOrte)

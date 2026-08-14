@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -47,6 +50,12 @@ fun PlaceDetail(
     history: Map<Long, List<CompletionDto>>,
     onComplete: (taskId: Long, liters: Double?) -> Unit,
     onLoadHistory: (taskId: Long) -> Unit,
+    meinSub: String? = null,
+    pendingSignups: Set<Long> = emptySet(),
+    pendingAssignments: Set<Long> = emptySet(),
+    onSignup: (placeId: Long, taskKind: String?, an: Boolean) -> Unit = { _, _, _ -> },
+    onClaim: (assignmentId: Long) -> Unit = {},
+    onRelease: (assignmentId: Long) -> Unit = {},
 ) {
     LaunchedEffect(place.id) {
         place.tasks.forEach { onLoadHistory(it.id) }
@@ -54,8 +63,11 @@ fun PlaceDetail(
     // Vor dem Melden wird nachgefragt: der Knopf ist schnell versehentlich
     // getroffen, und eine Meldung, die es nie gab, verdirbt Ampel und Rangliste.
     var nachfrage by remember { mutableStateOf<TaskDto?>(null) }
+    // Scrollbar: Mit Aufgaben, Historie und dem Eintrag als Helfer:in wird
+    // das Blatt länger als ein kleiner Bildschirm.
     Column(
         Modifier
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
             .padding(bottom = 32.dp)
             .testTag("place-detail"),
@@ -73,12 +85,26 @@ fun PlaceDetail(
             )
         }
         Spacer(Modifier.height(16.dp))
+        // Der Eintrag als Helfer:in gilt für den ganzen Ort — gemeint ist
+        // immer „ich kümmere mich um den Kasten vor meiner Tür".
+        if (place.tasks.any { it.active }) {
+            HelferKarte(
+                place = place,
+                ausstehend = place.id in pendingSignups,
+                onSignup = { art, an -> onSignup(place.id, art, an) },
+            )
+            Spacer(Modifier.height(12.dp))
+        }
         place.tasks.filter { it.active }.forEach { task ->
             TaskCard(
                 task = task,
                 pending = task.id in pendingTasks,
                 history = history[task.id].orEmpty(),
                 onComplete = { nachfrage = task },
+                meinSub = meinSub,
+                pendingAssignments = pendingAssignments,
+                onClaim = onClaim,
+                onRelease = onRelease,
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -152,6 +178,10 @@ private fun TaskCard(
     pending: Boolean,
     history: List<CompletionDto>,
     onComplete: () -> Unit,
+    meinSub: String? = null,
+    pendingAssignments: Set<Long> = emptySet(),
+    onClaim: (Long) -> Unit = {},
+    onRelease: (Long) -> Unit = {},
 ) {
     // Spielschutz: nach einer Erledigung bleibt die Aufgabe eine Weile
     // gesperrt. Der Knopf sagt das, statt erst in einen Fehler zu laufen.
@@ -181,6 +211,43 @@ private fun TaskCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // Vergabestand: wer hat zugesagt, wie viele helfen hier mit.
+            vergabeText(task, meinSub)?.let { stand ->
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stand,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.testTag("vergabe-stand-${task.id}"),
+                )
+            }
+            val vorgang = task.assignment
+            if (vorgang != null && !gesperrt) {
+                Spacer(Modifier.height(8.dp))
+                val meiner = vorgang.vonMir(meinSub)
+                val laeuft = vorgang.id in pendingAssignments
+                if (meiner) {
+                    OutlinedButton(
+                        onClick = { onRelease(vorgang.id) },
+                        enabled = !laeuft,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("release-task-${task.id}"),
+                    ) {
+                        Text(stringResource(R.string.notification_release))
+                    }
+                } else if (!vorgang.uebernommen) {
+                    Button(
+                        onClick = { onClaim(vorgang.id) },
+                        enabled = !laeuft,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("claim-task-${task.id}"),
+                    ) {
+                        Text(stringResource(R.string.notification_claim))
+                    }
+                }
+            }
             Spacer(Modifier.height(12.dp))
             if (gesperrt) {
                 Text(

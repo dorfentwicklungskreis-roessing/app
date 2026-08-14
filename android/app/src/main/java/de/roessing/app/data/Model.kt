@@ -38,6 +38,12 @@ data class TaskDto(
      * Fehlt, wenn die Aufgabe frei ist.
      */
     val lockedUntil: String? = null,
+    /** Laufender Vergabe-Vorgang (null = gerade keiner). */
+    val assignment: AssignmentDto? = null,
+    /** Wie viele sich hier als Helfer:innen eingetragen haben. */
+    val signupCount: Int = 0,
+    /** Ob ich selbst hier eingetragen bin. */
+    val signedUp: Boolean = false,
 ) {
     val careStatus: CareStatus get() = parseStatus(status)
 
@@ -55,6 +61,71 @@ data class TaskDto(
             }
         }
 }
+
+/**
+ * Ein laufender Vergabe-Vorgang zu genau einer Aufgabe. Die Regeln stehen im
+ * Backend (internal/vergabe); hier interessiert nur, was anzuzeigen ist:
+ * Hat jemand zugesagt, wer war es und bis wann hält die Zusage.
+ */
+@Serializable
+data class AssignmentDto(
+    val id: Long = 0,
+    val taskId: Long = 0,
+    /** offen · uebernommen · rundruf · beendet */
+    val state: String = "offen",
+    val claimedBy: String = "",
+    val claimedByName: String = "",
+    val claimedUntil: String? = null,
+    val nextOfferAt: String? = null,
+    val askedCount: Int = 0,
+) {
+    val uebernommen: Boolean get() = claimedBy.isNotEmpty()
+
+    /** Habe ich selbst zugesagt? */
+    fun vonMir(meinSub: String?): Boolean = claimedBy.isNotEmpty() && claimedBy == meinSub
+}
+
+/**
+ * Eine Benachrichtigung aus der Vergabe: entweder eine Anfrage („du bist
+ * dran"), auf die man zusagen kann, oder ein Hinweis, der nach dem Lesen
+ * erledigt ist.
+ */
+@Serializable
+data class NotificationDto(
+    val id: Long = 0,
+    val assignmentId: Long = 0,
+    val taskId: Long = 0,
+    val taskKind: String = "",
+    val taskName: String = "",
+    val placeId: Long = 0,
+    val placeName: String = "",
+    /** anfrage · rundruf · zusage_abgelaufen · zusage_aufgehoben · vorgang_beendet · vorgang_entfallen */
+    val kind: String = "",
+    val title: String = "",
+    val text: String = "",
+    val createdAt: String = "",
+    val expiresAt: String? = null,
+    val acknowledgedAt: String? = null,
+) {
+    /** Anfragen wollen eine Antwort; alles andere ist ein Hinweis. */
+    val istAnfrage: Boolean get() = kind == ANFRAGE || kind == RUNDRUF
+
+    companion object {
+        const val ANFRAGE = "anfrage"
+        const val RUNDRUF = "rundruf"
+    }
+}
+
+@Serializable
+data class NotificationsResponse(val notifications: List<NotificationDto> = emptyList())
+
+/** Eingabe von POST /api/v1/places/{id}/signup (taskKind leer = alle Aufgaben). */
+@Serializable
+data class SignupInput(val taskKind: String = "")
+
+/** Eingabe von POST/DELETE /api/v1/me/devices. */
+@Serializable
+data class DeviceInput(val token: String, val platform: String = "android")
 
 @Serializable
 data class PlaceDto(

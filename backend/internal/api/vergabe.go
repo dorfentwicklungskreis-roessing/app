@@ -18,7 +18,7 @@ import (
 
 // vergabeEngine baut die Vergabe mit der Zeitquelle dieses Servers.
 func (s *Server) vergabeEngine() *vergabe.Engine {
-	return vergabe.New(s.DB, vergabe.Config{Now: s.now})
+	return vergabe.New(s.DB, vergabe.Config{Now: s.now, Zusteller: s.Zusteller})
 }
 
 // registerVergabe hängt die Endpunkte an den bereits geschützten Router.

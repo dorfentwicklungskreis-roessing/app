@@ -84,7 +84,7 @@ class PlacesViewModelTest {
 
     @Test
     fun `laedt Orte und sortiert dringendste zuerst`() = runTest(dispatcher) {
-        val vm = PlacesViewModel(FakeRepo())
+        val vm = PlacesViewModel(FakeRepo(), FakeVergabe())
         dispatcher.scheduler.advanceUntilIdle()
         val state = vm.state.value
         assertFalse(state.loading)
@@ -95,7 +95,7 @@ class PlacesViewModelTest {
     @Test
     fun `netzfehler setzt offline-Flag und behaelt alte Daten`() = runTest(dispatcher) {
         val repo = FakeRepo()
-        val vm = PlacesViewModel(repo)
+        val vm = PlacesViewModel(repo, FakeVergabe())
         dispatcher.scheduler.advanceUntilIdle()
         assertEquals(3, vm.state.value.places.size)
 
@@ -109,7 +109,7 @@ class PlacesViewModelTest {
     @Test
     fun `erledigung melden ruft api und feuert erfolgs-event`() = runTest(dispatcher) {
         val repo = FakeRepo()
-        val vm = PlacesViewModel(repo)
+        val vm = PlacesViewModel(repo, FakeVergabe())
         dispatcher.scheduler.advanceUntilIdle()
 
         var event: UiEvent? = null
@@ -126,7 +126,7 @@ class PlacesViewModelTest {
     @Test
     fun `fehlgeschlagene meldung feuert fehler-event`() = runTest(dispatcher) {
         val repo = FakeRepo().apply { failComplete = true }
-        val vm = PlacesViewModel(repo)
+        val vm = PlacesViewModel(repo, FakeVergabe())
         dispatcher.scheduler.advanceUntilIdle()
 
         var event: UiEvent? = null
@@ -142,7 +142,7 @@ class PlacesViewModelTest {
     @Test
     fun `gesperrte Aufgabe meldet die Sperrfrist statt eines Netzfehlers`() = runTest(dispatcher) {
         val repo = FakeRepo().apply { gesperrtBis = "2026-08-15T09:00:00Z" }
-        val vm = PlacesViewModel(repo)
+        val vm = PlacesViewModel(repo, FakeVergabe())
         dispatcher.scheduler.advanceUntilIdle()
 
         var event: UiEvent? = null
@@ -157,7 +157,7 @@ class PlacesViewModelTest {
 
     @Test
     fun `Liste laesst sich nach Entfernung sortieren`() = runTest(dispatcher) {
-        val vm = PlacesViewModel(FakeRepo())
+        val vm = PlacesViewModel(FakeRepo(), FakeVergabe())
         dispatcher.scheduler.advanceUntilIdle()
         // Ohne Standort bleibt es bei der Dringlichkeit.
         vm.setSort(PlaceSort.DISTANCE)
@@ -185,7 +185,7 @@ class PlacesViewModelTest {
     @Test
     fun `Startseite kennt die Zahl der faelligen Orte`() = runTest(dispatcher) {
         val repo = FakeRepo()
-        val vm = PlacesViewModel(repo)
+        val vm = PlacesViewModel(repo, FakeVergabe())
         dispatcher.scheduler.advanceUntilIdle()
         // Ein roter und ein gelber Ort warten, der grüne nicht.
         assertEquals(2, vm.state.value.faelligeOrte)
@@ -201,7 +201,7 @@ class PlacesViewModelTest {
 
     @Test
     fun `Standort ueberlebt einen Refresh`() = runTest(dispatcher) {
-        val vm = PlacesViewModel(FakeRepo())
+        val vm = PlacesViewModel(FakeRepo(), FakeVergabe())
         dispatcher.scheduler.advanceUntilIdle()
         // Näher an „Kasten Grün" (52.2120) als an „Kasten Gelb" (52.2110).
         vm.setUserLocation(LatLon(52.2118, 9.8700))
