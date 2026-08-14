@@ -444,9 +444,11 @@ func TestEndToEnd(t *testing.T) {
 	// Der Test hält beide Richtungen fest, am echten Aussteller: ohne den
 	// Scope keine Rechte, mit ihm die vollen.
 	t.Run("Ohne Rollen-Scope ist niemand Verwaltung", func(t *testing.T) {
-		// Genau die Scopes, mit denen sich die App anmeldet — nur eben ohne
-		// den Rollen-Scope, wie es der Fehlerstand tat.
-		ohneRollen := fetchToken(t, adminUser, "openid profile email")
+		// Einziger Unterschied zum Token oben: der Rollen-Scope fehlt. Die
+		// Projekt-Audience bleibt, sonst wäre das Token schon deshalb
+		// ungültig und der Test würde etwas anderes messen.
+		audienz := "openid profile email urn:zitadel:iam:org:project:id:" + projectID + ":aud"
+		ohneRollen := fetchToken(t, adminUser, audienz)
 
 		_, me := request(t, "GET", "/api/v1/me", ohneRollen, nil)
 		if me["isAdmin"] != false {
@@ -464,8 +466,7 @@ func TestEndToEnd(t *testing.T) {
 		}
 
 		// Mit dem Scope, den die App jetzt anfordert, geht es.
-		mitRollen := fetchToken(t, adminUser,
-			"openid profile email urn:zitadel:iam:org:projects:roles")
+		mitRollen := fetchToken(t, adminUser, audienz+" urn:zitadel:iam:org:projects:roles")
 		_, me = request(t, "GET", "/api/v1/me", mitRollen, nil)
 		if me["isAdmin"] != true {
 			t.Fatalf("mit Rollen-Scope nicht als Verwaltung erkannt: %v", me)
