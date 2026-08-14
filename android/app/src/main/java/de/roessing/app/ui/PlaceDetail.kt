@@ -255,6 +255,17 @@ private fun TaskCard(
                 }
             }
             Spacer(Modifier.height(12.dp))
+            if (task.erledigtUndVorbei) {
+                // Einmalig ist einmalig: Statt eines Knopfes, der in ein 409
+                // läuft, steht hier schlicht, dass es getan ist.
+                Text(
+                    stringResource(R.string.task_once_done),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.testTag("task-once-done-${task.id}"),
+                )
+                return@Column
+            }
             if (gesperrt) {
                 Text(
                     stringResource(R.string.task_locked, formatTime(task.lockedUntil!!)),

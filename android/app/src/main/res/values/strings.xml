@@ -213,6 +213,7 @@
     <string name="task_kind_other">Sonstiges</string>
     <string name="task_every_days">alle %1$s Tage</string>
     <string name="task_once">Einmalig</string>
+    <string name="task_once_done">Erledigt — diese Aufgabe war einmalig.</string>
     <string name="task_once_due">Einmalig — fällig am %1$s</string>
     <string name="admin_edit">Bearbeiten</string>
     <string name="admin_delete">Löschen</string>

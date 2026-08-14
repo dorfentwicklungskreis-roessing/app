@@ -60,6 +60,13 @@ data class TaskDto(
     val lockedUntilInstant: java.time.Instant?
         get() = lockedUntil?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
 
+    /**
+     * Eine einmalige Aufgabe, die schon erledigt ist. Sie wird nicht wieder
+     * fällig, und das Backend weist eine zweite Meldung mit 409 ab — der
+     * Knopf gehört also weg, nicht bloß gesperrt.
+     */
+    val erledigtUndVorbei: Boolean get() = oneOff && lastCompletion != null
+
     /** Termin einer einmaligen Aufgabe als Zeitpunkt (oder null). */
     val dueDateInstant: java.time.Instant?
         get() = dueDate?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
