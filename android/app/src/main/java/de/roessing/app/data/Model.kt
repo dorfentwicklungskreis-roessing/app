@@ -168,7 +168,6 @@ data class MemberDto(
     val restricted: List<String> = emptyList(),
 ) {
     fun nurFuerVerwaltung(feld: String): Boolean = feld in restricted
-    val hasContact: Boolean get() = phone.isNotBlank() || email.isNotBlank() || note.isNotBlank()
 }
 
 @Serializable

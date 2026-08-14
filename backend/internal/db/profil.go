@@ -1,7 +1,6 @@
 package db
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
@@ -108,18 +107,4 @@ func sichtbarkeitOder(wert string, standard model.Visibility) model.Visibility {
 		return v
 	}
 	return standard
-}
-
-// ProfileExists ist eine kleine Hilfe für Aufrufer, die kein ganzes Profil
-// brauchen.
-func (d *DB) ProfileExists(userSub string) (bool, error) {
-	_, err := d.GetProfile(userSub)
-	switch {
-	case err == nil:
-		return true, nil
-	case err == sql.ErrNoRows:
-		return false, nil
-	default:
-		return false, err
-	}
 }

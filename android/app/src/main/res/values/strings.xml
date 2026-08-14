@@ -85,7 +85,5 @@
     <string name="members_empty">Noch niemand hat ein Profil ausgefüllt.</string>
     <string name="members_admin_hint">Du siehst als Verwaltende auch Angaben, die nicht freigegeben sind. Sie sind gekennzeichnet.</string>
     <string name="members_only_admins">nur Verwaltende</string>
-    <string name="members_call">Anrufen</string>
-    <string name="members_mail">E-Mail schreiben</string>
     <string name="back">Zurück</string>
 </resources>

@@ -46,6 +46,29 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
   Rückfrage (Ort und Menge), damit ein Fehlklick nichts einträgt. In der
   Verwaltung liegt beides unter `/admin/dorfpflege/rangliste` bzw. als
   eigene Bestätigungsseite in der Historie eines Ortes.
+- **Profile**: Jede Person pflegt in der App unter „Mein Profil" ihren
+  Anzeigenamen, einen Nickname für die Rangliste, Telefon, E-Mail und eine
+  kurze Notiz — **je Feld mit eigenem Sichtbarkeits-Schalter** (`dorf` = alle
+  Angemeldeten, `verwaltung` = nur Verwaltende). Vorbelegt sind Anzeigename
+  und Nickname sichtbar, **Telefon, E-Mail und Notiz nicht**: Kontaktdaten
+  werden nie still veröffentlicht. Anzeigename und E-Mail kommen aus der
+  Rössing-ID und sind überschreibbar.
+  `GET /api/v1/me` liefert das eigene Profil mit, `PUT /api/v1/me/profile`
+  ändert es (eine fremde Kennung im Rumpf ergibt **403**, auch für Admins),
+  `GET /api/v1/members` listet die Dorfbewohner mit **genau den freigegebenen
+  Feldern** — Gesperrtes verlässt den Server nicht. Verwaltende sehen alles,
+  erkennbar an `adminView: true` und `restricted: [...]` je Eintrag. Wer
+  weder Anzeigenamen noch Nickname freigibt, taucht für Mitglieder gar nicht
+  auf. In der App gibt es dazu „Dorfbewohner" mit antippbarer Rufnummer und
+  E-Mail, in der Verwaltung den Bereich `/admin/dorfbewohner/`.
+  **Namen in Rangliste und Historie** kommen jetzt aus dem Profil statt aus
+  dem, was bei der Meldung eingefroren wurde: Gibt es kein Profil, gilt der
+  gespeicherte Name (Bestandsdaten laufen unverändert weiter); gehört der
+  gespeicherte Name zur Person (Name aus der Rössing-ID, Anzeigename oder
+  Nickname), gilt der Profilname; sonst bleibt er stehen — so behält ein
+  Nachtrag, den die Verwaltung unter fremdem Namen eingetragen hat, die
+  genannte Person. Die SQL-Gruppierung bleibt unangetastet, ersetzt wird erst
+  für die Anzeige. Datenschutz-Folgen: siehe `backend/SICHERHEIT.md`.
 - **Spielschutz**: Nach einer Erledigung bleibt dieselbe Aufgabe gesperrt —
   50 % des Soll-Intervalls (beim Gießen mit dem Hitzefaktor skaliert, bei
   Jäten & Co. nicht), mindestens 12 Stunden, höchstens das volle Intervall.
