@@ -59,9 +59,15 @@
         <div class="flex flex-wrap items-center gap-2">
           <span class="badge {{statusBadge .Status}}" data-aufgabe-status="{{.Status}}">{{statusText .Status}}</span>
           <span class="font-medium">{{if .Title}}{{.Title}}{{else}}{{aufgabenart .Kind}}{{end}}</span>
-          <span class="text-sm text-base-content/60">
-            alle {{zahl .IntervalDays}} Tage{{if .Liters}}, {{liter .Liters}}{{end}} · rot nach {{zahl .RedAfterDays}} Tagen
+          <span class="text-sm text-base-content/60" data-plan>
+            {{if .OneOff}}
+              einmalig, fällig am {{datumOpt .DueDate}}{{if .Liters}}, {{liter .Liters}}{{end}}
+            {{else}}
+              alle {{zahl .IntervalDays}} Tage{{if .Liters}}, {{liter .Liters}}{{end}} · rot nach {{zahl .RedAfterDays}} Tagen
+            {{end}}
           </span>
+          {{if .OneOff}}<span class="badge badge-info badge-sm" data-einmalig>einmalig</span>{{end}}
+          {{if .RemoveWhenDone}}<span class="badge badge-ghost badge-sm" data-entfernen>verschwindet nach dem Erledigen</span>{{end}}
           {{if not .Active}}<span class="badge badge-ghost badge-sm">inaktiv</span>{{end}}
         </div>
         <div class="mt-1 text-sm text-base-content/70" data-letzte>

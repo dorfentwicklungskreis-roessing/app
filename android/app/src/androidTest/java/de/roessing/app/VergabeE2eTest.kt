@@ -13,6 +13,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import de.roessing.app.data.ApiPlacesRepository
 import de.roessing.app.data.ApiIdeenRepository
+import de.roessing.app.data.ApiVerwaltungRepository
 import de.roessing.app.data.ApiProfileRepository
 import de.roessing.app.data.ApiStatsRepository
 import de.roessing.app.data.ApiVergabeRepository
@@ -23,6 +24,7 @@ import de.roessing.app.ui.HomeScreen
 import de.roessing.app.ui.LeaderboardViewModel
 import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.IdeenViewModel
+import de.roessing.app.ui.VerwaltungViewModel
 import de.roessing.app.ui.ProfileViewModel
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -235,6 +237,7 @@ class VergabeE2eTest {
                     leaderboardViewModel = LeaderboardViewModel(ApiStatsRepository(api)),
                     profileViewModel = ProfileViewModel(ApiProfileRepository(api)),
                     ideenViewModel = IdeenViewModel(ApiIdeenRepository(api)),
+                    verwaltungViewModel = VerwaltungViewModel(ApiVerwaltungRepository(api)),
                     onLogout = {},
                 )
             }
