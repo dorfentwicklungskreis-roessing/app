@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import de.roessing.app.auth.LOGIN_SCOPES
@@ -19,6 +20,9 @@ import java.util.regex.Pattern
 
 /** Stichwort, unter dem die Token-Claims ins Log gehen. */
 private const val PROBE = "TOKENPROBE"
+
+/** Stichwort für den Ablauf der Anmeldung — Diagnose, wenn sie hakt. */
+private const val LOGIN_PROBE = "LOGINPROBE"
 
 /**
  * Echter Ende-zu-Ende-Login gegen die Produktion (id.xn--rssing-wxa.de).
@@ -47,6 +51,14 @@ class RealLoginE2eTest {
     /** „Weiter"-Buttons der Zitadel-Login-UI, sprachunabhängig. */
     private val weiterButton: BySelector = By.clazz("android.widget.Button")
         .text(Pattern.compile("continue|weiter|next|anmelden|submit|sign in", Pattern.CASE_INSENSITIVE))
+
+    /**
+     * Der Zustimmungs-Bildschirm der Rössing-ID. Er erscheint, wenn eine App
+     * zum ersten Mal etwas Neues anfragt — etwa nach dem Hinzufügen des
+     * Rollen-Scopes. Wer ihn nicht wegklickt, bleibt im Browser stehen.
+     */
+    private val zustimmungButton: BySelector = By.clazz("android.widget.Button")
+        .text(Pattern.compile("allow|zulassen|erlauben|zustimmen|accept|akzeptieren|continue|weiter", Pattern.CASE_INSENSITIVE))
 
     /** Einmalige Chrome-Dialoge, die den Login-Flow blockieren können. */
     private val chromeDialogTexte = Pattern.compile(
@@ -90,6 +102,19 @@ class RealLoginE2eTest {
         pwFeld.text = password
         klickeWeiter()
 
+        protokolliereBildschirm("nach dem Passwort")
+
+        // 3b) Zustimmung, falls die Rössing-ID danach fragt. Das tut sie,
+        //     wenn die App etwas Neues anfragt — etwa die Rollen. Ohne diesen
+        //     Schritt bliebe der Login im Browser stehen.
+        if (device.wait(Until.hasObject(By.textContains("Rössing")), 5_000) &&
+            device.findObject(zustimmungButton) != null &&
+            !device.hasObject(By.textStartsWith("Moin"))
+        ) {
+            protokolliereBildschirm("Zustimmung")
+            runCatching { klickeRobust(zustimmungButton) { "Zustimmung nicht gefunden" } }
+        }
+
         // 4) Rücksprung in die App: Der Login gilt erst als bewiesen, wenn die
         //    angemeldete Ansicht erscheint — das ist seit dem Umbau die
         //    Startseite mit den Bereichen, erkennbar an der Begrüßung.
@@ -97,6 +122,7 @@ class RealLoginE2eTest {
 
         // Aussagekräftige Diagnose, falls der Rücksprung wieder bricht.
         if (!angemeldet) {
+            protokolliereBildschirm("nicht angemeldet")
             val fehler = device.findObject(By.textContains("Anmeldung fehlgeschlagen"))?.text
             error("Nach dem Login erschien nicht die angemeldete Ansicht. Angezeigter Fehler: $fehler")
         }
@@ -200,10 +226,44 @@ class RealLoginE2eTest {
     }
 
     private fun klickeWeiter() {
-        val button = pollen(30_000) { device.findObject(weiterButton) }
-            ?: error("„Weiter\"-Button der Zitadel-Anmeldung nicht gefunden")
-        button.click()
-        device.waitForIdle()
+        klickeRobust(weiterButton) { "„Weiter\"-Button der Zitadel-Anmeldung nicht gefunden" }
+    }
+
+    /**
+     * Sucht ein Element und klickt es — und sucht neu, wenn es zwischen Fund
+     * und Klick verschwindet. Die Zitadel-Oberfläche baut sich neu auf,
+     * während wir zugreifen; ein einmal gefundenes Objekt ist dann veraltet
+     * (StaleObjectException).
+     */
+    private fun klickeRobust(auswahl: BySelector, fehler: () -> String) {
+        val ende = System.currentTimeMillis() + 30_000
+        while (System.currentTimeMillis() < ende) {
+            val objekt = device.findObject(auswahl)
+            if (objekt == null) {
+                schliesseChromeDialoge()
+                device.waitForIdle()
+                Thread.sleep(500)
+                continue
+            }
+            try {
+                objekt.click()
+                device.waitForIdle()
+                return
+            } catch (e: StaleObjectException) {
+                // Die Seite hat sich unter uns erneuert — nächster Versuch.
+                Thread.sleep(300)
+            }
+        }
+        error(fehler())
+    }
+
+    /** Schreibt den sichtbaren Bildschirm ins Log — Diagnose für die CI. */
+    private fun protokolliereBildschirm(schritt: String) {
+        val texte = device.findObjects(By.clazz("android.widget.TextView"))
+            .mapNotNull { runCatching { it.text }.getOrNull() }
+            .filter { it.isNotBlank() }
+            .take(25)
+        Log.i(LOGIN_PROBE, "$schritt: ${device.currentPackageName} | ${texte.joinToString(" · ")}")
     }
 
     private fun schliesseChromeDialoge() {
