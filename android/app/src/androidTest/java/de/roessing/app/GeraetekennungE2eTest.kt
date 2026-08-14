@@ -23,21 +23,27 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Die Gerätekennung darf nur bei erlaubten Benachrichtigungen beim Backend
- * liegen — hier am echten Android geprüft, mit dem echten Erlaubniszustand
- * des Systems und gegen das echte Backend.
+ * Die Gerätekennung darf nur bei erlaubten Mitteilungen beim Backend liegen —
+ * hier am echten Android geprüft, mit dem echten Erlaubniszustand des Systems
+ * und gegen ein echtes Backend.
  *
  * Der Nachweis nutzt einen Umstand des Backends: `POST /api/v1/me/devices`
  * antwortet mit **201**, wenn die Kennung dort neu ist, und mit **200**, wenn
  * sie schon lag (siehe internal/api/geraete.go). Danach lässt sich also
  * ablesen, ob die App die Kennung zuvor hinterlegt hat — ohne dass es dafür
  * einen Auskunfts-Endpunkt bräuchte, den es aus gutem Grund nicht gibt.
+ *
+ * Der Erlaubniszustand wird **nicht** aus dem Test heraus umgestellt: Er lässt
+ * sich weder über `appops` zuverlässig setzen (`areNotificationsEnabled()`
+ * richtet sich nicht danach) noch über `pm revoke` — das schösse den eigenen
+ * Testprozess ab. Stattdessen läuft dieselbe Klasse in `ci-e2e.sh` **zweimal**:
+ * einmal im Gradle-Lauf (der die APKs mit `-g` installiert, alle Rechte
+ * erteilt) und einmal nach einer Installation ohne `-g`. Jeder Testfall nimmt
+ * über `assumeTrue` den Durchgang, der zu ihm passt.
  */
 @RunWith(AndroidJUnit4::class)
 class GeraetekennungE2eTest {
-    private val instrumentierung = InstrumentationRegistry.getInstrumentation()
-    private val kontext = instrumentierung.targetContext
-    private val paket = "de.roessing.app"
+    private val kontext = InstrumentationRegistry.getInstrumentation().targetContext
     private val token = "kennung-e2e:Kennung Tester:member"
     private val basis = BuildConfig.API_BASE_URL.trimEnd('/')
     private val client = OkHttpClient()
@@ -45,6 +51,9 @@ class GeraetekennungE2eTest {
 
     /** Eindeutig je Lauf, damit ein früherer Lauf das Ergebnis nicht färbt. */
     private val kennung = "e2e-kennung-${System.nanoTime()}"
+
+    private val speicher = Speicher()
+    private var kennungAbgefragt = 0
 
     @Before
     fun nurImE2eModus() {
@@ -57,66 +66,79 @@ class GeraetekennungE2eTest {
     @After
     fun aufraeumen() {
         if (InstrumentationRegistry.getArguments().getString("e2e") != "true") return
-        // Andere Tests (und der echte Push-Test) brauchen wieder erlaubte
-        // Benachrichtigungen — den Emulator so hinterlassen, wie er war.
-        benachrichtigungen(erlaubt = true)
         runCatching { abmeldenAmBackend() }
     }
 
     // --- Testfälle -----------------------------------------------------------
 
+    /**
+     * Der eigentliche Nachweis. Läuft im Durchgang ohne erteilte Berechtigung,
+     * den `ci-e2e.sh` eigens dafür anstößt.
+     */
     @Test
     fun ohneErlaubnisKommtKeineKennungAmBackendAn() {
-        benachrichtigungen(erlaubt = false)
-        assertFalse(
-            "Der Emulator meldet trotz abgeschalteter Benachrichtigungen eine Erlaubnis",
-            Benachrichtigungserlaubnis.wirksam(kontext),
+        // Im eigens dafür angestoßenen Durchgang muss dieser Fall auch
+        // wirklich laufen — ein stilles Überspringen wäre kein Nachweis.
+        // Vor Android 13 lässt sich die Erlaubnis nicht wegnehmen: Es gibt
+        // dort keine Berechtigung POST_NOTIFICATIONS, und Mitteilungen sind
+        // ab Werk an. Dort bleibt es beim Überspringen.
+        val erlaubnisfrei =
+            InstrumentationRegistry.getArguments().getString("erlaubnisfrei") == "true"
+        if (erlaubnisfrei && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            assertFalse(
+                "Der Durchgang ohne erteilte Berechtigung meldet trotzdem eine Erlaubnis — " +
+                    "dann prüft dieser Test nichts",
+                Benachrichtigungserlaubnis.wirksam(kontext),
+            )
+        }
+        assumeTrue(
+            "Dieses Gerät erlaubt Mitteilungen — der Fall gehört in den " +
+                "Durchgang ohne erteilte Berechtigung (siehe ci-e2e.sh)",
+            !Benachrichtigungserlaubnis.wirksam(kontext),
         )
 
-        val speicher = Speicher()
-        runBlocking { abgleich(speicher).abgleichen(Benachrichtigungserlaubnis.wirksam(kontext)) }
+        runBlocking { abgleich().abgleichen(Benachrichtigungserlaubnis.wirksam(kontext)) }
 
         assertEquals(
-            "Die Kennung ist trotz abgelehnter Benachrichtigungen im Backend gelandet",
+            "Die Kennung ist trotz abgelehnter Mitteilungen im Backend gelandet",
             201,
             statusBeimAnmelden(),
         )
+        assertEquals("Firebase darf gar nicht erst gefragt worden sein", 0, kennungAbgefragt)
         assertFalse(speicher.wert)
     }
 
+    /** Die Gegenprobe: Mit Erlaubnis muss die Kennung dort ankommen. */
     @Test
     fun mitErlaubnisLiegtDieKennungAmBackend() {
-        benachrichtigungen(erlaubt = true)
         assumeTrue(
-            "Benachrichtigungen ließen sich auf diesem Abbild nicht erlauben",
+            "Dieses Gerät erlaubt keine Mitteilungen — der Fall gehört in den " +
+                "gewöhnlichen Gradle-Durchgang",
             Benachrichtigungserlaubnis.wirksam(kontext),
         )
 
-        val speicher = Speicher()
-        runBlocking { abgleich(speicher).abgleichen(Benachrichtigungserlaubnis.wirksam(kontext)) }
+        runBlocking { abgleich().abgleichen(Benachrichtigungserlaubnis.wirksam(kontext)) }
 
         assertEquals(
-            "Bei erlaubten Benachrichtigungen muss die Kennung beim Backend liegen",
+            "Bei erlaubten Mitteilungen muss die Kennung beim Backend liegen",
             200,
             statusBeimAnmelden(),
         )
         assertTrue(speicher.wert)
     }
 
+    /**
+     * Der Entzug. Läuft in beiden Durchgängen: Der Erlaubniszustand wird hier
+     * ausdrücklich übergeben, weil er sich am System nicht umstellen lässt —
+     * der Weg zum Backend ist deshalb nicht weniger echt.
+     */
     @Test
     fun entzogeneErlaubnisRaeumtDieKennungWiederWeg() {
-        benachrichtigungen(erlaubt = true)
-        assumeTrue(
-            "Benachrichtigungen ließen sich auf diesem Abbild nicht erlauben",
-            Benachrichtigungserlaubnis.wirksam(kontext),
-        )
-        val speicher = Speicher()
-        runBlocking { abgleich(speicher).abgleichen(erlaubt = true) }
+        runBlocking { abgleich().abgleichen(erlaubt = true) }
         assertTrue("Vorbedingung: die Kennung liegt beim Backend", speicher.wert)
 
-        // Jetzt dreht die Person die Benachrichtigungen in den Einstellungen ab.
-        benachrichtigungen(erlaubt = false)
-        runBlocking { abgleich(speicher).abgleichen(Benachrichtigungserlaubnis.wirksam(kontext)) }
+        // Jetzt dreht die Person die Mitteilungen in den Einstellungen ab.
+        runBlocking { abgleich().abgleichen(erlaubt = false) }
 
         assertEquals(
             "Nach dem Entzug darf die Kennung nicht mehr im Backend stehen",
@@ -134,14 +156,16 @@ class GeraetekennungE2eTest {
     }
 
     /**
-     * Der echte Abgleich mit dem echten Backend — nur die Kennung ist fest
-     * gesetzt statt von Firebase geholt: Das Systemabbild von API 28 hat
-     * keine Google-Play-Dienste und liefert dort gar keine.
+     * Der echte Abgleich gegen das echte Backend — nur die Kennung ist fest
+     * gesetzt statt von Firebase geholt: Das Systemabbild von API 28 hat keine
+     * Google-Play-Dienste und liefert dort gar keine. Firebase selbst wird
+     * bewusst nicht angefasst (`firebaseBereit` bleibt leer), damit der Test
+     * den Zustand der Installation nicht verändert.
      */
-    private fun abgleich(speicher: Anmeldespeicher) = Geraeteabgleich(
+    private fun abgleich() = Geraeteabgleich(
         speicher = speicher,
         geraete = ApiDeviceRepository(DorfApi.create(BuildConfig.API_BASE_URL) { token }),
-        kennung = { kennung },
+        kennung = { kennungAbgefragt++; kennung },
         kennungVerwerfen = {},
     )
 
@@ -165,31 +189,5 @@ class GeraetekennungE2eTest {
             .delete()
             .build()
         client.newCall(anfrage).execute().close()
-    }
-
-    /**
-     * Legt den Schalter um, den sonst die Person in den Android-Einstellungen
-     * umlegt. `appops POST_NOTIFICATION` steuert `areNotificationsEnabled()`
-     * auf allen API-Ständen; ab Android 13 kommt die Laufzeitberechtigung
-     * hinzu, die getrennt erteilt und entzogen wird.
-     */
-    private fun benachrichtigungen(erlaubt: Boolean) {
-        schale("cmd appops set $paket POST_NOTIFICATION ${if (erlaubt) "allow" else "ignore"}")
-        // Nur erteilen, nie entziehen: `pm revoke` schießt den eigenen Prozess
-        // ab — und damit den laufenden Test. Zum Abschalten genügt der
-        // AppOp; er ist genau der Schalter, den Android in den Einstellungen
-        // zeigt, und `areNotificationsEnabled()` richtet sich danach.
-        if (erlaubt && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            schale("pm grant $paket android.permission.POST_NOTIFICATIONS")
-        }
-        // Der Wechsel braucht einen Wimpernschlag, bis ihn der eigene Prozess
-        // sieht.
-        Thread.sleep(500)
-    }
-
-    private fun schale(befehl: String) {
-        instrumentierung.uiAutomation.executeShellCommand(befehl).use { deskriptor ->
-            java.io.FileInputStream(deskriptor.fileDescriptor).use { it.readBytes() }
-        }
     }
 }
