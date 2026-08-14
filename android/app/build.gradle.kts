@@ -142,6 +142,10 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // Ohne das wirft jeder Aufruf von android.util.Log im Unit-Test
+            // eine RuntimeException — auch aus reiner Ablauflogik heraus, die
+            // mit Android sonst nichts zu tun hat.
+            isReturnDefaultValues = true
         }
     }
 }
