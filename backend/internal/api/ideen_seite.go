@@ -30,7 +30,7 @@ type ideeFehlerDaten struct {
 	Zurueck  string
 }
 
-func (s *Server) ideeFehlerSeite(w http.ResponseWriter, in IdeeEingabe, meldung string) {
+func (s *Server) ideeFehlerSeite(w http.ResponseWriter, in IdeeEingabe, status int, meldung string) {
 	// Der Honigtopf und der Zeitstempel gehen bewusst nicht mit zurück: Beim
 	// zweiten Anlauf soll wieder von vorn geprüft werden.
 	daten := ideeFehlerDaten{
@@ -40,7 +40,7 @@ func (s *Server) ideeFehlerSeite(w http.ResponseWriter, in IdeeEingabe, meldung 
 		Zurueck:  s.ideenFormularAdresse(),
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusBadRequest)
+	w.WriteHeader(status)
 	if err := ideenFehlerSeite.Execute(w, daten); err != nil {
 		slog.Error("Ideen-Fehlerseite konnte nicht gerendert werden", "err", err)
 	}

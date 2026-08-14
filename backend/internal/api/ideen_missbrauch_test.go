@@ -142,3 +142,56 @@ func TestIdeeFehlerseiteEscaptDenText(t *testing.T) {
 		t.Fatalf("der Text kommt nicht escaped zurück:\n%s", seite)
 	}
 }
+
+// Auch wer in die Zugriffsgrenze läuft, darf seinen Text nicht verlieren:
+// Im Browser kommt er auf einer verständlichen Seite zurück.
+func TestIdeeRateLimitVerliertDenTextNicht(t *testing.T) {
+	ts, srv, _ := ideenServer(t)
+	srv.IdeenLimiter = httpx.NewRateLimiter(httpx.RateLimitConfig{Burst: 1, PerHour: 1})
+	html := map[string]string{"Accept": "text/html,application/xhtml+xml"}
+
+	// Der erste Versuch geht durch.
+	resp := sendeIdee(t, ts, "", url.Values{"wunsch": {guterWunsch}}, html)
+	resp.Body.Close()
+
+	// Der zweite läuft in die Grenze — und bekommt seine Eingabe zurück.
+	resp = sendeIdee(t, ts, "", url.Values{
+		"wunsch": {"Ein Radweg nach Nordstemmen wäre großartig."},
+		"name":   {"Erna Musterfrau"}, "email": {"erna@example.org"},
+	}, html)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("Status %d, erwartet 429", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Fatalf("Content-Type = %q, erwartet HTML", ct)
+	}
+	if resp.Header.Get("Retry-After") == "" {
+		t.Error("Retry-After fehlt")
+	}
+	seite := lies(t, resp)
+	for _, muss := range []string{
+		"Ein Radweg nach Nordstemmen wäre großartig.",
+		"Erna Musterfrau", "erna@example.org",
+	} {
+		if !strings.Contains(seite, muss) {
+			t.Errorf("die Seite enthält %q nicht", muss)
+		}
+	}
+}
+
+// Ohne Browser bleibt es bei der knappen JSON-Antwort.
+func TestIdeeRateLimitAntwortetJSONOhneBrowser(t *testing.T) {
+	ts, srv, _ := ideenServer(t)
+	srv.IdeenLimiter = httpx.NewRateLimiter(httpx.RateLimitConfig{Burst: 1, PerHour: 1})
+
+	sendeIdee(t, ts, "", url.Values{"wunsch": {guterWunsch}}, nil).Body.Close()
+	resp := sendeIdee(t, ts, "", url.Values{"wunsch": {guterWunsch}}, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("Status %d, erwartet 429", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "json") {
+		t.Fatalf("Content-Type = %q, erwartet JSON", ct)
+	}
+}

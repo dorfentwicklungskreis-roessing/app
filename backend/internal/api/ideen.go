@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -91,9 +92,7 @@ func (s *Server) registerIdeenEingang(mux *http.ServeMux) {
 	if s.OptionalAuth != nil {
 		h = s.OptionalAuth(h)
 	}
-	mux.Handle("POST /api/v1/ideen", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.grenzeFuerIdeen().Middleware(h).ServeHTTP(w, r)
-	}))
+	mux.Handle("POST /api/v1/ideen", h)
 }
 
 // grenzeFuerIdeen liefert die Zugriffsgrenze des öffentlichen Eingangs. Sie
@@ -261,6 +260,20 @@ func (s *Server) handleCreateIdee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Saeubern()
+
+	// Die Zugriffsgrenze wird erst hier geprüft — nach dem Lesen der
+	// Eingabe. Nur so kann die Abweisung den getippten Text zurückgeben,
+	// statt ihn in einer nackten Fehlermeldung verschwinden zu lassen.
+	// Dass dafür der Rumpf schon gelesen ist, kostet nichts: Er ist
+	// ohnehin auf MAX_BODY_BYTES gedeckelt, und die allgemeine Grenze
+	// (RATE_LIMIT) sitzt als Middleware weiterhin davor.
+	if ok, warten := s.grenzeFuerIdeen().Zulassen(r); !ok {
+		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(warten.Seconds()))))
+		s.ideeAbgewiesen(w, r, in, http.StatusTooManyRequests,
+			"Von hier kamen gerade viele Ideen auf einmal. Bitte in einer Stunde "+
+				"noch einmal abschicken — dein Text steht unten noch.")
+		return
+	}
 
 	// Erst das Ziel prüfen: Auf eine fremde Seite wird nie weitergeleitet,
 	// auch nicht im Erfolgsfall.
@@ -448,11 +461,17 @@ func (s *Server) ideeErfolg(w http.ResponseWriter, r *http.Request, ziel string,
 // verständliche Seite, auf der ihr Text noch steht — ohne JavaScript ginge
 // er beim Zurückgehen sonst verloren.
 func (s *Server) ideeFehler(w http.ResponseWriter, r *http.Request, in IdeeEingabe, meldung string) {
+	s.ideeAbgewiesen(w, r, in, http.StatusBadRequest, meldung)
+}
+
+// ideeAbgewiesen ist der gemeinsame Weg für alles, was nicht angenommen
+// wird. Browser bekommen die Seite mit ihrem Text, alle anderen JSON.
+func (s *Server) ideeAbgewiesen(w http.ResponseWriter, r *http.Request, in IdeeEingabe, status int, meldung string) {
 	if willHTML(r) {
-		s.ideeFehlerSeite(w, in, meldung)
+		s.ideeFehlerSeite(w, in, status, meldung)
 		return
 	}
-	writeErr(w, http.StatusBadRequest, meldung)
+	writeErr(w, status, meldung)
 }
 
 // --- Verwaltung ---------------------------------------------------------------

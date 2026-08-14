@@ -296,7 +296,7 @@ offenes Scheunentor wird:
 
 | Riegel | Wirkung | Test |
 |---|---|---|
-| Eigene Zugriffsgrenze | `IDEEN_BURST` (5) und `IDEEN_PRO_STUNDE` (5) je Aufrufer — bei anonymen Einreichungen also je IP. `429` mit `Retry-After`. | `TestIdeenRateLimit` |
+| Eigene Zugriffsgrenze | `IDEEN_BURST` (5) und `IDEEN_PRO_STUNDE` (5) je Aufrufer — bei anonymen Einreichungen also je IP. `429` mit `Retry-After`; im Browser samt der Seite, auf der der getippte Text noch steht. | `TestIdeenRateLimit`, `TestIdeeRateLimitVerliertDenTextNicht` |
 | Honigtopf | Verstecktes Feld `webseite`; ist es gefüllt, gibt es eine freundliche `201`, gespeichert wird nichts. | `TestIdeeHonigtopfWirdVerworfen` |
 | Mindestzeit | `gestartet` (Unix-Millisekunden) — unter 3 Sekunden zwischen Aufruf und Absenden wird still verworfen. Fehlt das Feld (kein JavaScript), wird nicht geprüft. | `TestIdeeMindestzeitZwischenAufrufUndAbsenden` |
 | Weiterleitung | `redirect` nur auf freigegebene Ursprünge (`IDEEN_ZIELE`, Vorgabe `https://xn--rssing-wxa.de`). Relative Pfade, fremde Hosts, `javascript:` und Benutzerangaben im Host werden mit `400` abgewiesen. | `TestIdeenWeiterleitungNurAufErlaubteZiele` |

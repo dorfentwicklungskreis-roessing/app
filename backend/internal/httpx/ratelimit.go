@@ -115,6 +115,19 @@ func (l *RateLimiter) Size() int {
 	return len(l.eimer)
 }
 
+// Zulassen prüft eine Anfrage gegen den Eimer ihres Aufrufers, ohne selbst
+// zu antworten. Gedacht für Endpunkte, die im Fall einer Abweisung etwas
+// Besseres liefern als eine nackte Fehlermeldung — der Ideen-Eingang gibt
+// dem Menschen dort seinen getippten Text zurück (siehe internal/api).
+//
+// Ein nil-Limiter lässt alles durch.
+func (l *RateLimiter) Zulassen(r *http.Request) (bool, time.Duration) {
+	if l == nil {
+		return true, 0
+	}
+	return l.erlaube(schluessel(r))
+}
+
 // Middleware begrenzt schreibende Zugriffe und /mcp.
 func (l *RateLimiter) Middleware(next http.Handler) http.Handler {
 	if l == nil {
