@@ -71,12 +71,46 @@ type CareTask struct {
 	// Liters: Wassermenge pro Gießvorgang (nur für Kind "giessen").
 	Liters *float64 `json:"liters,omitempty"`
 	// IntervalDays: Soll-Intervall in Tagen. Danach wird die Aufgabe gelb.
+	// Bei einmaligen Aufgaben ohne Bedeutung (0).
 	IntervalDays float64 `json:"intervalDays"`
 	// RedAfterDays: Nach so vielen Tagen ohne Erledigung wird sie rot.
-	RedAfterDays float64   `json:"redAfterDays"`
-	Active       bool      `json:"active"`
-	CreatedAt    time.Time `json:"createdAt"`
+	// Bei einmaligen Aufgaben ohne Bedeutung (0).
+	RedAfterDays float64 `json:"redAfterDays"`
+	// OneOff: einmalige Aufgabe („einmal zum Bahnhof fahren") statt eines
+	// wiederkehrenden Pflegeplans. An die Stelle des Intervalls tritt dann
+	// das Fälligkeitsdatum.
+	OneOff bool `json:"oneOff"`
+	// DueDate ist der Termin einer einmaligen Aufgabe („bis wann"). Nur bei
+	// OneOff gesetzt.
+	DueDate *time.Time `json:"dueDate,omitempty"`
+	// RemoveWhenDone: nach dem Erledigen von Karte und Liste nehmen. Die
+	// Aufgabe wird dabei nicht gelöscht, sondern abgeräumt (RemovedAt) —
+	// sonst verschwänden mit ihr die Erledigungen aus der Rangliste.
+	RemoveWhenDone bool `json:"removeWhenDone"`
+	// RemovedAt: abgeräumt, weil sie erledigt wurde. Solche Aufgaben tauchen
+	// nirgends mehr auf, ihre Erledigungen zählen aber weiter.
+	RemovedAt *time.Time `json:"removedAt,omitempty"`
+	Active    bool       `json:"active"`
+	CreatedAt time.Time  `json:"createdAt"`
 }
+
+// OneOffLeadTime ist die Vorwarnzeit einer einmaligen Aufgabe: So lange vor
+// dem Termin wird sie gelb. Drei Tage sind im Dorf die richtige Größe —
+// genug, um es einzuplanen, nicht so früh, dass die Karte dauernd gelb ist.
+const OneOffLeadTime = 3 * 24 * time.Hour
+
+// Faellig liefert den Termin einer einmaligen Aufgabe. Fehlt er (kann bei
+// Bestandsdaten nicht vorkommen, bei fehlerhaften Eingaben schon), gilt das
+// Anlegedatum — dann ist die Aufgabe sofort fällig statt nie.
+func (t CareTask) Faellig() time.Time {
+	if t.DueDate != nil {
+		return *t.DueDate
+	}
+	return t.CreatedAt
+}
+
+// Abgeraeumt sagt, ob die Aufgabe erledigt und weggeräumt ist.
+func (t CareTask) Abgeraeumt() bool { return t.RemovedAt != nil }
 
 // DisplayName liefert einen menschenlesbaren Namen der Aufgabe.
 func (t CareTask) DisplayName() string {
@@ -143,6 +177,9 @@ type PlaceWithStatus struct {
 // 0.5 = Hitzewelle (doppelt so schnell gelb/rot). Der Aufrufer entscheidet,
 // für welche Aufgabenarten der Faktor gilt (typisch: nur Gießen).
 func ComputeStatus(task CareTask, last *Completion, now time.Time, factor float64) (Status, time.Time, time.Time) {
+	if task.OneOff {
+		return statusEinmalig(task, last, now)
+	}
 	if factor <= 0 {
 		factor = 1
 	}
@@ -161,5 +198,33 @@ func ComputeStatus(task CareTask, last *Completion, now time.Time, factor float6
 		return StatusYellow, dueAt, redAt
 	default:
 		return StatusGreen, dueAt, redAt
+	}
+}
+
+// statusEinmalig ist die Ampel einer einmaligen Aufgabe. An die Stelle des
+// Intervalls tritt der Termin: rot ist sie, wenn er verstrichen ist, gelb in
+// den letzten Tagen davor (OneOffLeadTime), sonst grün. Ist sie erledigt,
+// bleibt sie grün — eine einmalige Aufgabe wird nicht wieder fällig.
+//
+// Der Hitzefaktor bleibt hier bewusst außen vor: Er beschleunigt Gießpläne,
+// aber ein Termin ist ein Termin.
+func statusEinmalig(task CareTask, last *Completion, now time.Time) (Status, time.Time, time.Time) {
+	faellig := task.Faellig()
+	gelbAb := faellig.Add(-OneOffLeadTime)
+	// Kurzfristig eingestellt („bis morgen"): Dann beginnt die Vorwarnung
+	// sofort, statt rückwirkend vor dem Anlegen zu liegen.
+	if gelbAb.Before(task.CreatedAt) {
+		gelbAb = task.CreatedAt
+	}
+	if last != nil {
+		return StatusGreen, gelbAb, faellig
+	}
+	switch {
+	case !now.Before(faellig):
+		return StatusRed, gelbAb, faellig
+	case !now.Before(gelbAb):
+		return StatusYellow, gelbAb, faellig
+	default:
+		return StatusGreen, gelbAb, faellig
 	}
 }

@@ -130,9 +130,14 @@ CREATE INDEX IF NOT EXISTS idx_assignments_task ON care_assignments(task_id);
 -- care_notifications: die Zustellungen an einzelne Personen (Anfragen und
 -- Hinweise). Sie sind gleichzeitig das Gedächtnis der Warteschlange: Wer
 -- hier steht, wurde schon gefragt.
+--
+-- Bewusst OHNE Fremdschlüssel auf care_assignments: Wird eine Aufgabe
+-- gelöscht, verschwindet der Vorgang — der Hinweis „deine zugesagte Aufgabe
+-- ist entfallen" muss aber gerade dann bleiben. Ort und Aufgabe stehen
+-- deshalb zusätzlich im Klartext dabei.
 CREATE TABLE IF NOT EXISTS care_notifications (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  assignment_id INTEGER NOT NULL REFERENCES care_assignments(id) ON DELETE CASCADE,
+  assignment_id INTEGER NOT NULL,
   task_id       INTEGER NOT NULL,
   place_id      INTEGER NOT NULL,
   user_sub      TEXT NOT NULL,
@@ -141,7 +146,9 @@ CREATE TABLE IF NOT EXISTS care_notifications (
   expires_at    TEXT NOT NULL DEFAULT '',
   ack_at        TEXT NOT NULL DEFAULT '',
   closed_at     TEXT NOT NULL DEFAULT '',
-  closed_reason TEXT NOT NULL DEFAULT ''
+  closed_reason TEXT NOT NULL DEFAULT '',
+  place_name    TEXT NOT NULL DEFAULT '',
+  task_name     TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_offen ON care_notifications(user_sub, closed_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_vorgang ON care_notifications(assignment_id);
@@ -165,15 +172,96 @@ CREATE INDEX IF NOT EXISTS idx_devices_person ON push_devices(user_sub);
 	}
 	// Nachträglich ergänzte Spalten: bestehende Datenbanken kennen sie noch
 	// nicht, ein zweiter Aufruf meldet „duplicate column name".
+	//
+	// Die vier Spalten der einmaligen Aufgaben sind rein additiv und so
+	// vorbelegt, dass jede Bestandsaufgabe unverändert als regelmäßige
+	// Aufgabe weiterläuft (one_off=0, kein Termin, nichts abgeräumt).
 	for _, stmt := range []string{
 		`ALTER TABLE completions ADD COLUMN forced INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE care_tasks ADD COLUMN one_off INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE care_tasks ADD COLUMN due_date TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE care_tasks ADD COLUMN remove_when_done INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE care_tasks ADD COLUMN removed_at TEXT NOT NULL DEFAULT ''`,
+		// Ort und Aufgabe im Klartext bei der Zustellung: Wird die Aufgabe
+		// gelöscht, ist sie nicht mehr nachschlagbar — der Hinweis soll
+		// trotzdem sagen können, worum es ging (siehe loeseNotificationsVomVorgang).
+		`ALTER TABLE care_notifications ADD COLUMN place_name TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE care_notifications ADD COLUMN task_name TEXT NOT NULL DEFAULT ''`,
 	} {
 		if _, err := d.sql.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			return err
 		}
 	}
+	if err := d.loeseNotificationsVomVorgang(); err != nil {
+		return err
+	}
 	// Weitere Bereiche bringen ihre Tabellen selbst mit (rein additiv).
 	return d.migrateIdeen()
+}
+
+// loeseNotificationsVomVorgang nimmt care_notifications den Fremdschlüssel
+// auf care_assignments.
+//
+// Warum: Wird eine Aufgabe gelöscht, räumt SQLite über zwei Kaskaden auch
+// den Vorgang und mit ihm jede Zustellung weg. Genau dann muss aber jemand
+// erfahren, dass die zugesagte Aufgabe entfallen ist — der Hinweis darf
+// nicht mit dem Anlass verschwinden (#7). Die Spalte assignment_id bleibt
+// als Bezug erhalten, nur eben ohne Zwang.
+//
+// Das ist der einzige Umbau am Bestand und läuft genau einmal: Fehlt der
+// Fremdschlüssel schon, passiert nichts. SQLite kann Fremdschlüssel nicht
+// nachträglich entfernen, deshalb der offizielle Weg über eine neue Tabelle.
+func (d *DB) loeseNotificationsVomVorgang() error {
+	var vorhanden int
+	if err := d.sql.QueryRow(
+		`SELECT COUNT(*) FROM pragma_foreign_key_list('care_notifications')`).Scan(&vorhanden); err != nil {
+		return err
+	}
+	if vorhanden == 0 {
+		return nil
+	}
+	// Fremdschlüsselprüfung aus, sonst zieht das DROP die Zeilen mit. Das
+	// geht nur außerhalb einer Transaktion; danach wird sie wieder scharf
+	// gestellt. Die Datenbank hat genau eine Verbindung (SetMaxOpenConns(1)),
+	// der Server nimmt zu diesem Zeitpunkt noch keine Anfragen an.
+	if _, err := d.sql.Exec(`PRAGMA foreign_keys=off`); err != nil {
+		return err
+	}
+	defer func() { _, _ = d.sql.Exec(`PRAGMA foreign_keys=on`) }()
+
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`
+CREATE TABLE care_notifications_neu (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  assignment_id INTEGER NOT NULL,
+  task_id       INTEGER NOT NULL,
+  place_id      INTEGER NOT NULL,
+  user_sub      TEXT NOT NULL,
+  kind          TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  expires_at    TEXT NOT NULL DEFAULT '',
+  ack_at        TEXT NOT NULL DEFAULT '',
+  closed_at     TEXT NOT NULL DEFAULT '',
+  closed_reason TEXT NOT NULL DEFAULT '',
+  place_name    TEXT NOT NULL DEFAULT '',
+  task_name     TEXT NOT NULL DEFAULT ''
+);
+INSERT INTO care_notifications_neu
+  (id,assignment_id,task_id,place_id,user_sub,kind,created_at,expires_at,ack_at,closed_at,closed_reason,place_name,task_name)
+  SELECT id,assignment_id,task_id,place_id,user_sub,kind,created_at,expires_at,ack_at,closed_at,closed_reason,place_name,task_name
+    FROM care_notifications;
+DROP TABLE care_notifications;
+ALTER TABLE care_notifications_neu RENAME TO care_notifications;
+CREATE INDEX IF NOT EXISTS idx_notifications_offen ON care_notifications(user_sub, closed_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_vorgang ON care_notifications(assignment_id);
+`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 const timeFormat = time.RFC3339
@@ -275,9 +363,12 @@ func scanPlace(row scannable) (*model.Place, error) {
 // --- CareTasks --------------------------------------------------------------
 
 func (d *DB) InsertTask(t *model.CareTask) error {
-	res, err := d.sql.Exec(`INSERT INTO care_tasks(place_id,kind,title,liters,interval_days,red_after_days,active,created_at)
-		VALUES(?,?,?,?,?,?,?,?)`,
-		t.PlaceID, string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays, boolToInt(t.Active), t.CreatedAt.UTC().Format(timeFormat))
+	res, err := d.sql.Exec(`INSERT INTO care_tasks(place_id,kind,title,liters,interval_days,red_after_days,
+			one_off,due_date,remove_when_done,active,created_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		t.PlaceID, string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays,
+		boolToInt(t.OneOff), zeitText(t.DueDate), boolToInt(t.RemoveWhenDone),
+		boolToInt(t.Active), t.CreatedAt.UTC().Format(timeFormat))
 	if err != nil {
 		return err
 	}
@@ -286,8 +377,24 @@ func (d *DB) InsertTask(t *model.CareTask) error {
 }
 
 func (d *DB) UpdateTask(t *model.CareTask) error {
-	res, err := d.sql.Exec(`UPDATE care_tasks SET kind=?,title=?,liters=?,interval_days=?,red_after_days=?,active=? WHERE id=?`,
-		string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays, boolToInt(t.Active), t.ID)
+	res, err := d.sql.Exec(`UPDATE care_tasks SET kind=?,title=?,liters=?,interval_days=?,red_after_days=?,
+			one_off=?,due_date=?,remove_when_done=?,active=? WHERE id=?`,
+		string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays,
+		boolToInt(t.OneOff), zeitText(t.DueDate), boolToInt(t.RemoveWhenDone),
+		boolToInt(t.Active), t.ID)
+	if err != nil {
+		return err
+	}
+	return requireRow(res)
+}
+
+// RemoveTask räumt eine erledigte einmalige Aufgabe ab: Sie verschwindet aus
+// Karte, Liste und Verwaltung, bleibt aber als Zeile bestehen. Löschen wäre
+// falsch — an der Aufgabe hängen die Erledigungen, und die zählen weiter für
+// die Rangliste (#6).
+func (d *DB) RemoveTask(id int64, at time.Time) error {
+	res, err := d.sql.Exec(`UPDATE care_tasks SET removed_at=?, active=0 WHERE id=? AND removed_at=''`,
+		at.UTC().Format(timeFormat), id)
 	if err != nil {
 		return err
 	}
@@ -302,14 +409,20 @@ func (d *DB) DeleteTask(id int64) error {
 	return requireRow(res)
 }
 
+const taskSpalten = `id,place_id,kind,title,liters,interval_days,red_after_days,
+	one_off,due_date,remove_when_done,removed_at,active,created_at`
+
+// GetTask liefert auch abgeräumte Aufgaben — die Rangliste und die Historie
+// müssen ihre Erledigungen weiter zuordnen können.
 func (d *DB) GetTask(id int64) (*model.CareTask, error) {
-	row := d.sql.QueryRow(`SELECT id,place_id,kind,title,liters,interval_days,red_after_days,active,created_at FROM care_tasks WHERE id=?`, id)
-	return scanTask(row)
+	return scanTask(d.sql.QueryRow(`SELECT `+taskSpalten+` FROM care_tasks WHERE id=?`, id))
 }
 
-// ListTasks liefert alle Aufgaben, gruppierbar über PlaceID.
+// ListTasks liefert alle laufenden Aufgaben, gruppierbar über PlaceID.
+// Abgeräumte (erledigte einmalige) bleiben außen vor: Sie sind vorbei.
 func (d *DB) ListTasks() ([]model.CareTask, error) {
-	rows, err := d.sql.Query(`SELECT id,place_id,kind,title,liters,interval_days,red_after_days,active,created_at FROM care_tasks ORDER BY place_id, id`)
+	rows, err := d.sql.Query(`SELECT ` + taskSpalten + ` FROM care_tasks
+		WHERE removed_at='' ORDER BY place_id, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -327,13 +440,18 @@ func (d *DB) ListTasks() ([]model.CareTask, error) {
 
 func scanTask(row scannable) (*model.CareTask, error) {
 	var t model.CareTask
-	var active int
-	var created, kind string
-	err := row.Scan(&t.ID, &t.PlaceID, &kind, &t.Title, &t.Liters, &t.IntervalDays, &t.RedAfterDays, &active, &created)
+	var active, oneOff, removeWhenDone int
+	var created, kind, dueDate, removedAt string
+	err := row.Scan(&t.ID, &t.PlaceID, &kind, &t.Title, &t.Liters, &t.IntervalDays, &t.RedAfterDays,
+		&oneOff, &dueDate, &removeWhenDone, &removedAt, &active, &created)
 	if err != nil {
 		return nil, err
 	}
 	t.Kind = model.TaskKind(kind)
+	t.OneOff = oneOff != 0
+	t.DueDate = zeitWert(dueDate)
+	t.RemoveWhenDone = removeWhenDone != 0
+	t.RemovedAt = zeitWert(removedAt)
 	t.Active = active != 0
 	t.CreatedAt, _ = time.Parse(timeFormat, created)
 	return &t, nil

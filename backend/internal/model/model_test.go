@@ -72,3 +72,69 @@ func TestDisplayName(t *testing.T) {
 		t.Error("Titel hat keinen Vorrang")
 	}
 }
+
+// --- Einmalige Aufgaben (#6) -------------------------------------------------
+
+func zeitpunkt(t time.Time) *time.Time { return &t }
+
+// einmalig: „einmal zum Bahnhof fahren" — kein Intervall, sondern ein
+// Fälligkeitsdatum. Angelegt am 1. August, fällig am 20. August.
+func einmalig() CareTask {
+	return CareTask{
+		Kind: TaskOther, Title: "Zum Bahnhof fahren", CreatedAt: t0,
+		OneOff: true, DueDate: zeitpunkt(t0.Add(19 * 24 * time.Hour)),
+	}
+}
+
+func TestComputeStatusEinmalig(t *testing.T) {
+	faellig := t0.Add(19 * 24 * time.Hour)
+	cases := []struct {
+		name string
+		last *Completion
+		now  time.Time
+		want Status
+	}{
+		{"lange vorher grün", nil, t0.Add(1 * time.Hour), StatusGreen},
+		{"noch außerhalb der Vorwarnzeit", nil, faellig.Add(-OneOffLeadTime - time.Minute), StatusGreen},
+		{"Vorwarnzeit erreicht → gelb", nil, faellig.Add(-OneOffLeadTime), StatusYellow},
+		{"kurz vor dem Termin gelb", nil, faellig.Add(-time.Hour), StatusYellow},
+		{"Termin erreicht → rot", nil, faellig, StatusRed},
+		{"überfällig bleibt rot", nil, faellig.Add(30 * 24 * time.Hour), StatusRed},
+		{"erledigt bleibt grün, auch nach dem Termin", done(faellig.Add(-time.Hour)),
+			faellig.Add(90 * 24 * time.Hour), StatusGreen},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, _, _ := ComputeStatus(einmalig(), c.last, c.now, 1)
+			if got != c.want {
+				t.Fatalf("ComputeStatus = %s, erwartet %s", got, c.want)
+			}
+		})
+	}
+}
+
+// Der Hitzefaktor beschleunigt Gießpläne. Ein einmaliger Termin ist ein
+// Termin — er verschiebt sich nicht, weil es heiß ist.
+func TestEinmaligIgnoriertHitzefaktor(t *testing.T) {
+	faellig := t0.Add(19 * 24 * time.Hour)
+	got, dueAt, redAt := ComputeStatus(einmalig(), nil, faellig.Add(-2*24*time.Hour), 0.5)
+	if got != StatusYellow {
+		t.Fatalf("Status = %s, erwartet %s", got, StatusYellow)
+	}
+	if !redAt.Equal(faellig) {
+		t.Errorf("redAt = %v, erwartet den Termin %v", redAt, faellig)
+	}
+	if want := faellig.Add(-OneOffLeadTime); !dueAt.Equal(want) {
+		t.Errorf("dueAt = %v, erwartet %v", dueAt, want)
+	}
+}
+
+// Wer eine Aufgabe für übermorgen einstellt, hat keine drei Tage Vorlauf.
+// Dann beginnt die Vorwarnung eben sofort — grün wäre gelogen.
+func TestEinmaligKurzfristigStartetGelb(t *testing.T) {
+	kurz := CareTask{Kind: TaskOther, CreatedAt: t0, OneOff: true,
+		DueDate: zeitpunkt(t0.Add(12 * time.Hour))}
+	if got, _, _ := ComputeStatus(kurz, nil, t0, 1); got != StatusYellow {
+		t.Fatalf("Status = %s, erwartet %s", got, StatusYellow)
+	}
+}
