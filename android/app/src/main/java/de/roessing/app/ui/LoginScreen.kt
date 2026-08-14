@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,6 +40,9 @@ fun LoginScreen(
         Column(
             Modifier
                 .fillMaxSize()
+                // Scrollbar, damit der Rechtliches-Fuß auch auf kleinen
+                // Bildschirmen erreichbar bleibt und nichts verdeckt.
+                .verticalScroll(rememberScrollState())
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -93,6 +98,10 @@ fun LoginScreen(
                     Text(stringResource(R.string.login_dev_button))
                 }
             }
+            // Impressum und Datenschutz gehören schon hierher: Wer noch kein
+            // Konto hat, muss nachlesen können, worauf er sich einlässt.
+            Spacer(Modifier.height(32.dp))
+            Rechtliches()
         }
     }
 }

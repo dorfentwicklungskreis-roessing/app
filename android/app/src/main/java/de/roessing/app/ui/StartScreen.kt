@@ -132,6 +132,10 @@ fun StartScreen(
         }
 
         IdeenKachel(onClick = { onBereich(Bereich.IDEEN) })
+
+        // Impressum und Datenschutz stehen am Fuß der Startseite — dort, wo
+        // man sie sucht, und dauerhaft erreichbar.
+        Rechtliches()
     }
 }
 

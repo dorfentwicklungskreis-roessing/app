@@ -122,6 +122,12 @@
     <string name="members_only_admins">nur Verwaltende</string>
     <string name="back">Zurück</string>
 
+    <!-- Rechtliches: Pflichtangaben nach § 5 DDG, auch ohne Anmeldung erreichbar -->
+    <string name="legal_title">Rechtliches</string>
+    <string name="legal_imprint">Impressum</string>
+    <string name="legal_privacy">Datenschutzerklärung</string>
+    <string name="legal_offline">Ohne Internetverbindung lassen sie sich nicht öffnen. Du findest sie unter rössing.de/impressum und rössing.de/app/datenschutz.</string>
+
     <!-- Vergabe der Pflegeaufgaben: mithelfen, Anfragen, Zusagen -->
     <string name="signup_title">Hier als Helfer:in eintragen</string>
     <string name="signup_active">Du hilfst hier mit</string>
