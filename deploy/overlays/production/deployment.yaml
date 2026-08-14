@@ -49,6 +49,11 @@ spec:
               value: "1"
             - name: PUBLIC_URL
               value: https://app.xn--rssing-wxa.de
+            # Zugangsdaten für den Versand von Benachrichtigungen über
+            # Firebase Cloud Messaging. Liegt als SealedSecret im Repo und
+            # wird vom Controller im Cluster entschlüsselt.
+            - name: FCM_CREDENTIALS_FILE
+              value: /secrets/fcm/firebase-admin.json
             # SESSION_KEY (optional): signiert die Cookies der Verwaltung.
             # Ohne ihn erzeugt der Server beim Start einen zufälligen Schlüssel
             # — Anmeldungen überleben dann kein Rollout. Für dauerhafte
@@ -67,6 +72,9 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: fcm
+              mountPath: /secrets/fcm
+              readOnly: true
             # Schreibbares /tmp, weil das Wurzeldateisystem nur lesbar ist.
             - name: tmp
               mountPath: /tmp
@@ -92,6 +100,12 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: dorf-app-data
+        - name: fcm
+          secret:
+            secretName: dorf-app-fcm
+            # Fehlt das Secret (z.B. lokal), startet der Server trotzdem —
+            # dann werden schlicht keine Push-Nachrichten verschickt.
+            optional: true
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
