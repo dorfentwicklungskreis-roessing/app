@@ -15,4 +15,4 @@ resources:
 images:
 - name: ghcr.io/dorfentwicklungskreis-roessing/app-backend
   newName: ghcr.io/dorfentwicklungskreis-roessing/app-backend
-  newTag: d37e4987bf501552bf8b0f48ca2440459e301d1f
+  newTag: f184f9c6fbd3728b04b9a02d482fa1520c30f61f
