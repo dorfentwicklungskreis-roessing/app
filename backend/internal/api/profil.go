@@ -47,6 +47,12 @@ var mailForm = regexp.MustCompile(`^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$`)
 
 // ProfileInput ist die Eingabe von PUT /api/v1/me/profile.
 //
+// PUT ersetzt den ganzen Datensatz: Ein Feld, das nicht mitkommt, wird
+// geleert. Wer nur eine Kleinigkeit ändern will, schickt das Profil aus
+// GET /api/v1/me vollständig zurück — App und Verwaltung tun genau das.
+// Einzige Ausnahme ist visibility: Fehlt der Block ganz, bleiben die
+// bisherigen Schalter stehen, statt auf die Vorbelegung zurückzufallen.
+//
 // UserSub ist optional und dient als Sicherung: Schickt eine App versehentlich
 // (oder absichtlich) eine fremde Kennung mit, wird die Änderung abgelehnt,
 // statt still das eigene Profil zu überschreiben.
