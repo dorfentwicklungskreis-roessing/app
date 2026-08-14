@@ -2,6 +2,9 @@
    Ergebnis (static/app.css) ist committet — zur Laufzeit wird nichts geladen. */
 @import "tailwindcss";
 @source "./templates/**/*.html";
+/* Die Fehlerseite des öffentlichen Ideen-Eingangs wird von internal/api
+   ausgeliefert, nutzt aber dasselbe gebaute CSS. */
+@source "../api/templates/**/*.html";
 
 @plugin "daisyui" {
   themes: garden --default, forest --prefersdark;

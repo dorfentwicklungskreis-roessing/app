@@ -287,6 +287,52 @@ folgenden Angaben:
      holt ihre Anfragen dann wie bisher selbst ab. Diese Rückfallebene läuft
      immer mit — sie ist kein Notbehelf, sondern der verlässliche Weg.
 
+## Ideen-Sammlung (Stand 14.08.2026)
+
+`POST /api/v1/ideen` ist der **einzige** Endpunkt ohne Anmeldung. Das ist
+Absicht: Das Formular steht auf der öffentlichen Website, und wer noch keine
+App hat, soll trotzdem sagen können, was sie können soll. Damit daraus kein
+offenes Scheunentor wird:
+
+| Riegel | Wirkung | Test |
+|---|---|---|
+| Eigene Zugriffsgrenze | `IDEEN_BURST` (5) und `IDEEN_PRO_STUNDE` (5) je Aufrufer — bei anonymen Einreichungen also je IP. `429` mit `Retry-After`. | `TestIdeenRateLimit` |
+| Honigtopf | Verstecktes Feld `webseite`; ist es gefüllt, gibt es eine freundliche `201`, gespeichert wird nichts. | `TestIdeeHonigtopfWirdVerworfen` |
+| Mindestzeit | `gestartet` (Unix-Millisekunden) — unter 3 Sekunden zwischen Aufruf und Absenden wird still verworfen. Fehlt das Feld (kein JavaScript), wird nicht geprüft. | `TestIdeeMindestzeitZwischenAufrufUndAbsenden` |
+| Weiterleitung | `redirect` nur auf freigegebene Ursprünge (`IDEEN_ZIELE`, Vorgabe `https://xn--rssing-wxa.de`). Relative Pfade, fremde Hosts, `javascript:` und Benutzerangaben im Host werden mit `400` abgewiesen. | `TestIdeenWeiterleitungNurAufErlaubteZiele` |
+| Eingabeprüfung | Wunsch 5–2000 Zeichen, Name ≤ 100, E-Mail ≤ 200 und plausibel, keine Steuerzeichen (im Wunsch sind Zeilenumbrüche erlaubt). | `TestIdeeValidierung` |
+| Rechte | Lesen, Ändern und Löschen nur mit `admin`; Mitglieder bekommen `403`, ohne Token `401`. | `TestIdeenVerwaltungNurFuerAdmins` |
+
+Kein Captcha und kein Fremddienst: Beides würde Daten an Dritte tragen und
+Menschen mit Vorlesehilfe ausbremsen.
+
+Die interne Notiz der Verwaltung verlässt die Verwaltung nicht — die Antwort
+des öffentlichen Eingangs blendet sie aus.
+
+**Migration**: `CREATE TABLE IF NOT EXISTS ideen` — rein additiv, an
+bestehenden Tabellen ändert sich nichts, ein Rückschritt auf die vorige
+Version funktioniert weiterhin.
+
+### Was daraus für die Datenschutzerklärung folgt
+
+Die Datenschutzerklärung (Website `/app/datenschutz` und
+`store/datenschutz.md`) braucht einen eigenen Abschnitt: gespeichert werden
+**Wunschtext (Pflicht) sowie Name und E-Mail (beides freiwillig)**, dazu
+Eingangszeitpunkt, der Weg (Website oder App) und — nur bei Einreichung aus
+der angemeldeten App — die Kennung der Rössing-ID. Zweck: die Weiterentwicklung
+der Dorf-App und Rückfragen zum Wunsch. Rechtsgrundlage: Einwilligung
+(Art. 6 Abs. 1 lit. a DSGVO) durch das Absenden des Formulars; ohne Name und
+E-Mail ist die Einreichung anonym möglich. Empfänger: ausschließlich die
+Verwaltenden des Dorfentwicklungskreises — Ideen werden **nicht**
+veröffentlicht. Speicherdauer: bis der Wunsch erledigt oder verworfen ist,
+längstens bis zum Widerruf. Widerruf und Löschung formlos per E-Mail an den
+Dorfentwicklungskreis. **Es wird keine IP-Adresse gespeichert**; die
+Zugriffsgrenze hält sie nur flüchtig im Arbeitsspeicher.
+
+Für die Play-Datensicherheit ändert sich nichts Neues gegenüber den
+Profildaten: *Name* und *Email address* sind bereits als optional erhoben
+deklariert, dazu kommt *Personal info → Other info* für den Wunschtext.
+
 ## Wenn doch etwas klemmt
 
 Alle Riegel sind über die Umgebung steuerbar, ohne neues Image:

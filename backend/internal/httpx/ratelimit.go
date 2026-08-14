@@ -24,6 +24,10 @@ type RateLimitConfig struct {
 	Burst int
 	// PerMinute ist die Nachfüllrate in Zugriffen pro Minute.
 	PerMinute int
+	// PerHour ist die Nachfüllrate in Zugriffen pro Stunde. Gesetzt sticht
+	// sie PerMinute — gebraucht wird sie für Pfade, bei denen schon eine
+	// Handvoll Zugriffe pro Stunde reicht (öffentliche Formulare).
+	PerHour int
 	// Enabled schaltet den Limiter ab, wenn es auf false zeigt (Tests).
 	Enabled *bool
 	// Now ist die Zeitquelle (Tests).
@@ -84,15 +88,18 @@ func NewRateLimiter(cfg RateLimitConfig) *RateLimiter {
 	if cfg.Burst <= 0 {
 		cfg.Burst = DefaultBurst
 	}
-	if cfg.PerMinute <= 0 {
-		cfg.PerMinute = DefaultPerMinute
+	proSek := float64(cfg.PerMinute) / 60
+	if cfg.PerHour > 0 {
+		proSek = float64(cfg.PerHour) / 3600
+	} else if cfg.PerMinute <= 0 {
+		proSek = float64(DefaultPerMinute) / 60
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
 	return &RateLimiter{
 		burst:  float64(cfg.Burst),
-		proSek: float64(cfg.PerMinute) / 60,
+		proSek: proSek,
 		now:    cfg.Now,
 		eimer:  map[string]*eimer{},
 	}

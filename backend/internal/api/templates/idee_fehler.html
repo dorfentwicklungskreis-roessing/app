@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="de" data-theme="garden">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Idee konnte nicht gespeichert werden · Dorf-App Rössing</title>
+<link rel="stylesheet" href="/admin/static/app.css">
+</head>
+<body class="min-h-screen bg-base-200 p-4 md:p-8">
+<main class="card mx-auto max-w-2xl bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h1 class="card-title" id="seitentitel">Das hat leider nicht geklappt</h1>
+    <div role="alert" class="alert alert-error" id="ideen-fehler"><span>{{.Fehler}}</span></div>
+    <p class="text-base-content/70">
+      Dein Text ist nicht verloren — er steht unten noch genau so, wie du ihn
+      geschrieben hast. Bitte kurz anpassen und noch einmal abschicken.
+    </p>
+
+    <form method="post" action="/api/v1/ideen" class="mt-2">
+      <input type="hidden" name="redirect" value="{{.Redirect}}">
+      {{/* Der Honigtopf bleibt auch hier leer — er ist für Skripte da. */}}
+      <input type="text" name="webseite" value="" tabindex="-1" autocomplete="off"
+             aria-hidden="true" class="hidden">
+
+      <fieldset class="fieldset">
+        <label class="fieldset-legend" for="feld-name">Name (freiwillig)</label>
+        <input type="text" name="name" id="feld-name" maxlength="100"
+               value="{{.Eingabe.Name}}" class="input w-full">
+
+        <label class="fieldset-legend" for="feld-email">E-Mail (freiwillig)</label>
+        <input type="email" name="email" id="feld-email" maxlength="200"
+               value="{{.Eingabe.Email}}" class="input w-full">
+        <p class="label">Nur, falls wir bei deinem Wunsch nachfragen dürfen.</p>
+
+        <label class="fieldset-legend" for="feld-wunsch">Was soll die App können?</label>
+        <textarea name="wunsch" id="feld-wunsch" rows="6" required
+                  minlength="5" maxlength="2000" class="textarea w-full">{{.Eingabe.Wunsch}}</textarea>
+      </fieldset>
+
+      <div class="card-actions mt-4 justify-end">
+        <a class="btn btn-ghost" href="{{.Zurueck}}">Zurück zur Website</a>
+        <button type="submit" class="btn btn-primary" id="idee-absenden">Noch einmal abschicken</button>
+      </div>
+    </form>
+  </div>
+</main>
+</body>
+</html>

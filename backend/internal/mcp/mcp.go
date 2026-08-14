@@ -351,6 +351,9 @@ func (s *Server) registerTools() {
 			Handler: s.toolSetFactor,
 		},
 	}
+	// Weitere Bereiche bringen ihre Werkzeuge selbst mit; bestehende Namen
+	// bleiben dabei unverändert.
+	s.tools = append(s.tools, s.ideenTools()...)
 }
 
 func (s *Server) toolListPlaces(json.RawMessage, auth.User) (any, error) {

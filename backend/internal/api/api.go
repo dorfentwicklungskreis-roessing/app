@@ -8,10 +8,12 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/httpx"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
@@ -23,6 +25,19 @@ type Server struct {
 	// entstehen (z.B. eine von der Verwaltung aufgehobene Zusage). Ohne
 	// Angabe bleibt es bei der Abrufliste — siehe vergabe.Zusteller.
 	Zusteller vergabe.Zusteller
+	// OptionalAuth prüft ein mitgeschicktes Bearer-Token, verlangt aber
+	// keines. Gebraucht wird das nur am öffentlichen Ideen-Eingang: Die
+	// Website reicht anonym ein, die App angemeldet (siehe ideen.go).
+	OptionalAuth func(http.Handler) http.Handler
+	// IdeenLimiter begrenzt den öffentlichen Ideen-Eingang deutlich
+	// strenger als der allgemeine Limiter. Leer = aus der Umgebung.
+	IdeenLimiter *httpx.RateLimiter
+	// IdeenRedirects sind die Ursprünge, auf die nach dem Absenden
+	// weitergeleitet werden darf. Leer = aus der Umgebung.
+	IdeenRedirects []string
+
+	// ideenEinmal baut die Zugriffsgrenze des Ideen-Eingangs genau einmal.
+	ideenEinmal sync.Once
 }
 
 // Handler baut den HTTP-Router. authMW schützt alle /api/v1-Routen.
@@ -54,8 +69,12 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 	s.registerGeraete(api)
 	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
 	api.HandleFunc("PUT /api/v1/settings", s.adminOnly(s.handlePutSettings))
+	s.registerIdeenVerwaltung(api)
 
 	mux.Handle("/api/v1/", authMW(api))
+	// Der Ideen-Eingang hängt bewusst außerhalb der Anmeldepflicht (siehe
+	// ideen.go) und ist als genauere Route trotzdem vorrangig.
+	s.registerIdeenEingang(mux)
 	if extra != nil {
 		extra(mux)
 	}

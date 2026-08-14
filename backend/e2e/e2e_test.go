@@ -22,6 +22,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -247,6 +248,12 @@ func TestEndToEnd(t *testing.T) {
 		// Der Takt der Vergabe läuft im Betrieb jede Minute; im Test soll er
 		// nicht bremsen. Die Regeln selbst bleiben unverändert.
 		"VERGABE_TAKT=1s",
+		// Ideen-Eingang: erlaubtes Weiterleitungsziel wie in Produktion. Die
+		// Zugriffsgrenze wird hier hochgesetzt, weil der Test in Folge
+		// einreicht — sie hat einen eigenen Test in internal/api.
+		"IDEEN_ZIELE=https://xn--rssing-wxa.de",
+		"IDEEN_BURST=100",
+		"IDEEN_PRO_STUNDE=100",
 	)
 	srv.Stdout, srv.Stderr = os.Stderr, os.Stderr
 	if err := srv.Start(); err != nil {
@@ -806,6 +813,154 @@ func TestEndToEnd(t *testing.T) {
 		}
 	})
 
+	// --- Ideen-Sammlung ---
+	t.Run("Ideen: öffentlicher Eingang, Missbrauchsschutz, Verwaltung", func(t *testing.T) {
+		// Ohne Anmeldung einreichen — genau so kommt es von der Website.
+		wunsch := fmt.Sprintf("E2E-Wunsch %d: ein Mitfahrbrett für Fahrten nach Hildesheim.", time.Now().UnixNano())
+		resp := formular(t, "/api/v1/ideen", "", nil, map[string]string{
+			"name": "Erna E2E", "email": "erna@example.org", "wunsch": wunsch,
+		})
+		resp.Body.Close()
+		if resp.StatusCode != 201 {
+			t.Fatalf("öffentliche Einreichung: HTTP %d", resp.StatusCode)
+		}
+
+		// Aus der angemeldeten App: die Idee hängt am Konto.
+		appWunsch := fmt.Sprintf("E2E-App-Wunsch %d: Erinnerungen bitte auch abends.", time.Now().UnixNano())
+		resp = formular(t, "/api/v1/ideen", memberToken, nil, map[string]string{"wunsch": appWunsch})
+		resp.Body.Close()
+		if resp.StatusCode != 201 {
+			t.Fatalf("Einreichung aus der App: HTTP %d", resp.StatusCode)
+		}
+
+		// Honigtopf: freundliche 201, aber nichts wird gespeichert.
+		resp = formular(t, "/api/v1/ideen", "", nil, map[string]string{
+			"wunsch": "E2E-Honigtopf: das darf nirgends auftauchen.", "webseite": "http://spam.example",
+		})
+		resp.Body.Close()
+		if resp.StatusCode != 201 {
+			t.Fatalf("Honigtopf: HTTP %d, erwartet 201", resp.StatusCode)
+		}
+
+		// Zu kurzer Wunsch → 400, nichts gespeichert.
+		resp = formular(t, "/api/v1/ideen", "", nil, map[string]string{"wunsch": "hm"})
+		resp.Body.Close()
+		if resp.StatusCode != 400 {
+			t.Fatalf("zu kurzer Wunsch: HTTP %d, erwartet 400", resp.StatusCode)
+		}
+
+		// Weiterleitung nur auf erlaubte Ziele.
+		resp = formular(t, "/api/v1/ideen", "", nil, map[string]string{
+			"wunsch": "E2E-Umleitung: das darf nirgends auftauchen.", "redirect": "https://boese.example/",
+		})
+		resp.Body.Close()
+		if resp.StatusCode != 400 {
+			t.Fatalf("fremdes Weiterleitungsziel: HTTP %d, erwartet 400", resp.StatusCode)
+		}
+		resp = formular(t, "/api/v1/ideen", "", nil, map[string]string{
+			"wunsch": fmt.Sprintf("E2E-Danke %d: Weiterleitung prüfen.", time.Now().UnixNano()),
+			// Muss zu IDEEN_ZIELE unten passen.
+			"redirect": "https://xn--rssing-wxa.de/app/danke",
+		})
+		resp.Body.Close()
+		if resp.StatusCode != 303 || resp.Header.Get("Location") != "https://xn--rssing-wxa.de/app/danke" {
+			t.Fatalf("erlaubtes Ziel: HTTP %d, Location %q", resp.StatusCode, resp.Header.Get("Location"))
+		}
+
+		// Lesen und Ändern darf nur die Verwaltung.
+		for _, methode := range []string{"GET"} {
+			r, _ := request(t, methode, "/api/v1/ideen", memberToken, nil)
+			if r.StatusCode != 403 {
+				t.Fatalf("Mitglied darf Ideen lesen: HTTP %d", r.StatusCode)
+			}
+		}
+
+		_, liste := request(t, "GET", "/api/v1/ideen", adminToken, nil)
+		ideen := liste["ideen"].([]any)
+		var meine, ausDerApp map[string]any
+		for _, roh := range ideen {
+			i := roh.(map[string]any)
+			if i["wunsch"] == wunsch {
+				meine = i
+			}
+			if i["wunsch"] == appWunsch {
+				ausDerApp = i
+			}
+			if s, _ := i["wunsch"].(string); strings.Contains(s, "E2E-Honigtopf") || strings.Contains(s, "E2E-Umleitung") {
+				t.Fatalf("verworfene Einreichung ist gespeichert: %v", i)
+			}
+		}
+		if meine == nil {
+			t.Fatalf("eingereichte Idee fehlt in der Liste: %v", ideen)
+		}
+		if meine["status"] != "neu" || meine["quelle"] != "website" || meine["userSub"] != "" {
+			t.Fatalf("Idee falsch abgelegt: %v", meine)
+		}
+		if ausDerApp == nil || ausDerApp["quelle"] != "app" || ausDerApp["userSub"] == "" {
+			t.Fatalf("Idee aus der App ist keinem Konto zugeordnet: %v", ausDerApp)
+		}
+
+		// Stand und Notiz ändern — auch das nur als Admin.
+		id := meine["id"].(float64)
+		pfad := fmt.Sprintf("/api/v1/ideen/%.0f", id)
+		if r, _ := request(t, "PATCH", pfad, memberToken, map[string]any{"status": "gelesen"}); r.StatusCode != 403 {
+			t.Fatalf("Mitglied darf Ideen ändern: HTTP %d", r.StatusCode)
+		}
+		resp2, geaendert := request(t, "PATCH", pfad, adminToken,
+			map[string]any{"status": "umgesetzt", "notiz": "E2E-Notiz"})
+		if resp2.StatusCode != 200 || geaendert["status"] != "umgesetzt" {
+			t.Fatalf("Statuswechsel: HTTP %d: %v", resp2.StatusCode, geaendert)
+		}
+
+		// Über MCP sichtbar und änderbar.
+		text, fehler := mcpToolText(t, adminToken, "ideen_liste", map[string]any{"status": "umgesetzt"})
+		if fehler || !strings.Contains(text, wunsch) {
+			t.Fatalf("ideen_liste über MCP: %s", text)
+		}
+		text, fehler = mcpToolText(t, adminToken, "idee_status_setzen",
+			map[string]any{"id": id, "status": "abgelehnt", "notiz": "E2E über MCP"})
+		if fehler || !strings.Contains(text, "abgelehnt") {
+			t.Fatalf("idee_status_setzen über MCP: %s", text)
+		}
+
+		// Aufräumen: die E2E-Einträge wieder löschen.
+		if r, _ := request(t, "DELETE", pfad, memberToken, nil); r.StatusCode != 403 {
+			t.Fatalf("Mitglied darf Ideen löschen: HTTP %d", r.StatusCode)
+		}
+		for _, roh := range ideen {
+			i := roh.(map[string]any)
+			r, _ := request(t, "DELETE", fmt.Sprintf("/api/v1/ideen/%.0f", i["id"].(float64)), adminToken, nil)
+			if r.StatusCode != 204 {
+				t.Fatalf("Idee löschen: HTTP %d", r.StatusCode)
+			}
+		}
+	})
+}
+
+// formular schickt ein klassisches HTML-Formular (so kommt es von der
+// Website) und folgt Weiterleitungen bewusst nicht.
+func formular(t *testing.T, pfad, token string, kopf map[string]string, werte map[string]string) *http.Response {
+	t.Helper()
+	form := url.Values{}
+	for k, v := range werte {
+		form.Set(k, v)
+	}
+	req, _ := http.NewRequest("POST", backendAddr+pfad, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	for k, v := range kopf {
+		req.Header.Set(k, v)
+	}
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
 }
 
 // warteAufAnfrage pollt die Benachrichtigungen, bis eine Anfrage zu dieser

@@ -87,6 +87,32 @@ Anfang.
   erst, wenn jemand sich als Helfer:in eingetragen hat, und ein Tipp auf die
   Meldung führt direkt zur Aufgabe. Datenschutz-Folgen: siehe
   `backend/SICHERHEIT.md`.
+- **Ideen-Sammlung** („Sag uns, was die App können soll"): Wünsche aus dem
+  Dorf mit Name, E-Mail (beides freiwillig) und dem Wunsch selbst.
+  `POST /api/v1/ideen` ist als einziger Endpunkt **ohne Anmeldung**
+  erreichbar — die Website ist öffentlich, und wer noch keine App hat, soll
+  trotzdem etwas sagen können. Er versteht JSON **und** klassische
+  HTML-Formulare, damit das Formular auf der Website ohne JavaScript
+  funktioniert; Browser werden danach auf eine Dankeseite weitergeleitet
+  (`redirect`, nur auf **freigegebene Ursprünge** — `IDEEN_ZIELE`, Vorgabe
+  `https://xn--rssing-wxa.de`), alle anderen bekommen **201** mit JSON.
+  Eine abgewiesene Eingabe ergibt für Browser eine eigene Fehlerseite, auf
+  der der getippte Text vollständig zurückkommt. Kommt ein gültiges Token
+  mit (App), wird die Idee dem Konto zugeordnet (`quelle: "app"`,
+  `userSub`), sonst gilt `quelle: "website"`.
+  **Missbrauchsschutz ohne Captcha und ohne Fremddienst**: eine eigene,
+  strenge Zugriffsgrenze je IP (`IDEEN_BURST`/`IDEEN_PRO_STUNDE`, Vorgabe
+  5 am Stück und 5 pro Stunde), ein verstecktes Feld (`webseite`), das nur
+  Skripte ausfüllen, und eine Mindestzeit von 3 Sekunden zwischen
+  Formularaufruf und Absenden (`gestartet`, Unix-Millisekunden; fehlt das
+  Feld, wird nicht geprüft). Was daran hängen bleibt, bekommt eine
+  freundliche 201 und wird verworfen.
+  Lesen und Ändern darf nur die Verwaltung: `GET /api/v1/ideen?status=…`,
+  `PATCH /api/v1/ideen/{id}` (Stand `neu`/`gelesen`/`umgesetzt`/`abgelehnt`
+  und interne Notiz), `DELETE /api/v1/ideen/{id}`. In der Verwaltung liegt
+  der Bereich unter `/admin/ideen/` (Zähler „neu" auf der Bereichsübersicht,
+  Löschen über eine eigene Bestätigungsseite); aus Claude heraus gibt es
+  `ideen_liste` und `idee_status_setzen`.
 - **Spielschutz**: Nach einer Erledigung bleibt dieselbe Aufgabe gesperrt —
   50 % des Soll-Intervalls (beim Gießen mit dem Hitzefaktor skaliert, bei
   Jäten & Co. nicht), mindestens 12 Stunden, höchstens das volle Intervall.

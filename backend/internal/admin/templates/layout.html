@@ -62,6 +62,15 @@
           {{end}}
         </li>
         <li>
+          <a href="/admin/ideen/" {{if eq .Nav "ideen"}}class="menu-active"{{end}}>Ideen</a>
+          {{if eq .Nav "ideen"}}
+          <ul>
+            <li><a href="/admin/ideen/">Alle</a></li>
+            <li><a href="/admin/ideen/?status=neu">Neu</a></li>
+          </ul>
+          {{end}}
+        </li>
+        <li>
           <a href="/admin/dorfbewohner/" {{if eq .Nav "dorfbewohner"}}class="menu-active"{{end}}>Dorfbewohner</a>
           {{if eq .Nav "dorfbewohner"}}
           <ul>

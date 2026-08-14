@@ -15,6 +15,19 @@
     </div>
   </div>
 
+  <div class="card bg-base-100 shadow-sm" id="bereich-ideen">
+    <div class="card-body">
+      <h2 class="card-title">
+        💡 Ideen
+        {{if .Data.NeueIdeen}}<span class="badge badge-warning" id="ideen-neu">{{.Data.NeueIdeen}}</span>{{else}}<span class="badge badge-ghost" id="ideen-neu">0</span>{{end}}
+      </h2>
+      <p class="text-base-content/70">Was das Dorf sich von der App wünscht: eingereichte Ideen lesen, einordnen und aufräumen.</p>
+      <div class="card-actions justify-end">
+        <a class="btn btn-primary btn-sm" href="/admin/ideen/">Öffnen</a>
+      </div>
+    </div>
+  </div>
+
   <div class="card bg-base-100 shadow-sm" id="bereich-dorfbewohner">
     <div class="card-body">
       <h2 class="card-title">👋 Dorfbewohner</h2>

@@ -117,7 +117,10 @@ func main() {
 	// Push-Weg (Firebase). Ohne Schlüssel bleibt es bei der Abrufliste.
 	zusteller := pushEinrichten(database)
 
-	srv := &api.Server{DB: database, Zusteller: zusteller}
+	// OptionalAuth versorgt nur den öffentlichen Ideen-Eingang: Wer aus der
+	// angemeldeten App einreicht, bekommt die Idee dem Konto zugeordnet;
+	// wer über die Website kommt, reicht anonym ein.
+	srv := &api.Server{DB: database, Zusteller: zusteller, OptionalAuth: auth.Optional(verifier)}
 	handler := srv.Handler(auth.Middleware(verifier), func(mux *http.ServeMux) {
 		// MCP: OAuth gegen die Rössing-ID, admin-Rolle erforderlich.
 		// MCP_CLIENT_ID: PKCE-Client, den Dynamic Client Registration

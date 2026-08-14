@@ -1,0 +1,56 @@
+{{/* Bereich „Ideen“: die Wünsche aus dem Dorf. Gefiltert wird über echte
+     Links (?status=…), nicht über clientseitiges Ein- und Ausblenden. */}}
+{{define "seite"}}
+<h1 class="text-2xl font-bold" id="seitentitel">Ideen aus dem Dorf</h1>
+<p class="mt-1 text-base-content/70">
+  Was die App noch können soll — eingereicht über das Formular auf der Website
+  und aus der App.
+</p>
+
+<div class="mt-4 flex flex-wrap gap-2" id="ideen-filter">
+  {{range .Data.Filter}}
+    <a class="btn btn-sm {{if .Aktiv}}btn-primary{{else}}btn-ghost{{end}}"
+       href="/admin/ideen/{{if .Wert}}?status={{.Wert}}{{end}}">
+      {{.Titel}} <span class="badge badge-sm">{{.Anzahl}}</span>
+    </a>
+  {{end}}
+</div>
+
+{{if .Data.Ideen}}
+  <div class="mt-4 overflow-x-auto rounded-box bg-base-100 shadow-sm">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Datum</th>
+          <th>Name</th>
+          <th>E-Mail</th>
+          <th>Wunsch</th>
+          <th>Stand</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Data.Ideen}}
+          <tr>
+            <td class="whitespace-nowrap align-top">{{datum .CreatedAt}}</td>
+            <td class="align-top">
+              {{if .Name}}{{.Name}}{{else}}<span class="text-base-content/50">ohne Namen</span>{{end}}
+              {{if .AusDerApp}}<span class="badge badge-sm badge-outline">App</span>{{end}}
+            </td>
+            <td class="align-top">
+              {{if .Email}}<a class="link" href="mailto:{{.Email}}">{{.Email}}</a>{{end}}
+            </td>
+            <td class="align-top">
+              <a class="link link-hover" href="/admin/ideen/{{.ID}}">{{.Wunsch}}</a>
+            </td>
+            <td class="align-top"><span class="badge {{.Badge}}">{{.StatusText}}</span></td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+{{else}}
+  <div class="mt-4 alert" id="keine-ideen">
+    <span>Hier ist noch nichts eingegangen.</span>
+  </div>
+{{end}}
+{{end}}

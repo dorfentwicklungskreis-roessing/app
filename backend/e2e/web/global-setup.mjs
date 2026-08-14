@@ -58,6 +58,12 @@ export default async function globalSetup() {
       PUBLIC_URL: BASE_URL,
       ADMIN_CLIENT_ID: boot.clientId,
       SEED: '1',
+      // Ideen-Eingang: erlaubtes Weiterleitungsziel wie in Produktion. Die
+      // Zugriffsgrenze wird hochgesetzt, weil der Browser-Test in Folge
+      // einreicht — sie hat einen eigenen Test in internal/api.
+      IDEEN_ZIELE: 'https://xn--rssing-wxa.de',
+      IDEEN_BURST: '100',
+      IDEEN_PRO_STUNDE: '100',
     },
     stdio: ['ignore', log, log],
     detached: true,

@@ -159,6 +159,32 @@ func Middleware(v Verifier) func(http.Handler) http.Handler {
 	}
 }
 
+// Optional legt den Nutzer in den Context, wenn ein gültiges Bearer-Token
+// mitkommt — verlangt aber keines. Gedacht für Endpunkte, die bewusst
+// öffentlich sind (die Ideen-Sammlung auf der Website), bei denen eine
+// Einreichung aus der angemeldeten App aber dem Konto zugeordnet werden soll.
+//
+// Ein ungültiges Token führt hier NICHT zu 401: Der Endpunkt ist öffentlich,
+// und ein abgelaufenes Token in der App darf niemanden aussperren.
+func Optional(v Verifier) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			const prefix = "Bearer "
+			h := r.Header.Get("Authorization")
+			if !strings.HasPrefix(h, prefix) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			u, err := v.Verify(r.Context(), strings.TrimPrefix(h, prefix))
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(WithUser(r.Context(), u)))
+		})
+	}
+}
+
 // InsecureDevVerifier akzeptiert jedes Token und liest Nutzer, Rollen und
 // optional die E-Mail direkt aus dem Token-String
 // ("sub:name:role1,role2:mail@example.org"). NUR für lokale Entwicklung

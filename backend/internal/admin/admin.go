@@ -118,6 +118,7 @@ func (a *App) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/logout", a.handleLogout)
 
 	a.registerMithelfen(mux)
+	a.registerIdeen(mux)
 	a.registerDorfbewohner(mux)
 }
 
@@ -266,7 +267,8 @@ func (a *App) handleAdminHome(w http.ResponseWriter, r *http.Request) {
 		a.render(w, r, http.StatusOK, "anmelden", view{Title: "Anmelden"})
 		return
 	}
-	a.render(w, r, http.StatusOK, "verwaltung", view{Title: "Verwaltung", Nav: "verwaltung"})
+	a.render(w, r, http.StatusOK, "verwaltung", view{Title: "Verwaltung", Nav: "verwaltung",
+		Data: a.bereichsDaten()})
 }
 
 // --- Anzeige-Helfer ---------------------------------------------------------
