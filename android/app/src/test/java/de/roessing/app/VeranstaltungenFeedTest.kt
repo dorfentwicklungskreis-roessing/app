@@ -145,4 +145,28 @@ class VeranstaltungenFeedTest {
         // still verschlucken wäre das Schlimmste.
         assertTrue(fehler != null)
     }
+
+    @Test
+    fun `Eine Antwort, die kein JSON ist, reisst die App nicht mit`() = runTest {
+        // Kommt statt der Datei eine Fehlerseite (Zwischenspeicher, Portal,
+        // umgezogene Adresse), darf das nicht abstürzen.
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/html")
+                .setBody("<!doctype html><title>Nicht gefunden</title>"),
+        )
+
+        val fehler = runCatching { repo().kommende() }.exceptionOrNull()
+
+        assertTrue(fehler != null)
+    }
+
+    @Test
+    fun `Ein leerer Kalender ist kein Fehler`() = runTest {
+        server.enqueue(
+            MockResponse().setBody("""{"version":1,"generatedAt":"","events":[]}"""),
+        )
+
+        assertTrue(repo().kommende().isEmpty())
+    }
 }

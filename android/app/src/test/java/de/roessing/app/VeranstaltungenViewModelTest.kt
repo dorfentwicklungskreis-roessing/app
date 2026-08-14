@@ -235,6 +235,17 @@ class VeranstaltungenViewModelTest {
     }
 
     @Test
+    fun `Ein leerer Kalender ist kein Fehler, sondern eine ruhige Woche`() = runTest(dispatcher) {
+        val vm = vm(FakeVeranstaltungen(emptyList()))
+        vm.laden()
+        advanceUntilIdle()
+
+        // Nichts eingetragen heißt: freundlicher Satz, kein Alarm.
+        assertTrue(vm.state.value.leer)
+        assertFalse(vm.state.value.fehler)
+    }
+
+    @Test
     fun `Nach einem Fehler bleiben die zuletzt geholten Termine stehen`() = runTest(dispatcher) {
         val repo = FakeVeranstaltungen(listOf(dto("bald", "2026-08-20T18:00:00+02:00")))
         val vm = vm(repo)
