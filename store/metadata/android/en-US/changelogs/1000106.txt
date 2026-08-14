@@ -1,0 +1,12 @@
+The app now opens on a home screen with sections. "Helping out" comes
+first — formerly "Village care". Map, list and leaderboard now live
+together in that section, and the tile shows how many spots are
+waiting for you.
+
+"My profile" is new: a display name plus, entirely optional, phone,
+e-mail and a note. Every field has its own switch — only what you
+release is visible to others.
+
+"Villagers" shows you who else takes part.
+
+The whole look has been freshened up.

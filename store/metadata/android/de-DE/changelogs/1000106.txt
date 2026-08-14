@@ -1,0 +1,12 @@
+Die App startet jetzt auf einer Startseite mit Bereichen. Ganz oben
+steht "Mithelfen" — bisher "Dorfpflege". Dort liegen Karte, Liste und
+Rangliste beisammen, und die Kachel zeigt, wie viele Orte gerade auf
+dich warten.
+
+Neu ist "Mein Profil": ein Anzeigename und, ganz freiwillig, Telefon,
+E-Mail und eine Notiz. Jedes Feld hat einen eigenen Schalter — zu sehen
+ist nur, was du freigibst.
+
+Unter "Dorfbewohner" siehst du, wer mitmacht.
+
+Dazu eine rundum aufgefrischte Gestaltung.
