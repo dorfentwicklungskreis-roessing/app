@@ -98,6 +98,24 @@ android {
         }
     }
 
+    lint {
+        // NullSafeMutableLiveData ist in der ausgelieferten Lint-Fassung selbst
+        // defekt: der Prüfer stürzt mit
+        // „IncompatibleClassChangeError: NonNullableMutableLiveDataDetector
+        // $createUastHandler$1.visitCallExpression" ab. Der Fehler steckt im
+        // Prüfer, nicht in unserem Code — Lint schlägt in derselben Ausgabe
+        // selbst vor, ihn abzuschalten. Weil `bundleRelease` die Aufgabe
+        // `lintVitalRelease` mitzieht, riss der Absturz den kompletten
+        // Release-Build mit: Lauf 31788054089 (Tag v0.1.6) scheiterte daran im
+        // Schritt „Release bauen (APK + AAB)".
+        //
+        // Bewusst nur dieser eine Prüfer und nicht `abortOnError = false` oder
+        // `checkReleaseBuilds = false`: alle übrigen Prüfungen sollen den
+        // Release weiterhin blockieren können. Sobald eine neuere AGP-/Lint-
+        // Fassung den Prüfer repariert, kann die Zeile wieder weg.
+        disable += "NullSafeMutableLiveData"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
