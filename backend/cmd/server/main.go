@@ -6,7 +6,9 @@
 //	DB_PATH       Standard "/data/dorfapp.sqlite"
 //	AUTH_ISSUER   z.B. https://id.xn--rssing-wxa.de — Pflicht in Produktion
 //	AUTH_MODE     "oidc" (Standard) oder "insecure-dev" (nur lokal/E2E!)
-//	AUTH_AUDIENCE optionale, kommaseparierte Liste erlaubter Audiences
+//	AUTH_AUDIENCE kommaseparierte Liste erlaubter Empfänger (Client-IDs der
+//	              Anwendungen, die dieses Backend nutzen dürfen). Im OIDC-Modus
+//	              Pflicht: ohne sie gälte hier jedes Token desselben Ausstellers.
 //	PUBLIC_URL    öffentliche Basis-URL (MCP-OAuth-Metadata und OIDC-Redirect
 //	              der Verwaltung: {PUBLIC_URL}/admin/). Ohne Angabe die
 //	              Produktions-URL — bei AUTH_MODE=insecure-dev dagegen
@@ -104,13 +106,28 @@ func main() {
 		slog.Warn("AUTH_MODE=insecure-dev — KEINE echte Authentifizierung!")
 		verifier = auth.InsecureDevVerifier{}
 	default:
+		// Ohne Empfängerliste prüft der Verifier nur Aussteller und Signatur.
+		// Auf id.xn--rssing-wxa.de liegt aber nicht nur die Dorf-App, sondern
+		// eine ganze Reihe weiterer Projekte. Ein Token, das für eines davon
+		// ausgestellt wurde, käme hier sonst als gültig durch — gleicher
+		// Aussteller, gültige Signatur, niemand fragt nach dem Empfänger.
+		// Deshalb ist die Liste Pflicht, statt still zu fehlen.
+		aud := audiences()
+		if len(aud) == 0 {
+			slog.Error("AUTH_AUDIENCE fehlt — ohne Empfängerprüfung wäre jedes Token dieses Ausstellers hier gültig, "+
+				"auch eines für ein anderes Projekt derselben Rössing-ID. "+
+				"Erwartet: kommaseparierte Client-IDs der Anwendungen, die dieses Backend nutzen dürfen",
+				"issuer", issuer)
+			os.Exit(1)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		v, err := auth.NewOIDCVerifier(ctx, issuer, audiences())
+		v, err := auth.NewOIDCVerifier(ctx, issuer, aud)
 		if err != nil {
 			slog.Error("OIDC-Discovery fehlgeschlagen", "issuer", issuer, "err", err)
 			os.Exit(1)
 		}
+		slog.Info("Empfängerprüfung aktiv", "issuer", issuer, "audiences", aud)
 		verifier = v
 	}
 
@@ -234,7 +251,8 @@ func logEinrichten() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 }
 
-// audiences liest AUTH_AUDIENCE (kommasepariert). Leer = keine Prüfung.
+// audiences liest AUTH_AUDIENCE (kommasepariert). Leer heißt: keine Prüfung —
+// im OIDC-Modus lässt main() den Server dann gar nicht erst starten.
 func audiences() []string {
 	roh := strings.TrimSpace(os.Getenv("AUTH_AUDIENCE"))
 	if roh == "" {

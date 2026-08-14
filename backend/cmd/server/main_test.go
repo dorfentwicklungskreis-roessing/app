@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -84,6 +85,74 @@ func TestServerLehntInsecureDevMitOeffentlicherURLAb(t *testing.T) {
 	if !strings.Contains(string(aus), "insecure-dev") {
 		t.Fatalf("Ablehnung ohne Erklärung:\n%s", aus)
 	}
+}
+
+// Ohne AUTH_AUDIENCE prüft der Verifier den Empfänger nicht (audienceOK gibt
+// bei leerer Liste true zurück). Auf id.xn--rssing-wxa.de liegen neben der
+// Dorf-App etliche weitere Projekte — Mietplattform, VSV, DRK, Bürgerstiftung.
+// Ein Token, das für eines davon ausgestellt wurde, wäre hier ohne diese
+// Prüfung gültig: gleicher Aussteller, gültige Signatur, niemand fragt nach
+// dem Empfänger. Der Server darf in diesem Zustand gar nicht erst starten.
+// Bewusst ein nicht erreichbarer Issuer: Der Server soll schon an der
+// fehlenden Audience scheitern, also noch vor der OIDC-Discovery. Ohne die
+// Prüfung kommt er bis zur Discovery und begründet den Abbruch damit — genau
+// daran erkennt der Test den ungeschützten Zustand.
+func TestServerVerweigertOIDCOhneAudience(t *testing.T) {
+	aus := starteUndWarteAufEnde(t, map[string]string{
+		// Kein AUTH_MODE=insecure-dev: Das ist der Produktionspfad.
+		"AUTH_ISSUER":   "http://127.0.0.1:1/nicht-erreichbar",
+		"AUTH_AUDIENCE": "",
+	})
+	if !strings.Contains(aus, "AUTH_AUDIENCE") {
+		t.Fatalf("Server hat die fehlende Empfängerprüfung nicht bemängelt — "+
+			"jedes Token der Rössing-ID wäre hier gültig:\n%s", aus)
+	}
+}
+
+// Gegenprobe: Mit gesetzter Audience darf die Prüfung nicht im Weg stehen.
+// Der Start scheitert dann erst an der Discovery — entscheidend ist, dass die
+// Begründung nicht mehr AUTH_AUDIENCE lautet.
+func TestServerAkzeptiertGesetzteAudience(t *testing.T) {
+	aus := starteUndWarteAufEnde(t, map[string]string{
+		"AUTH_ISSUER":   "http://127.0.0.1:1/nicht-erreichbar",
+		"AUTH_AUDIENCE": "385941807986376899",
+	})
+	if strings.Contains(aus, "AUTH_AUDIENCE") {
+		t.Fatalf("gesetzte Audience wurde trotzdem bemängelt:\n%s", aus)
+	}
+	if !strings.Contains(aus, "Discovery") {
+		t.Fatalf("erwartet wurde ein Abbruch an der Discovery:\n%s", aus)
+	}
+}
+
+// starteUndWarteAufEnde startet den Server mit den übergebenen Variablen und
+// gibt seine Ausgabe zurück. Der Server MUSS sich von selbst beenden; tut er
+// es nicht, schlägt der Test fehl, statt die Testsuite hängen zu lassen.
+func starteUndWarteAufEnde(t *testing.T, env map[string]string) string {
+	t.Helper()
+	bin := baueServer(t)
+
+	ctx, abbruch := context.WithTimeout(context.Background(), 60*time.Second)
+	defer abbruch()
+
+	cmd := exec.CommandContext(ctx, bin)
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("LISTEN_ADDR=:%d", freierPort(t)),
+		"DB_PATH="+filepath.Join(t.TempDir(), "probe.sqlite"),
+		"BACKUP=off",
+		"LOG_FORMAT=text",
+	)
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	aus, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("Server lief weiter, statt sich zu beenden:\n%s", aus)
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("Server hat sich nicht von selbst beendet:\n%s", aus)
+	}
+	return string(aus)
 }
 
 // --- Hilfen ------------------------------------------------------------------

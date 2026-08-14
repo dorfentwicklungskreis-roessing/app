@@ -42,6 +42,32 @@ spec:
               value: /data/dorfapp.sqlite
             - name: AUTH_ISSUER
               value: https://id.xn--rssing-wxa.de
+            # Empfängerprüfung: Auf id.xn--rssing-wxa.de liegt nicht nur die
+            # Dorf-App, sondern eine Reihe weiterer Projekte. Ohne diese Liste
+            # prüft das Backend nur Aussteller und Signatur — ein Token, das
+            # für ein anderes Projekt derselben Rössing-ID ausgestellt wurde,
+            # käme damit als gültig durch.
+            #
+            # Eingetragen sind die Client-IDs der drei Anwendungen, die dieses
+            # Backend nutzen; Zitadel trägt die Client-ID der anfragenden
+            # Anwendung in den aud-Claim ein. Ein Treffer genügt.
+            #   385941807986376899  Android-App (AppAuth, PKCE)
+            #   385942875872952515  Web-Admin (= ADMIN_CLIENT_ID)
+            #   385946294599876803  MCP (= MCP_CLIENT_ID, feste ID der DCR)
+            #   385941791695700163  Projekt „Dorf-App" — zusätzlicher Fangnetz-
+            #                       Eintrag: Tokens, die die Projekt-Audience
+            #                       führen (Machine-User mit dem Scope
+            #                       „…:project:id:<id>:aud"), kommen damit auch
+            #                       durch. Das erweitert die Prüfung nur nach
+            #                       innen: Ein fremdes Projekt trägt weder diese
+            #                       Projekt-ID noch eine dieser Client-IDs.
+            #
+            # Wer hier eine Anwendung vergisst, sperrt deren Nutzer aus. Das
+            # Backend protokolliert in dem Fall die beobachtete Audience
+            # ("Token ist nicht für diese Anwendung ausgestellt (aud=…)"),
+            # daran lässt sich der fehlende Wert direkt ablesen.
+            - name: AUTH_AUDIENCE
+              value: "385941807986376899,385942875872952515,385946294599876803,385941791695700163"
             - name: ADMIN_CLIENT_ID
               value: "385942875872952515"
             # Seed legt nur bei leerer DB die Beispiel-Kästen an.
