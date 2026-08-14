@@ -11,6 +11,15 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: >-
+          Bestehendes Release, dem die Store-Grafiken (store-assets.zip)
+          nachgereicht werden sollen, z.B. "v0.1.5". Leer lassen für einen
+          reinen Probelauf ohne Upload. Nachgereicht wird ausschließlich das
+          ZIP — APK und AAB des Releases bleiben unangetastet.
+        required: false
+        default: ""
 
 # Ein Tag-Push löst diesen Workflow in der Regel selbst aus; wer zusätzlich
 # von Hand auslöst, bekäme sonst zwei Läufe, die um den Asset-Upload rennen.
@@ -53,13 +62,90 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease bundleRelease
 
+      # Erst prüfen, dann packen und veröffentlichen: ein fehlender oder zu
+      # langer Änderungshinweis soll auffallen, bevor das ZIP entsteht und
+      # bevor Google das Release ablehnt.
+      - name: Store-Metadaten prüfen
+        working-directory: .
+        run: python3 store/check_metadata.py
+
+      # Die Store-Grafiken hängen als ZIP am Release, damit man die Play
+      # Console befüllen kann, ohne die Dateien einzeln aus dem Repo zu
+      # klauben. Fester Dateiname: ein erneuter Lauf ersetzt das Asset, statt
+      # ein zweites daneben zu legen.
+      - name: Store-Grafiken als ZIP packen
+        working-directory: .
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -eu
+          VERSION_CODE=$(python3 - <<'PY'
+          import pathlib, re
+          quelle = pathlib.Path("android/app/build.gradle.kts").read_text(encoding="utf-8")
+          print(re.search(r"^\s*versionCode\s*=\s*(\d+)", quelle, re.M).group(1))
+          PY
+          )
+          VERSION="${RELEASE_TAG:-$REF_NAME}"
+
+          STAGE="$RUNNER_TEMP/paket"
+          ZIEL="$STAGE/store-assets"
+          rm -rf "$STAGE"
+          mkdir -p "$ZIEL"
+          cp -r store/metadata/android/. "$ZIEL/"
+          # Die README-Dateien sind Arbeitsanleitungen fürs Repo (wie man
+          # Screenshots aufnimmt) und gehören nicht in ein Paket, das jemand
+          # zum Befüllen der Play Console auspackt.
+          find "$ZIEL" -name 'README.md' -delete
+
+          cat > "$ZIEL/LIESMICH.txt" <<EOF
+          Store-Grafiken und -Texte der Dorf-App Rössing
+          Version $VERSION (versionCode $VERSION_CODE)
+
+          Diese Dateien gehören in die Play Console unter
+          "Wachstum → Store-Präsenz → Hauptbestandteile des Store-Eintrags".
+
+          Bilder (nur in der Standardsprache de-DE gepflegt; für en-US greift
+          Play automatisch darauf zurück):
+
+            de-DE/images/icon.png               → App-Symbol, 512 x 512
+            de-DE/images/featureGraphic.png     → Feature-Grafik, 1024 x 500
+            de-DE/images/phoneScreenshots/*.png → Telefon-Screenshots,
+                                                  1080 x 1920. Die Nummer im
+                                                  Dateinamen gibt die
+                                                  Reihenfolge im Store vor.
+
+          Texte, je Sprachverzeichnis (de-DE, en-US):
+
+            title.txt             → App-Name, höchstens 30 Zeichen
+            short_description.txt → Kurzbeschreibung, höchstens 80 Zeichen
+            full_description.txt  → Vollständige Beschreibung, 4000 Zeichen
+
+          Änderungshinweise ("Neuerungen" beim Release) liegen unter
+          <sprache>/changelogs/ und sind nach versionCode benannt. Zu dieser
+          Version gehören:
+
+            de-DE/changelogs/$VERSION_CODE.txt
+            en-US/changelogs/$VERSION_CODE.txt
+
+          Quelle ist store/metadata/android/ im Repo; dieses Archiv erzeugt
+          der Release-Workflow. Änderungen also dort vornehmen, nicht hier.
+          EOF
+
+          (cd "$STAGE" && zip -qr "$GITHUB_WORKSPACE/store-assets.zip" store-assets)
+          echo "Inhalt des Archivs:"
+          unzip -l store-assets.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: release-artefakte
           path: |
             android/app/build/outputs/apk/release/app-release.apk
             android/app/build/outputs/bundle/release/app-release.aab
+            store-assets.zip
 
+      # action-gh-release ersetzt gleichnamige Assets, statt sie zu doppeln —
+      # ein zweiter Lauf auf demselben Tag hinterlässt also keine Karteileichen.
       - name: GitHub-Release mit APK
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -67,7 +153,21 @@ jobs:
           files: |
             android/app/build/outputs/apk/release/app-release.apk
             android/app/build/outputs/bundle/release/app-release.aab
+            store-assets.zip
           generate_release_notes: true
+
+      # Handlauf: die Store-Grafiken einem schon bestehenden Release
+      # nachreichen, ohne dafür ein neues Release schneiden zu müssen.
+      # Bewusst nur das ZIP — würden hier auch APK und AAB hochgeladen,
+      # ersetzte ein Build vom aktuellen Stand die veröffentlichten
+      # Artefakte des Releases.
+      - name: Store-ZIP einem bestehenden Release nachreichen
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: gh release upload "$RELEASE_TAG" store-assets.zip --clobber
 
       - name: Firebase App Distribution (falls Secrets vorhanden)
         working-directory: .
@@ -86,13 +186,6 @@ jobs:
             --app "$FIREBASE_APP_ID" \
             --groups tester \
             --release-notes "Automatischer Build ${{ github.ref_name }}"
-
-      # Vor dem Play-Upload: Store-Metadaten prüfen. Ein fehlender oder zu
-      # langer Änderungshinweis soll auffallen, bevor Google das Release
-      # ablehnt. Läuft auch ohne Play-Secret, kostet nichts.
-      - name: Store-Metadaten prüfen
-        working-directory: .
-        run: python3 store/check_metadata.py
 
       - name: Play-Store-Upload (nur bei Tags, falls Secret vorhanden)
         # Nur getaggte Stände gehen in den Store; ein workflow_dispatch würde
