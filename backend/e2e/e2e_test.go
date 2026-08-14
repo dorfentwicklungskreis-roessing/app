@@ -244,6 +244,11 @@ func TestEndToEnd(t *testing.T) {
 		"LISTEN_ADDR=:8124",
 		"DB_PATH="+filepath.Join(t.TempDir(), "e2e.sqlite"),
 		"AUTH_ISSUER="+issuer,
+		// Empfängerprüfung wie in Produktion. Die Machine-User holen ihre
+		// Tokens unten mit dem Scope „…:project:id:<projectID>:aud", tragen
+		// die Projekt-ID also als Empfänger — genau darauf wird hier geprüft.
+		// Ohne diese Zeile verweigert der Server im OIDC-Modus den Start.
+		"AUTH_AUDIENCE="+projectID,
 		"PUBLIC_URL="+backendAddr,
 		// Der Takt der Vergabe läuft im Betrieb jede Minute; im Test soll er
 		// nicht bremsen. Die Regeln selbst bleiben unverändert.

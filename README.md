@@ -245,7 +245,7 @@ Rollen-Gating — und ein kompletter Durchlauf **mit abgeschaltetem JavaScript**
 | `SESSION_KEY` | Schlüssel für die signierten Session-Cookies; leer = zufällig beim Start (Sessions überleben dann keinen Neustart) |
 | `MCP_CLIENT_ID` | PKCE-Client für die MCP-Anbindung |
 | `SEED` | `1` → Beispieldaten anlegen, falls die DB leer ist |
-| `AUTH_AUDIENCE` | optionale, kommaseparierte Liste erlaubter Token-Audiences (leer = keine Prüfung) |
+| `AUTH_AUDIENCE` | kommaseparierte Liste erlaubter Token-Empfänger — die Client-IDs der Anwendungen, die dieses Backend nutzen dürfen. **Im OIDC-Modus Pflicht:** ohne sie prüft das Backend nur Aussteller und Signatur, und ein Token für ein anderes Projekt derselben Rössing-ID käme durch. Der Server verweigert deshalb ohne diesen Wert den Start |
 | `RATE_LIMIT` | `off` schaltet die Zugriffsbegrenzung ab |
 | `RATE_LIMIT_BURST` / `RATE_LIMIT_PER_MINUTE` | Eimergröße (60) und Nachfüllrate pro Minute (120) |
 | `MAX_BODY_BYTES` | Obergrenze je Anfrage, Standard 1 MiB |
