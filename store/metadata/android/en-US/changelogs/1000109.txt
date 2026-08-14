@@ -1,0 +1,9 @@
+New: Village events – what's coming up, now in the app as well.
+
+New: Tasks with a fixed date, not just recurring ones.
+
+New: Legal notice and privacy policy are now available inside the app.
+
+Fixed: The app could crash after switching between map and list several times.
+
+For administrators: places and tasks can now be created and maintained directly in the app.

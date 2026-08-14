@@ -1,0 +1,9 @@
+Neu: Veranstaltungen aus dem Dorf – was demnächst ansteht, jetzt auch in der App.
+
+Neu: Aufgaben mit festem Termin, nicht nur regelmäßige.
+
+Neu: Impressum und Datenschutz sind jetzt in der App zu finden.
+
+Behoben: Die App konnte abstürzen, wenn man mehrmals zwischen Karte und Liste gewechselt hat.
+
+Für die Verwaltung: Orte und Aufgaben lassen sich direkt in der App anlegen und pflegen.
