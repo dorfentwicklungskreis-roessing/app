@@ -27,8 +27,8 @@ sonst nur den Anmeldebildschirm sieht.
 | Feld | Eintrag |
 |---|---|
 | Name der Anleitung | Anmeldung mit der Rössing-ID |
-| Nutzername | `test-dorf` |
-| Passwort | (das hinterlegte Testkonto-Passwort) |
+| Nutzername | `google-reviewer` |
+| Passwort | (steht in `.env` im Arbeitsverzeichnis, Schlüssel `GOOGLE_REVIEWER_PASSWORD`) |
 | Weitere Hinweise | Auf „Mit Rössing-ID anmelden" tippen. Die Anmeldung läuft über den selbst betriebenen Dienst id.xn--rssing-wxa.de. Danach ist die App vollständig nutzbar. |
 
 ## 3. Anzeigen
@@ -102,3 +102,14 @@ Sobald Benachrichtigungen ausgeliefert sind, ändert sich **ein** Punkt: Es
 wandert dann eine **Gerätekennung an Google** (Firebase Cloud Messaging). Dann
 sind Datensicherheit und Datenschutzerklärung nachzuziehen — das wird hier
 vermerkt, sobald es so weit ist.
+
+
+---
+
+## Prüfkonto
+
+Für die Google-Prüfung existiert ein **eigenes** Konto der Rössing-ID:
+`google-reviewer` (angelegt 14.08.2026, keine Rollen — kann Orte sehen und
+Erledigungen melden, nichts verwalten). Bewusst getrennt vom Testkonto
+`test-dorf`, das die automatischen Tests benutzen: So lässt sich das
+Prüfkonto jederzeit sperren, ohne die CI zu brechen.
