@@ -228,4 +228,16 @@
     <string name="admin_task_deleted">Aufgabe gelöscht.</string>
     <string name="admin_task_paused_toast">Aufgabe pausiert. Wer zugesagt hatte, wurde benachrichtigt.</string>
     <string name="admin_task_resumed_toast">Aufgabe läuft wieder.</string>
+    <!-- Veranstaltungen: „Was ist los in Rössing" — Termine von der Website -->
+    <string name="area_events_title">Was ist los?</string>
+    <string name="area_events_subtitle">Termine im Dorf.</string>
+    <string name="events_title">Was ist los in Rössing</string>
+    <string name="events_intro">Die Termine kommen von rössing.de — gepflegt werden sie dort, damit sie nur an einer Stelle stehen.</string>
+    <string name="events_all_day">Ganztägig</string>
+    <string name="events_external">Zur Seite des Veranstalters</string>
+    <string name="events_empty">Gerade steht kein Termin an. Sobald etwas eingetragen ist, steht es hier.</string>
+    <string name="events_offline">Die Termine konnten nicht geladen werden. Besteht eine Verbindung?</string>
+    <string name="events_offline_stale">Gerade keine Verbindung — die Liste ist möglicherweise nicht mehr aktuell.</string>
+    <string name="events_retry">Erneut versuchen</string>
+    <string name="events_loading">Termine werden geholt …</string>
 </resources>

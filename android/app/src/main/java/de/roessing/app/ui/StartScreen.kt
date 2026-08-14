@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.LocalFlorist
 import androidx.compose.material.icons.filled.Person
@@ -45,7 +46,7 @@ import de.roessing.app.ui.theme.statusFarben
  * Die Bereiche der App. „Mithelfen" ist der erste — weitere kommen, deshalb
  * ist die Startseite eine Übersicht und nicht die Gieß-Karte.
  */
-enum class Bereich { START, MITHELFEN, PROFIL, DORFBEWOHNER, IDEEN, VERWALTUNG }
+enum class Bereich { START, MITHELFEN, VERANSTALTUNGEN, PROFIL, DORFBEWOHNER, IDEEN, VERWALTUNG }
 
 /**
  * Startseite: freundlicher Einstieg mit dem Namen aus dem Profil, darunter
@@ -110,6 +111,16 @@ fun StartScreen(
             ladend = ladend,
             offeneAnfragen = notifications.count { it.istAnfrage },
             onClick = { onBereich(Bereich.MITHELFEN) },
+        )
+
+        // Was im Dorf ansteht — die Termine kommen von rössing.de und werden
+        // dort gepflegt.
+        BereichKachel(
+            titel = stringResource(R.string.area_events_title),
+            text = stringResource(R.string.area_events_subtitle),
+            symbol = Icons.Filled.Event,
+            testTag = "bereich-veranstaltungen",
+            onClick = { onBereich(Bereich.VERANSTALTUNGEN) },
         )
 
         Row(

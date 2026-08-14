@@ -29,6 +29,7 @@ import de.roessing.app.ui.LoginScreen
 import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.ProfileViewModel
 import de.roessing.app.ui.VerwaltungViewModel
+import de.roessing.app.ui.VeranstaltungenViewModel
 import de.roessing.app.push.PushZiel
 import de.roessing.app.ui.theme.DorfAppTheme
 import kotlinx.coroutines.launch
@@ -114,12 +115,14 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
             val profilVm: ProfileViewModel = viewModel(factory = factory)
             val ideenVm: IdeenViewModel = viewModel(factory = factory)
             val verwaltungVm: VerwaltungViewModel = viewModel(factory = factory)
+            val termineVm: VeranstaltungenViewModel = viewModel(factory = factory)
             HomeScreen(
                 viewModel = vm,
                 leaderboardViewModel = rangVm,
                 profileViewModel = profilVm,
                 ideenViewModel = ideenVm,
                 verwaltungViewModel = verwaltungVm,
+                veranstaltungenViewModel = termineVm,
                 pushZiel = pushZiel,
                 onPushZielVerbraucht = onPushZielVerbraucht,
                 onLogout = {
@@ -153,6 +156,8 @@ private fun viewModelFactory(container: AppContainer) =
 
             modelClass.isAssignableFrom(VerwaltungViewModel::class.java) ->
                 VerwaltungViewModel(container.verwaltungRepository) as T
+            modelClass.isAssignableFrom(VeranstaltungenViewModel::class.java) ->
+                VeranstaltungenViewModel(container.veranstaltungenRepository) as T
 
             else -> error("Unbekanntes ViewModel: ${modelClass.name}")
         }

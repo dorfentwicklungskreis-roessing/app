@@ -67,6 +67,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import de.roessing.app.R
 import de.roessing.app.data.DeviceLocation
+import de.roessing.app.data.KeineVeranstaltungen
 import de.roessing.app.push.Geraeteanmeldung
 import de.roessing.app.push.PushZiel
 import de.roessing.app.ui.theme.DorfMotion
@@ -86,6 +87,11 @@ fun HomeScreen(
     profileViewModel: ProfileViewModel,
     ideenViewModel: IdeenViewModel,
     verwaltungViewModel: VerwaltungViewModel,
+    // Vorgabe: ein leerer Kalender. So bleiben Oberflächen-Tests gültig, die
+    // mit den Veranstaltungen nichts zu tun haben.
+    veranstaltungenViewModel: VeranstaltungenViewModel = remember {
+        VeranstaltungenViewModel(KeineVeranstaltungen)
+    },
     pushZiel: PushZiel? = null,
     onPushZielVerbraucht: () -> Unit = {},
     onLogout: () -> Unit,
@@ -95,6 +101,7 @@ fun HomeScreen(
     val profil by profileViewModel.state.collectAsState()
     val ideen by ideenViewModel.state.collectAsState()
     val verwaltung by verwaltungViewModel.state.collectAsState()
+    val veranstaltungen by veranstaltungenViewModel.state.collectAsState()
     var bereich by rememberSaveable { mutableStateOf(Bereich.START) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -246,6 +253,11 @@ fun HomeScreen(
     LaunchedEffect(tab, bereich) {
         if (bereich == Bereich.MITHELFEN && tab == 2) leaderboardViewModel.refresh()
     }
+    // Die Termine werden beim Öffnen geholt — und danach nur noch neu
+    // gesiebt, damit nichts Vergangenes stehen bleibt (siehe ViewModel).
+    LaunchedEffect(bereich) {
+        if (bereich == Bereich.VERANSTALTUNGEN) veranstaltungenViewModel.laden()
+    }
     // Die Dorfbewohner-Liste wird beim Öffnen frisch geholt.
     LaunchedEffect(bereich) {
         if (bereich == Bereich.DORFBEWOHNER) profileViewModel.loadMembers()
@@ -313,6 +325,7 @@ fun HomeScreen(
                             Bereich.PROFIL -> stringResource(R.string.profile_title)
                             Bereich.DORFBEWOHNER -> stringResource(R.string.members_title)
                             Bereich.MITHELFEN -> stringResource(R.string.area_care_title)
+                            Bereich.VERANSTALTUNGEN -> stringResource(R.string.events_title)
                             Bereich.IDEEN -> stringResource(R.string.ideas_title)
                             Bereich.VERWALTUNG -> stringResource(R.string.area_admin_title)
                             Bereich.START -> stringResource(R.string.home_title)
@@ -479,6 +492,12 @@ fun HomeScreen(
                 Bereich.DORFBEWOHNER -> MembersScreen(
                     state = profil,
                     modifier = Modifier.padding(padding),
+                )
+
+                Bereich.VERANSTALTUNGEN -> VeranstaltungenScreen(
+                    state = veranstaltungen,
+                    modifier = Modifier.padding(padding),
+                    onAktualisieren = veranstaltungenViewModel::aktualisieren,
                 )
 
                 Bereich.IDEEN -> IdeenScreen(
