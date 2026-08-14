@@ -433,6 +433,50 @@ func TestEndToEnd(t *testing.T) {
 	// Der ganze Weg mit echten Tokens: anlegen → erscheint mit der richtigen
 	// Ampel → wird erledigt → verschwindet bzw. bleibt. Und: Ohne die Rolle
 	// „admin" geht gar nichts, egal mit welchem Client.
+	// Der Rollen-Scope entscheidet, ob überhaupt jemand verwalten darf.
+	//
+	// Das ist kein theoretischer Fall: Die Android-App forderte anfangs nur
+	// „openid profile email offline_access" an. Zitadel stellte daraufhin ein
+	// Token ganz ohne Rollen aus — in der ausgelieferten App war damit
+	// niemand Verwaltung, auch nicht, wer die Rolle in Zitadel hatte. Alle
+	// Pflege-Endpunkte antworteten mit 403.
+	//
+	// Der Test hält beide Richtungen fest, am echten Aussteller: ohne den
+	// Scope keine Rechte, mit ihm die vollen.
+	t.Run("Ohne Rollen-Scope ist niemand Verwaltung", func(t *testing.T) {
+		// Genau die Scopes, mit denen sich die App anmeldet — nur eben ohne
+		// den Rollen-Scope, wie es der Fehlerstand tat.
+		ohneRollen := fetchToken(t, adminUser, "openid profile email")
+
+		_, me := request(t, "GET", "/api/v1/me", ohneRollen, nil)
+		if me["isAdmin"] != false {
+			t.Fatalf("ohne Rollen-Scope trotzdem Admin: %v", me)
+		}
+		if rollen, ok := me["roles"].([]any); ok && len(rollen) != 0 {
+			t.Fatalf("ohne Rollen-Scope kamen Rollen an: %v", rollen)
+		}
+		// Und damit steht die Verwaltung offen wie ein Scheunentor — nach innen:
+		// Sie lässt niemanden mehr durch.
+		resp, out := request(t, "POST", "/api/v1/places", ohneRollen,
+			map[string]any{"name": "Ohne Rollen", "lat": 52.2, "lon": 9.8})
+		if resp.StatusCode != 403 {
+			t.Fatalf("Ort anlegen ohne Rollen-Scope: HTTP %d, erwartet 403: %v", resp.StatusCode, out)
+		}
+
+		// Mit dem Scope, den die App jetzt anfordert, geht es.
+		mitRollen := fetchToken(t, adminUser,
+			"openid profile email urn:zitadel:iam:org:projects:roles")
+		_, me = request(t, "GET", "/api/v1/me", mitRollen, nil)
+		if me["isAdmin"] != true {
+			t.Fatalf("mit Rollen-Scope nicht als Verwaltung erkannt: %v", me)
+		}
+		resp, out = request(t, "POST", "/api/v1/places", mitRollen,
+			map[string]any{"name": "Mit Rollen " + fmt.Sprint(time.Now().UnixNano()), "lat": 52.2, "lon": 9.8})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Ort anlegen mit Rollen-Scope: HTTP %d, erwartet 201: %v", resp.StatusCode, out)
+		}
+	})
+
 	t.Run("Mitglied darf keine Aufgaben pflegen", func(t *testing.T) {
 		morgen := time.Now().AddDate(0, 0, 2).Format("2006-01-02")
 		faelle := []struct {

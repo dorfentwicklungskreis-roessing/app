@@ -73,6 +73,12 @@ if [ "${API_LEVEL:-}" = "35" ] && [ -n "${REAL_LOGIN_USER:-}" ] && [ -n "${REAL_
     -Pandroid.testInstrumentationRunnerArguments.class=de.roessing.app.RealLoginE2eTest \
     -Pandroid.testInstrumentationRunnerArguments.realLoginUser="$REAL_LOGIN_USER" \
     -Pandroid.testInstrumentationRunnerArguments.realLoginPassword="$REAL_LOGIN_PASSWORD"
+
+  # Was im ECHTEN Token steht, gehört in die Ausgabe: Fehlt der Rollen-Claim,
+  # ist in der ausgelieferten App niemand Verwaltung — und das sieht man sonst
+  # nirgends, weil jede Rechteprüfung das 403 ja erwartet.
+  echo "--- Claims des echten Tokens (aus dem Login oben)"
+  adb logcat -d -s TOKENPROBE:I | sed -n 's/.*TOKENPROBE *: //p' || true
 else
   echo "Echter Login-Test übersprungen (API ${API_LEVEL:-unbekannt} bzw. keine Secrets)."
 fi

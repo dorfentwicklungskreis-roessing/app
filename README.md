@@ -20,6 +20,17 @@ Anfang.
 
 - **Identität**: Zitadel auf `id.xn--rssing-wxa.de` („Rössing-ID").
   - App-Login: OIDC Authorization Code + PKCE im System-Browser (AppAuth), mit Consent-Screen.
+  - **Rollen müssen angefordert werden.** App und Web-Verwaltung fragen beim
+    Login zusätzlich den Scope `urn:zitadel:iam:org:projects:roles` an
+    („projects", Plural); Zitadel legt die Rollen daraufhin unter dem Claim
+    `urn:zitadel:iam:org:project:roles` („project", Singular) ins Token, aus
+    dem `internal/auth` sie liest. Fehlt der Scope, stellt Zitadel ein Token
+    **ganz ohne Rollen** aus — dann ist niemand `admin`, und alles, was die
+    Rolle verlangt (Orte und Aufgaben pflegen), antwortet mit 403. Genau das
+    war in der App der Fall, bis `LOGIN_SCOPES` den Scope bekam.
+    Achtung beim Ausrollen: Ein bereits angemeldetes Gerät behält seinen
+    Token-Satz, auch über die Aktualisierung hinweg — **einmal abmelden und
+    neu anmelden**, sonst fehlen die Rollen weiterhin.
   - Projekt `dorf-app` mit Rollen `admin` und `member`. Jeder eingeloggte
     Dorfbewohner darf Erledigungen melden; nur `admin` darf verwalten.
 - **Backend** (`app.xn--rssing-wxa.de`):

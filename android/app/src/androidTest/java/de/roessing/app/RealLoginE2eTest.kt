@@ -1,15 +1,24 @@
 package de.roessing.app
 
 import android.content.Intent
+import android.util.Base64
+import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
+import de.roessing.app.auth.LOGIN_SCOPES
+import de.roessing.app.auth.ROLLEN_SCOPE
+import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assume.assumeFalse
 import org.junit.Before
 import org.junit.Test
 import java.util.regex.Pattern
+
+/** Stichwort, unter dem die Token-Claims ins Log gehen. */
+private const val PROBE = "TOKENPROBE"
 
 /**
  * Echter Ende-zu-Ende-Login gegen die Produktion (id.xn--rssing-wxa.de).
@@ -117,6 +126,56 @@ class RealLoginE2eTest {
         )
         check(device.wait(Until.hasObject(ortStatus), 60_000)) {
             "Orte-Liste wurde nach dem Login nicht geladen"
+        }
+
+        pruefeTokenClaims()
+    }
+
+    /**
+     * Sieht im ECHTEN Token nach, was Zitadel tatsächlich hineingelegt hat.
+     *
+     * Der Anlass: Die App forderte anfangs keinen Rollen-Scope an. Zitadel
+     * stellte daraufhin ein Token ohne jeden Rollen-Claim aus — in der
+     * ausgelieferten App war damit niemand Verwaltung, und der ganze Bereich
+     * „Verwaltung" antwortete nur mit 403. Kein Test hat das gesehen: Die
+     * Rechteprüfungen erwarten das 403 ja, und die Test-Tokens der übrigen
+     * E2E-Läufe fordern die Rollen ausdrücklich an.
+     *
+     * Deshalb wird hier am echten Aussteller nachgeschaut. Die Claims gehen
+     * unter dem Stichwort TOKENPROBE ins Log; `android/ci-e2e.sh` holt sie in
+     * die CI-Ausgabe, damit man sie ohne Debugger lesen kann.
+     */
+    private fun pruefeTokenClaims() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val token = runBlocking { ctx.appContainer.authManager.freshAccessToken() }
+        requireNotNull(token) { "Nach dem Login liegt kein Access-Token vor" }
+
+        val teile = token.split(".")
+        check(teile.size == 3) { "Access-Token ist kein JWT (${teile.size} Teile)" }
+        val nutzlast = String(
+            Base64.decode(teile[1], Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING),
+        )
+        val claims = JSONObject(nutzlast)
+
+        val rollenClaims = claims.keys().asSequence().filter { it.contains(":roles") }.toList()
+        Log.i(PROBE, "aud = ${claims.opt("aud")}")
+        Log.i(PROBE, "Rollen-Claims = $rollenClaims")
+        for (name in rollenClaims) Log.i(PROBE, "  $name = ${claims.opt(name)}")
+        if (rollenClaims.isEmpty()) {
+            Log.i(PROBE, "  (keine — mit diesem Token ist in der App niemand Verwaltung)")
+        }
+
+        // Das Token muss an diese App gerichtet sein — sonst würde eine
+        // eingeschaltete Empfängerprüfung (AUTH_AUDIENCE) es abweisen.
+        val aud = claims.opt("aud").toString()
+        check(aud.contains(BuildConfig.OIDC_CLIENT_ID)) {
+            "Das Token ist nicht an diese App gerichtet: aud = $aud"
+        }
+
+        // Die App muss die Rollen anfordern. Ob das Testkonto welche hat,
+        // entscheidet Zitadel; dass wir danach fragen, entscheiden wir.
+        check(LOGIN_SCOPES.contains(ROLLEN_SCOPE)) {
+            "Die App fordert $ROLLEN_SCOPE nicht an — dann ist niemand Verwaltung"
         }
     }
 
