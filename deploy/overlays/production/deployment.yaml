@@ -47,6 +47,15 @@ spec:
             # Seed legt nur bei leerer DB die Beispiel-Kästen an.
             - name: SEED
               value: "1"
+            # Ideen-Eingang: Mobilfunkanbieter teilen sich eine öffentliche
+            # Adresse unter vielen Kunden. Bei der Vorgabe (5/Stunde) könnten
+            # nach dem Aushang mehrere Dorfbewohner abgewiesen werden, obwohl
+            # sie nichts falsch gemacht haben. Ein Dorf schickt Dutzende
+            # Ideen, ein Skript will Tausende — 30 trennt das sauber.
+            - name: IDEEN_PRO_STUNDE
+              value: "30"
+            - name: IDEEN_BURST
+              value: "10"
             - name: PUBLIC_URL
               value: https://app.xn--rssing-wxa.de
             # Zugangsdaten für den Versand von Benachrichtigungen über
