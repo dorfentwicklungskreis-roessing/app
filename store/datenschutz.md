@@ -57,7 +57,10 @@ Anfragen und Vorgänge hängen an der Pflegeaufgabe und verschwinden mit ihr.
 **Benachrichtigungen aufs Handy (freiwillig).** Wer zustimmt, bekommt Anfragen
 als Push-Nachricht. Dafür vergibt **Google (Firebase Cloud Messaging)** eine
 Kennung dieser App-Installation; die App meldet sie dem Dorfserver, damit er
-Nachrichten an dieses Gerät schicken kann. An Google gehen dabei:
+Nachrichten an dieses Gerät schicken kann. **Diese Kennung entsteht erst, wenn
+Benachrichtigungen erlaubt sind** — wer sie ablehnt oder in den
+Android-Einstellungen abschaltet, für dessen Gerät wird gar keine vergeben.
+An Google gehen dabei:
 
 - die Kennung der App-Installation,
 - Titel und Text der Meldung (also Ortsname, Aufgabe und ggf. die Frist),
@@ -70,7 +73,9 @@ Nachrichten an dieses Gerät schicken kann. An Google gehen dabei:
 wird bei einer Anfrage, beim Rundruf und bei Hinweisen (Zusage abgelaufen oder
 aufgehoben, Aufgabe schon erledigt oder nicht mehr nötig). Die Anfragen stehen
 unabhängig davon beim Öffnen in der App — Push ist die Abkürzung, nicht der
-einzige Weg. Beim Abmelden aus der App wird die Kennung gelöscht, ebenso, wenn
+einzige Weg. Wird die Erlaubnis in den Android-Einstellungen wieder entzogen,
+löscht die App die Kennung beim nächsten Öffnen vom Dorfserver und wirft sie
+danach auch bei Google weg; beim Abmelden aus der App ebenso, und ebenso, wenn
 Google sie als ungültig meldet. Zwischen 21 und 7 Uhr wird nichts zugestellt.
 
 **Ideen an den Dorfentwicklungskreis (freiwillig).** Über „Idee vorschlagen"
@@ -125,8 +130,10 @@ in den Android-Einstellungen bzw. durch Leeren des Feldes.
   Meldung löschen.
 - Auf Wunsch werden alle Meldungen einer Person gelöscht bzw. anonymisiert und
   das Konto in der Rössing-ID entfernt. Anfragen an den Dorfentwicklungskreis.
-- Die Gerätekennung für Benachrichtigungen wird beim Abmelden aus der App
-  gelöscht — und auch dann, wenn Google sie als ungültig meldet.
+- Die Gerätekennung für Benachrichtigungen wird gelöscht, sobald die Erlaubnis
+  fehlt (Entzug in den Android-Einstellungen, spätestens beim nächsten Öffnen
+  der App), beim Abmelden aus der App — und auch dann, wenn Google sie als
+  ungültig meldet.
 - Die von Play verlangte öffentliche Seite zur Löschung von Konto und Daten
   steht unter <https://xn--rssing-wxa.de/app/daten-loeschen/>.
 

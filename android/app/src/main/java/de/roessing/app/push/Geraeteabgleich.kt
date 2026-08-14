@@ -74,7 +74,7 @@ class Geraeteabgleich(
 
     /** Der Abgleich bei jedem Start und bei jeder Rückkehr in den Vordergrund. */
     suspend fun abgleichen(erlaubt: Boolean) {
-        anmelden()
+        if (erlaubt) anmelden() else abmelden()
     }
 
     /**

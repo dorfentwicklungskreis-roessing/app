@@ -123,11 +123,10 @@ Messaging) — das ist eine Weitergabe und unten als solche deklariert.
 ### Geräte- oder andere Kennungen → Gerätekennung (seit 0.1.7)
 
 - **Erhoben:** ja · **Geteilt:** **ja** (an Google/Firebase Cloud Messaging)
-- **Pflicht oder optional:** gemeint ist **optional** — nur, wer
-  Benachrichtigungen erlaubt; die App zeigt die Anfragen sonst wie bisher
-  beim Öffnen. **Aber:** so, wie der Code heute läuft, entsteht die Kennung
-  auch ohne Erlaubnis. Siehe „Abweichung im Code" unten — davon hängt ab, was
-  hier angekreuzt werden darf.
+- **Pflicht oder optional:** **optional** — die Kennung entsteht erst, wenn
+  Benachrichtigungen wirksam erlaubt sind; wer sie ablehnt, sieht die Anfragen
+  wie bisher beim Öffnen der App. Seit `0.1.8` deckt sich das mit dem Code
+  (siehe „So hängt das im Code zusammen" unten).
 - **Zwecke:** App-Funktionalität (Benachrichtigung, dass jemand an der Reihe
   ist)
 - **Nur kurzzeitig verarbeitet:** nein — die Kennung steht bis zum Abmelden
@@ -165,27 +164,41 @@ Messaging) — das ist eine Weitergabe und unten als solche deklariert.
   `push_devices` in `backend/internal/db/db.go`,
   `android/app/src/main/java/de/roessing/app/push/`
 
-#### ⚠️ Abweichung im Code — vor dem Absenden entscheiden
+#### So hängt das im Code zusammen
 
-Die Angabe „optional" oben setzt voraus, dass ohne Erlaubnis keine Kennung
-entsteht. **Das stimmt derzeit nicht:**
-`android/app/src/main/java/de/roessing/app/ui/HomeScreen.kt` ruft
-`Geraeteanmeldung.anmelden(context)` in einem `LaunchedEffect(Unit)` beim
-Betreten der Startseite auf — ohne vorher `POST_NOTIFICATIONS` zu prüfen. Die
-Erlaubnisfrage kommt erst später und nur, wenn sich jemand irgendwo als
-Helfer:in eingetragen hat. Die Folge: Firebase vergibt die Kennung und der
-Server merkt sie sich auch bei jemandem, der die Benachrichtigungen abgelehnt
-hat; Nachrichten für dieses Gerät laufen dann über Google, Android zeigt sie
-nur nicht an (`PushDienst.kt` prüft die Erlaubnis erst beim Anzeigen).
+Die Angabe „optional" setzt voraus, dass ohne Erlaubnis keine Kennung
+entsteht. **Bis einschließlich `0.1.7` stimmte das nicht:**
+`ui/HomeScreen.kt` rief `Geraeteanmeldung.anmelden(context)` in einem
+`LaunchedEffect(Unit)` beim Betreten der Startseite auf — ohne vorher die
+Erlaubnis zu prüfen. Die Frage nach `POST_NOTIFICATIONS` kommt erst später
+und nur, wenn sich jemand als Helfer:in eingetragen hat. Die Folge: Firebase
+vergab die Kennung und der Server merkte sie sich auch bei jemandem, der die
+Benachrichtigungen abgelehnt hatte.
 
-Zwei Wege, beide vertretbar — der erste ist der bessere:
+**Seit `0.1.8` folgt die Kennung der Erlaubnis** — nachzulesen in
+`android/app/src/main/java/de/roessing/app/push/Geraeteabgleich.kt`:
 
-1. **Code nachziehen** (eigenes Issue): erst anmelden, wenn die Erlaubnis
-   erteilt ist, und beim Widerruf `unregister` schicken. Danach stimmt
-   „optional", und die Einwilligung als Rechtsgrundlage trägt.
-2. **Bis dahin** in der Play Console bei *Geräte-ID* **„Pflicht"**
-   ankreuzen — sonst weicht die Angabe vom beobachtbaren Netzwerkverkehr ab,
-   und genau darauf schaut Googles Prüfung.
+- Maßgeblich ist der *wirksame* Zustand: vor Android 13
+  `areNotificationsEnabled()`, ab Android 13 zusätzlich die erteilte
+  Berechtigung `POST_NOTIFICATIONS`. In den Einstellungen abgedreht heißt
+  abgedreht.
+- Ohne Erlaubnis wird Firebase **gar nicht erst nach einer Kennung gefragt** —
+  das Fragen selbst legt sie an.
+- Wird die Erlaubnis später entzogen, löscht die App die Kennung beim nächsten
+  Start bzw. bei der Rückkehr in den Vordergrund (`DELETE /api/v1/me/devices`)
+  und wirft sie danach auch bei Firebase weg. Dasselbe beim Abmelden aus der
+  App.
+- Auch die Erneuerung der Kennung (`onNewToken`) läuft nur bei erteilter
+  Erlaubnis.
+
+Belegt durch `android/app/src/test/java/de/roessing/app/GeraeteabgleichTest.kt`
+sowie den Instrumentierungstest
+`androidTest/.../GeraetekennungE2eTest.kt`, der auf den Emulatoren API 28 und
+35 gegen ein echtes Backend nachweist, dass bei abgeschalteten
+Benachrichtigungen keine Kennung dort ankommt.
+
+In der Play Console darf *Geräte-ID* deshalb als **optional** angekreuzt
+werden.
 
 ### Nachrichten (Chat, E-Mail, SMS)
 

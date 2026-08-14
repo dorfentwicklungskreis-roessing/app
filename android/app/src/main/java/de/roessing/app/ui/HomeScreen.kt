@@ -58,10 +58,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import de.roessing.app.R
 import de.roessing.app.data.DeviceLocation
 import de.roessing.app.push.Geraeteanmeldung
@@ -152,16 +155,30 @@ fun HomeScreen(
     }
 
     // --- Push-Benachrichtigungen ------------------------------------------
-    // Das Gerät meldet sich bei jedem Start an: Firebase tauscht die Kennung
-    // von Zeit zu Zeit aus, und das Backend soll die aktuelle haben.
-    LaunchedEffect(Unit) { Geraeteanmeldung.anmelden(context) }
+    // Die Gerätekennung folgt der Erlaubnis. Sie steht für genau dieses Handy
+    // und erlaubt dem Dorfserver, Nachrichten dorthin zu schicken — sie darf
+    // deshalb erst entstehen, wenn Benachrichtigungen wirklich erlaubt sind,
+    // und muss wieder verschwinden, sobald jemand sie abdreht. Umgelegt wird
+    // dieser Schalter in den Android-Einstellungen, also außerhalb der App;
+    // wir sehen bei jeder Rückkehr in den Vordergrund nach.
+    var erlaubnisGeaendert by remember { mutableStateOf(0) }
+    val lebenslauf = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lebenslauf, erlaubnisGeaendert) {
+        lebenslauf.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            Geraeteanmeldung.abgleichen(context)
+        }
+    }
 
     var pushGefragt by rememberSaveable { mutableStateOf(false) }
     var pushErklaerung by remember { mutableStateOf(false) }
     var pushAbgelehnt by remember { mutableStateOf(false) }
     val pushFrage = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { erlaubt -> pushAbgelehnt = !erlaubt }
+    ) { erlaubt ->
+        pushAbgelehnt = !erlaubt
+        // Die Antwort gilt sofort — nicht erst beim nächsten Vordergrund.
+        erlaubnisGeaendert++
+    }
     // Erst fragen, wenn es etwas zu benachrichtigen gibt: Wer sich nirgends
     // eingetragen hat, bekommt ohnehin keine Anfragen.
     val brauchtErlaubnis = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
