@@ -20,7 +20,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Startausschnitt der Karte: Beim Öffnen der App sollen alle Pflege-Orte im
+ * Startausschnitt der Karte: Beim Öffnen der App sollen alle Orte im
  * Bild liegen — nicht ein zufälliger Ausschnitt des Ortskerns.
  *
  * Die Prüfung rechnet den sichtbaren Bereich aus Mitte und Zoom bewusst mit

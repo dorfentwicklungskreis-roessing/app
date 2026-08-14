@@ -1,8 +1,11 @@
 # Dorf-App Rössing 🌻
 
-Die App fürs Dorf: Login mit der **Rössing-ID**, Karte der Blumenkästen und
-Beete mit Ampel-Status (grün/gelb/rot), Gieß- und Jätpläne, Erledigungen
-melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
+Die App fürs Dorf: Login mit der **Rössing-ID**, danach eine Startseite mit
+Bereichen. Der erste Bereich heißt **„Mithelfen"** — was gerade im Dorf
+ansteht: Karte der Blumenkästen und Beete mit Ampel-Status (grün/gelb/rot),
+Gieß- und Jätpläne, Erledigungen melden, Rangliste. Dazu **Mein Profil** und
+**Dorfbewohner**. Weitere Bereiche kommen; das Gießen ist ausdrücklich nur der
+Anfang.
 
 ## Aufbau (Monorepo)
 
@@ -42,7 +45,7 @@ melden. Langfristig: ERNA-Mitgliederverwaltung u.v.m.
   schlichte Auszeichnungen (Gießkanne des Monats, Frühaufsteher, Retter,
   Ausdauer). Eine irrtümliche Meldung nimmt
   `DELETE /api/v1/completions/{id}` zurück — erlaubt dem Melder und Admins.
-  In der App gibt es dazu den Tab „Rangliste"; gemeldet wird erst nach einer
+  In der App gibt es dazu den Reiter „Rangliste" im Bereich „Mithelfen"; gemeldet wird erst nach einer
   Rückfrage (Ort und Menge), damit ein Fehlklick nichts einträgt. In der
   Verwaltung liegt beides unter `/admin/dorfpflege/rangliste` bzw. als
   eigene Bestätigungsseite in der Historie eines Ortes.

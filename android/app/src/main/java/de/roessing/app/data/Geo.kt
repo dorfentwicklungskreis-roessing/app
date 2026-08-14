@@ -149,7 +149,7 @@ fun zoomForBounds(
 }
 
 /**
- * Startausschnitt der Karte: Beim Öffnen sollen möglichst **alle** Pflege-Orte
+ * Startausschnitt der Karte: Beim Öffnen sollen möglichst **alle** Orte
  * im Bild liegen, nicht ein zufälliger Ausschnitt.
  *
  * * Gibt es Orte, umschließt der Ausschnitt sie alle (mit Rand).

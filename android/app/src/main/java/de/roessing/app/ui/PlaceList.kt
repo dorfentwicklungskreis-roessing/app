@@ -15,8 +15,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,14 +34,46 @@ import de.roessing.app.data.PlaceDto
 import de.roessing.app.data.PlaceSort
 import de.roessing.app.data.distanceMeters
 import de.roessing.app.data.formatDistance
-import de.roessing.app.ui.theme.StatusGreen
-import de.roessing.app.ui.theme.StatusRed
-import de.roessing.app.ui.theme.StatusYellow
+import de.roessing.app.ui.theme.statusFarben
 
+/**
+ * Schriftfarbe eines Status. Kommt aus dem Design (hell/dunkel), damit der
+ * Text in beiden Fassungen genug Kontrast hat — die kräftigen Kartenfarben
+ * wären auf dunklem Grund kaum lesbar.
+ */
+@Composable
 fun statusColor(status: CareStatus) = when (status) {
-    CareStatus.green -> StatusGreen
-    CareStatus.yellow -> StatusYellow
-    CareStatus.red -> StatusRed
+    CareStatus.green -> statusFarben.gruen
+    CareStatus.yellow -> statusFarben.gelb
+    CareStatus.red -> statusFarben.rot
+}
+
+/** Flächenfarbe hinter einem Status (Plaketten). */
+@Composable
+fun statusFlaeche(status: CareStatus) = when (status) {
+    CareStatus.green -> statusFarben.gruenFlaeche
+    CareStatus.yellow -> statusFarben.gelbFlaeche
+    CareStatus.red -> statusFarben.rotFlaeche
+}
+
+/** Status als Plakette: Punkt plus Text, gut sichtbar und gut lesbar. */
+@Composable
+fun StatusPill(status: CareStatus, text: String, modifier: Modifier = Modifier) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = statusFlaeche(status),
+        contentColor = statusColor(status),
+        modifier = modifier,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusDot(status, size = 8)
+            Spacer(Modifier.width(8.dp))
+            Text(text, style = MaterialTheme.typography.labelLarge)
+        }
+    }
 }
 
 /**
@@ -96,8 +130,8 @@ fun PlaceListScreen(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             FilterChip(
                 selected = state.sort == PlaceSort.URGENCY,
@@ -117,9 +151,9 @@ fun PlaceListScreen(
         LazyColumn(
             modifier = Modifier.testTag("place-list"),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 16.dp, end = 16.dp, bottom = 16.dp,
+                start = 16.dp, end = 16.dp, bottom = 24.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(state.places, key = { it.id }) { place ->
                 PlaceCard(
@@ -138,19 +172,20 @@ fun PlaceListScreen(
 private fun PlaceCard(place: PlaceDto, entfernung: String?, onTap: () -> Unit) {
     Card(
         onClick = onTap,
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("place-card-${place.id}"),
     ) {
         Row(
-            Modifier.padding(16.dp),
+            Modifier.padding(18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatusDot(place.careStatus, size = 18)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(place.name, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(2.dp))
                 val tasks = place.tasks.filter { it.active }
                     .joinToString(" · ") { it.displayName }
                 Text(
@@ -158,21 +193,16 @@ private fun PlaceCard(place: PlaceDto, entfernung: String?, onTap: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                StatusPill(place.careStatus, statusLabel(place.careStatus))
             }
-            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+            if (entfernung != null) {
+                Spacer(Modifier.width(12.dp))
                 Text(
-                    statusLabel(place.careStatus),
+                    entfernung,
                     style = MaterialTheme.typography.labelLarge,
-                    color = statusColor(place.careStatus),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("distance-${place.id}"),
                 )
-                if (entfernung != null) {
-                    Text(
-                        entfernung,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.testTag("distance-${place.id}"),
-                    )
-                }
             }
         }
     }

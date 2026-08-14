@@ -52,6 +52,7 @@ fun MembersScreen(
 
         if (state.adminView) {
             Card(
+                shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
                 modifier = Modifier.fillMaxWidth().testTag("verwaltungs-hinweis"),
             ) {
@@ -73,7 +74,13 @@ fun MembersScreen(
         }
 
         state.members.forEach { m ->
-            Card(Modifier.fillMaxWidth().testTag("bewohner-${m.userSub}")) {
+            Card(
+                Modifier.fillMaxWidth().testTag("bewohner-${m.userSub}"),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
+            ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         m.name,

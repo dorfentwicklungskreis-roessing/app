@@ -26,8 +26,9 @@ fun LocationHint(onRequest: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .testTag("location-hint"),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
         ),

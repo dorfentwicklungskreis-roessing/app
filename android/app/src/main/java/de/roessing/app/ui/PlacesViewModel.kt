@@ -2,6 +2,7 @@ package de.roessing.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import de.roessing.app.data.CareStatus
 import de.roessing.app.data.CompletionDto
 import de.roessing.app.data.LatLon
 import de.roessing.app.data.MeDto
@@ -32,7 +33,15 @@ data class PlacesUiState(
      */
     val userLocation: LatLon? = null,
     val sort: PlaceSort = PlaceSort.URGENCY,
-)
+) {
+    /**
+     * Zahl der Orte, die gerade Aufmerksamkeit brauchen (gelb oder rot).
+     * Die Startseite macht daraus ihre Statuszeile; abgeschaltete Orte
+     * zählen nicht, sie sind niemandes Aufgabe.
+     */
+    val faelligeOrte: Int
+        get() = places.count { it.active && it.careStatus != CareStatus.green }
+}
 
 /** Einmalige UI-Ereignisse (Snackbars). */
 sealed interface UiEvent {

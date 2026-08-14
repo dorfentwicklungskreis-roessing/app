@@ -3,7 +3,12 @@ agp = "8.7.3"
 kotlin = "2.0.21"
 coroutines = "1.9.0"
 serialization = "1.7.3"
-composeBom = "2024.12.01"
+# Compose-BOM 2026.01.01 = material3 1.4.0 (stabil, mit Material-3-Expressive:
+# MaterialExpressiveTheme, MotionScheme, ShortNavigationBar) und Compose 1.10.2.
+# Bewusst nicht neuer: ab BOM 2026.02 verlangt Compose Kotlin 2.1+, ab 2026.08
+# sogar compileSdk 37 und AGP 9 — und material3 bleibt in allen neueren BOMs
+# ohnehin bei 1.4.0. Alles darüber (material3 1.5.0) gibt es nur als Alpha.
+composeBom = "2026.01.01"
 activityCompose = "1.9.3"
 navigationCompose = "2.8.5"
 lifecycle = "2.8.7"

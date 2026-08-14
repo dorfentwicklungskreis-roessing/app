@@ -75,8 +75,14 @@ fun LeaderboardScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        Card(Modifier.fillMaxWidth().testTag("leaderboard-totals")) {
-            Column(Modifier.padding(16.dp)) {
+        Card(
+            Modifier.fillMaxWidth().testTag("leaderboard-totals"),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ),
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     stringResource(R.string.leaderboard_totals_title),
                     style = MaterialTheme.typography.titleMedium,
@@ -128,6 +134,7 @@ fun LeaderboardScreen(
             Spacer(Modifier.height(16.dp))
             Card(
                 Modifier.fillMaxWidth().testTag("leaderboard-me"),
+                shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                 ),
@@ -150,11 +157,23 @@ fun LeaderboardScreen(
 /** Eine der ersten drei Karten — mit Medaille. */
 @Composable
 private fun PodiumCard(eintrag: LeaderboardEntryDto, modifier: Modifier = Modifier) {
-    OutlinedCard(modifier.testTag("podium-${eintrag.rank}")) {
+    val erster = eintrag.rank == 1
+    OutlinedCard(
+        modifier.testTag("podium-${eintrag.rank}"),
+        shape = MaterialTheme.shapes.large,
+        colors = if (erster) {
+            CardDefaults.outlinedCardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        } else {
+            CardDefaults.outlinedCardColors()
+        },
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(horizontal = 12.dp, vertical = if (erster) 20.dp else 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -186,13 +205,14 @@ private fun LeaderboardRow(eintrag: LeaderboardEntryDto, eigen: Boolean) {
         Modifier
             .fillMaxWidth()
             .testTag("leaderboard-row-${eintrag.userSub}"),
+        shape = MaterialTheme.shapes.large,
         colors = if (eigen) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
         } else {
-            CardDefaults.cardColors()
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         },
     ) {
-        Column(Modifier.padding(12.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Platz und Name in einem Text — sonst stünde derselbe Name
                 // zweimal wortgleich auf der Seite (Podest und Liste).

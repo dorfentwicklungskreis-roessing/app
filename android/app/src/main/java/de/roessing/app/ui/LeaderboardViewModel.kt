@@ -34,7 +34,7 @@ data class LeaderboardUiState(
 }
 
 /**
- * Rangliste der Dorfpflege. Die Auswertung macht komplett das Backend
+ * Rangliste des Mithelfens. Die Auswertung macht komplett das Backend
  * (Zeiträume, Sortierung, Auszeichnungen) — hier wird nur geladen und
  * der gewählte Zeitraum gehalten.
  */

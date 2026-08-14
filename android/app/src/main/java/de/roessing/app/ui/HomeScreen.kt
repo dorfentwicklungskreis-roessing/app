@@ -1,10 +1,22 @@
 package de.roessing.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
@@ -22,11 +34,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -37,20 +50,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import de.roessing.app.R
 import de.roessing.app.data.DeviceLocation
+import de.roessing.app.ui.theme.DorfMotion
 
 /**
- * Die Seiten hinter dem Konto-Symbol. NONE = die gewohnten Reiter
- * (Karte, Liste, Rangliste).
+ * Das Gerüst der App: oben die Startseite mit den Bereichen, darunter die
+ * Bereiche selbst. „Mithelfen" ist der erste davon — Karte, Liste und
+ * Rangliste liegen deshalb *in* diesem Bereich und nicht mehr auf der
+ * obersten Ebene.
  */
-enum class KontoSeite { NONE, PROFIL, DORFBEWOHNER }
-
-/** Hauptbildschirm: Karte/Liste der Pflege-Orte mit Detail-Sheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -62,12 +77,16 @@ fun HomeScreen(
     val state by viewModel.state.collectAsState()
     val leaderboard by leaderboardViewModel.state.collectAsState()
     val profil by profileViewModel.state.collectAsState()
-    var kontoSeite by rememberSaveable { mutableStateOf(KontoSeite.NONE) }
+    var bereich by rememberSaveable { mutableStateOf(Bereich.START) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(0) }
     var selectedPlaceId by rememberSaveable { mutableStateOf<Long?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+
+    // System-Zurück führt aus dem Bereich auf die Startseite — und erst von
+    // dort aus der App heraus.
+    BackHandler(enabled = bereich != Bereich.START) { bereich = Bereich.START }
 
     // Standort: nur im Vordergrund, nur auf Wunsch — und er bleibt auf dem
     // Gerät. Das Backend bekommt ihn nie zu sehen.
@@ -110,12 +129,12 @@ fun HomeScreen(
         if (abgelehnt) snackbar.showSnackbar(deniedMsg)
     }
     // Beim Wechsel auf die Rangliste den aktuellen Stand holen.
-    LaunchedEffect(tab) {
-        if (tab == 2) leaderboardViewModel.refresh()
+    LaunchedEffect(tab, bereich) {
+        if (bereich == Bereich.MITHELFEN && tab == 2) leaderboardViewModel.refresh()
     }
     // Die Dorfbewohner-Liste wird beim Öffnen frisch geholt.
-    LaunchedEffect(kontoSeite) {
-        if (kontoSeite == KontoSeite.DORFBEWOHNER) profileViewModel.loadMembers()
+    LaunchedEffect(bereich) {
+        if (bereich == Bereich.DORFBEWOHNER) profileViewModel.loadMembers()
     }
     val profilGespeichert = stringResource(R.string.profile_saved)
     LaunchedEffect(Unit) {
@@ -131,17 +150,18 @@ fun HomeScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        when (kontoSeite) {
-                            KontoSeite.PROFIL -> stringResource(R.string.profile_title)
-                            KontoSeite.DORFBEWOHNER -> stringResource(R.string.members_title)
-                            KontoSeite.NONE -> stringResource(R.string.map_title)
+                        when (bereich) {
+                            Bereich.PROFIL -> stringResource(R.string.profile_title)
+                            Bereich.DORFBEWOHNER -> stringResource(R.string.members_title)
+                            Bereich.MITHELFEN -> stringResource(R.string.area_care_title)
+                            Bereich.START -> stringResource(R.string.home_title)
                         },
                     )
                 },
                 navigationIcon = {
-                    if (kontoSeite != KontoSeite.NONE) {
+                    if (bereich != Bereich.START) {
                         IconButton(
-                            onClick = { kontoSeite = KontoSeite.NONE },
+                            onClick = { bereich = Bereich.START },
                             modifier = Modifier.testTag("zurueck"),
                         ) {
                             Icon(
@@ -162,7 +182,21 @@ fun HomeScreen(
                         Icon(Icons.Filled.Refresh, contentDescription = "Aktualisieren")
                     }
                     IconButton(onClick = { menuOpen = true }, modifier = Modifier.testTag("menu")) {
-                        Text(state.me?.name?.take(1)?.uppercase() ?: "•")
+                        // Runder Anfangsbuchstabe statt loser Letter — das ist
+                        // der Knopf zum eigenen Konto, er darf danach aussehen.
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(34.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    state.me?.name?.take(1)?.uppercase() ?: "•",
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
+                        }
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         state.me?.let {
@@ -170,12 +204,12 @@ fun HomeScreen(
                         }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.profile_title)) },
-                            onClick = { menuOpen = false; kontoSeite = KontoSeite.PROFIL },
+                            onClick = { menuOpen = false; bereich = Bereich.PROFIL },
                             modifier = Modifier.testTag("menu-profil"),
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.members_title)) },
-                            onClick = { menuOpen = false; kontoSeite = KontoSeite.DORFBEWOHNER },
+                            onClick = { menuOpen = false; bereich = Bereich.DORFBEWOHNER },
                             modifier = Modifier.testTag("menu-dorfbewohner"),
                         )
                         DropdownMenuItem(
@@ -188,36 +222,41 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            // Auf den Konto-Seiten führt der Weg über den Zurück-Pfeil,
-            // die Reiter blenden sich so lange aus.
-            if (kontoSeite == KontoSeite.NONE) NavigationBar {
-                NavigationBarItem(
-                    selected = tab == 0, onClick = { tab = 0 },
-                    icon = { Icon(Icons.Filled.Map, contentDescription = null) },
-                    label = { Text(stringResource(R.string.map_title)) },
-                    modifier = Modifier.testTag("tab-map"),
-                )
-                NavigationBarItem(
-                    selected = tab == 1, onClick = { tab = 1 },
-                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-                    label = { Text(stringResource(R.string.list_title)) },
-                    modifier = Modifier.testTag("tab-list"),
-                )
-                NavigationBarItem(
-                    selected = tab == 2, onClick = { tab = 2 },
-                    icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
-                    label = { Text(stringResource(R.string.leaderboard_title)) },
-                    modifier = Modifier.testTag("tab-leaderboard"),
-                )
+            // Die Reiter gehören in den Bereich Mithelfen — überall sonst
+            // wären sie schlicht falsch.
+            if (bereich == Bereich.MITHELFEN) {
+                // ShortNavigationBar ist der Expressive-Nachfolger der
+                // NavigationBar: flacher, mit weicher Auswahl-Pille.
+                ShortNavigationBar {
+                    ShortNavigationBarItem(
+                        selected = tab == 0, onClick = { tab = 0 },
+                        icon = { Icon(Icons.Filled.Map, contentDescription = null) },
+                        label = { Text(stringResource(R.string.tab_map)) },
+                        modifier = Modifier.testTag("tab-map"),
+                    )
+                    ShortNavigationBarItem(
+                        selected = tab == 1, onClick = { tab = 1 },
+                        icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+                        label = { Text(stringResource(R.string.list_title)) },
+                        modifier = Modifier.testTag("tab-list"),
+                    )
+                    ShortNavigationBarItem(
+                        selected = tab == 2, onClick = { tab = 2 },
+                        icon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null) },
+                        label = { Text(stringResource(R.string.leaderboard_title)) },
+                        modifier = Modifier.testTag("tab-leaderboard"),
+                    )
+                }
             }
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            if (tab == 0 && kontoSeite == KontoSeite.NONE) {
+            if (bereich == Bereich.MITHELFEN && tab == 0) {
                 FloatingActionButton(
                     onClick = {
                         if (darfStandort) fokusZaehler++ else standortFrage.launch(DeviceLocation.PERMISSIONS)
                     },
+                    shape = MaterialTheme.shapes.large,
                     modifier = Modifier.testTag("my-location"),
                 ) {
                     Icon(Icons.Filled.MyLocation, contentDescription = stringResource(R.string.my_location))
@@ -225,65 +264,93 @@ fun HomeScreen(
             }
         },
     ) { padding ->
-        // Die Konto-Seiten ersetzen den Reiter-Inhalt vollständig.
-        when (kontoSeite) {
-            KontoSeite.PROFIL -> ProfileScreen(
-                state = profil,
-                modifier = Modifier.padding(padding),
-                onDisplayName = profileViewModel::setDisplayName,
-                onNickname = profileViewModel::setNickname,
-                onPhone = profileViewModel::setPhone,
-                onEmail = profileViewModel::setEmail,
-                onNote = profileViewModel::setNote,
-                onDisplayNamePublic = profileViewModel::setDisplayNamePublic,
-                onNicknamePublic = profileViewModel::setNicknamePublic,
-                onPhonePublic = profileViewModel::setPhonePublic,
-                onEmailPublic = profileViewModel::setEmailPublic,
-                onNotePublic = profileViewModel::setNotePublic,
-                onSave = profileViewModel::save,
-            )
-
-            KontoSeite.DORFBEWOHNER -> MembersScreen(
-                state = profil,
-                modifier = Modifier.padding(padding),
-            )
-
-            KontoSeite.NONE -> Column(Modifier.padding(padding)) {
-            if (!darfStandort) {
-                LocationHint(onRequest = { standortFrage.launch(DeviceLocation.PERMISSIONS) })
-            }
-            if (state.loading && state.places.isEmpty()) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-            }
-            when (tab) {
-                0 -> MapScreen(
-                    places = state.places,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    userLocation = state.userLocation,
-                    showUserLocation = darfStandort,
-                    focusRequest = fokusZaehler,
-                    onPlaceTap = { selectedPlaceId = it },
+        // Bewegung mit Richtung: in einen Bereich hinein wandert der Inhalt
+        // von rechts herein, zurück zur Startseite von links.
+        AnimatedContent(
+            targetState = bereich,
+            transitionSpec = {
+                val hinein = initialState == Bereich.START
+                val richtung = if (hinein) 1 else -1
+                (
+                    slideInHorizontally(DorfMotion.raeumlich()) { breite -> richtung * breite / 6 } +
+                        fadeIn(DorfMotion.effekt())
+                    ) togetherWith (
+                    slideOutHorizontally(DorfMotion.raeumlich()) { breite -> -richtung * breite / 6 } +
+                        fadeOut(DorfMotion.effekt())
+                    ) using SizeTransform(clip = false)
+            },
+            label = "bereich",
+            modifier = Modifier.fillMaxSize(),
+        ) { aktuell ->
+            when (aktuell) {
+                Bereich.START -> StartScreen(
+                    name = vorname(profil, state),
+                    faelligeOrte = state.faelligeOrte,
+                    ladend = state.loading && state.places.isEmpty(),
+                    modifier = Modifier.padding(padding),
+                    onBereich = { bereich = it },
                 )
 
-                1 -> PlaceListScreen(
-                    state = state,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    onPlaceTap = { selectedPlaceId = it },
-                    onSortChange = { viewModel.setSort(it) },
+                Bereich.PROFIL -> ProfileScreen(
+                    state = profil,
+                    modifier = Modifier.padding(padding),
+                    onDisplayName = profileViewModel::setDisplayName,
+                    onNickname = profileViewModel::setNickname,
+                    onPhone = profileViewModel::setPhone,
+                    onEmail = profileViewModel::setEmail,
+                    onNote = profileViewModel::setNote,
+                    onDisplayNamePublic = profileViewModel::setDisplayNamePublic,
+                    onNicknamePublic = profileViewModel::setNicknamePublic,
+                    onPhonePublic = profileViewModel::setPhonePublic,
+                    onEmailPublic = profileViewModel::setEmailPublic,
+                    onNotePublic = profileViewModel::setNotePublic,
+                    onSave = profileViewModel::save,
                 )
 
-                2 -> LeaderboardScreen(
-                    state = leaderboard,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    onSelectPeriod = { leaderboardViewModel.select(it) },
+                Bereich.DORFBEWOHNER -> MembersScreen(
+                    state = profil,
+                    modifier = Modifier.padding(padding),
                 )
-            }
+
+                Bereich.MITHELFEN -> Column(Modifier.padding(padding)) {
+                    // Der Hinweis gehört zu Karte und Liste — die Rangliste
+                    // kennt keine Entfernungen.
+                    if (!darfStandort && tab != 2) {
+                        LocationHint(onRequest = { standortFrage.launch(DeviceLocation.PERMISSIONS) })
+                    }
+                    if (state.loading && state.places.isEmpty()) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
+                    when (tab) {
+                        0 -> MapScreen(
+                            places = state.places,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            userLocation = state.userLocation,
+                            showUserLocation = darfStandort,
+                            focusRequest = fokusZaehler,
+                            onPlaceTap = { selectedPlaceId = it },
+                        )
+
+                        1 -> PlaceListScreen(
+                            state = state,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            onPlaceTap = { selectedPlaceId = it },
+                            onSortChange = { viewModel.setSort(it) },
+                        )
+
+                        2 -> LeaderboardScreen(
+                            state = leaderboard,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            onSelectPeriod = { leaderboardViewModel.select(it) },
+                        )
+                    }
+                }
             }
         }
     }
 
     val selected = state.places.find { it.id == selectedPlaceId }
-    if (selected != null && kontoSeite == KontoSeite.NONE) {
+    if (selected != null && bereich == Bereich.MITHELFEN) {
         ModalBottomSheet(
             onDismissRequest = { selectedPlaceId = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -297,4 +364,14 @@ fun HomeScreen(
             )
         }
     }
+}
+
+/**
+ * Der Name für die Begrüßung: Nickname vor Anzeigename vor dem Namen aus der
+ * Rössing-ID — und davon nur der erste Teil, „Moin, Erna Beispiel!" klänge
+ * nach Behördenpost.
+ */
+private fun vorname(profil: ProfileUiState, state: PlacesUiState): String {
+    val voll = profil.nickname.ifBlank { profil.displayName }.ifBlank { state.me?.name.orEmpty() }
+    return voll.trim().substringBefore(' ')
 }

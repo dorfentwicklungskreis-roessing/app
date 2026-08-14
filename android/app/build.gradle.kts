@@ -104,6 +104,13 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // Material 3 Expressive ist in material3 1.4.0 stabil ausgeliefert, die
+        // Signaturen sind aber noch als „experimentell" markiert (der Vertrag
+        // kann sich in 1.5 ändern). Wir nutzen daraus bewusst nur wenige
+        // Bausteine: MaterialExpressiveTheme, MotionScheme und die
+        // ShortNavigationBar. Die Zustimmung steht hier zentral, damit sie in
+        // einer Datei sichtbar ist statt in jeder Oberfläche einzeln.
+        freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi"
     }
     buildFeatures {
         compose = true

@@ -60,10 +60,9 @@ fun PlaceDetail(
             .padding(bottom = 32.dp)
             .testTag("place-detail"),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            StatusDot(place.careStatus, size = 18)
-            Spacer(Modifier.width(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(place.name, style = MaterialTheme.typography.headlineSmall)
+            StatusPill(place.careStatus, statusLabel(place.careStatus))
         }
         if (place.description.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
@@ -158,18 +157,13 @@ private fun TaskCard(
     // gesperrt. Der Knopf sagt das, statt erst in einen Fehler zu laufen.
     val gesperrtBis = task.lockedUntilInstant
     val gesperrt = gesperrtBis != null && gesperrtBis.isAfter(Instant.now())
-    OutlinedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+    OutlinedCard(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+        Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusDot(task.careStatus)
-                Spacer(Modifier.width(8.dp))
                 Text(task.displayName, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.weight(1f))
-                Text(
-                    taskStatusLabel(task.kind, task.careStatus),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = statusColor(task.careStatus),
-                )
+                Spacer(Modifier.width(8.dp))
+                StatusPill(task.careStatus, taskStatusLabel(task.kind, task.careStatus))
             }
             Spacer(Modifier.height(6.dp))
             val plan = buildString {

@@ -183,6 +183,23 @@ class PlacesViewModelTest {
     }
 
     @Test
+    fun `Startseite kennt die Zahl der faelligen Orte`() = runTest(dispatcher) {
+        val repo = FakeRepo()
+        val vm = PlacesViewModel(repo)
+        dispatcher.scheduler.advanceUntilIdle()
+        // Ein roter und ein gelber Ort warten, der grüne nicht.
+        assertEquals(2, vm.state.value.faelligeOrte)
+
+        // Abgeschaltete Orte zählen nicht mit — sie sind niemandes Aufgabe.
+        repo.response = repo.response.copy(
+            places = repo.response.places.map { it.copy(active = false) },
+        )
+        vm.refresh()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(0, vm.state.value.faelligeOrte)
+    }
+
+    @Test
     fun `Standort ueberlebt einen Refresh`() = runTest(dispatcher) {
         val vm = PlacesViewModel(FakeRepo())
         dispatcher.scheduler.advanceUntilIdle()

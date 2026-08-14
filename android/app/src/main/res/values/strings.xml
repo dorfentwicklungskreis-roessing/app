@@ -1,11 +1,29 @@
 <resources>
     <string name="app_name">Rössing</string>
     <string name="login_title">Willkommen in Rössing</string>
-    <string name="login_subtitle">Die App fürs Dorf: Blumenkästen gießen, Dorfleben im Blick.</string>
+    <string name="login_subtitle">Die App fürs Dorf. Den Anfang macht das Mithelfen: Was steht gerade an?</string>
     <string name="login_button">Mit Rössing-ID anmelden</string>
     <string name="login_dev_button">Entwickler-Login (nur Test)</string>
     <string name="login_error">Anmeldung fehlgeschlagen (%1$s). Bitte erneut versuchen.</string>
+    <!-- Startseite: die App ist die Dorf-App, Mithelfen ist der erste Bereich -->
+    <string name="home_title">Rössing</string>
+    <string name="home_greeting">Moin, %1$s!</string>
+    <string name="home_greeting_anon">Moin!</string>
+    <string name="home_intro">Deine App fürs Dorf.</string>
+    <string name="area_care_title">Mithelfen</string>
+    <string name="area_care_subtitle">Was gerade im Dorf ansteht.</string>
+    <string name="area_care_done">Alles erledigt — danke!</string>
+    <string name="area_care_loading">Wird geladen …</string>
+    <plurals name="area_care_due">
+        <item quantity="one">Ein Ort wartet auf dich</item>
+        <item quantity="other">%1$d Orte warten auf dich</item>
+    </plurals>
+    <string name="area_profile_subtitle">Deine Angaben — und was andere davon sehen.</string>
+    <string name="area_members_subtitle">Wer mitmacht, mit Kontakt nach Freigabe.</string>
+    <string name="home_more_title">Weitere Bereiche kommen</string>
+    <string name="home_more_text">Sag uns, was die App können soll.</string>
     <string name="map_title">Blumenkästen</string>
+    <string name="tab_map">Karte</string>
     <string name="list_title">Liste</string>
     <string name="water_now">Ich habe gegossen</string>
     <string name="watered_success">Danke fürs Gießen! 💚</string>

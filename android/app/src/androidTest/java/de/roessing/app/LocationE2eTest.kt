@@ -53,7 +53,7 @@ class LocationE2eTest {
         assertTrue("Standort müsste als nah am Dorf gelten", isNearVillage(ich))
 
         // Der Startausschnitt springt nicht auf den Nutzer, nimmt ihn aber mit
-        // ins Bild — zusammen mit den Pflege-Orten.
+        // ins Bild — zusammen mit den Orten.
         val orte = listOf(LatLon(52.183159, 9.816763), LatLon(52.1908, 9.8210))
         val start = startView(orte, ich, widthDp = 400.0, heightDp = 700.0)
         assertTrue("Standort fehlt im Startausschnitt", start.bounds.contains(ich))

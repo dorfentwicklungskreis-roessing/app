@@ -60,7 +60,7 @@ private const val SOURCE_ID = "places"
 private const val LAYER_ID = "places-layer"
 
 /**
- * Dorfkarte mit farbigen Status-Markern für alle Pflege-Orte.
+ * Dorfkarte mit farbigen Status-Markern für alle Orte.
  *
  * userLocation kommt vom Gerät und bleibt dort — die Karte nutzt ihn nur für
  * den Startausschnitt und den eigenen Standortpunkt.
