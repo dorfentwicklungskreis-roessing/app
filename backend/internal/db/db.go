@@ -74,6 +74,26 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+-- Profile: was jede Person selbst über sich hinterlegt. Rein additiv — an
+-- den bestehenden Tabellen ändert sich nichts, die laufende Datenbank
+-- bekommt die Tabelle beim nächsten Start einfach dazu.
+-- vis_*: Sichtbarkeit je Feld ('dorf' = alle Angemeldeten, 'verwaltung' =
+-- nur Verwaltende). Kontaktdaten stehen bewusst auf 'verwaltung'.
+CREATE TABLE IF NOT EXISTS profiles (
+  user_sub         TEXT PRIMARY KEY,
+  display_name     TEXT NOT NULL DEFAULT '',
+  nickname         TEXT NOT NULL DEFAULT '',
+  phone            TEXT NOT NULL DEFAULT '',
+  email            TEXT NOT NULL DEFAULT '',
+  note             TEXT NOT NULL DEFAULT '',
+  vis_display_name TEXT NOT NULL DEFAULT 'dorf',
+  vis_nickname     TEXT NOT NULL DEFAULT 'dorf',
+  vis_phone        TEXT NOT NULL DEFAULT 'verwaltung',
+  vis_email        TEXT NOT NULL DEFAULT 'verwaltung',
+  vis_note         TEXT NOT NULL DEFAULT 'verwaltung',
+  token_name       TEXT NOT NULL DEFAULT '',
+  updated_at       TEXT NOT NULL
+);
 `)
 	if err != nil {
 		return err

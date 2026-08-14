@@ -159,13 +159,14 @@ func Middleware(v Verifier) func(http.Handler) http.Handler {
 	}
 }
 
-// InsecureDevVerifier akzeptiert jedes Token und liest Nutzer/Rollen direkt
-// aus dem Token-String ("sub:name:role1,role2"). NUR für lokale Entwicklung
+// InsecureDevVerifier akzeptiert jedes Token und liest Nutzer, Rollen und
+// optional die E-Mail direkt aus dem Token-String
+// ("sub:name:role1,role2:mail@example.org"). NUR für lokale Entwicklung
 // und E2E-Tests — niemals in Produktion konfigurieren.
 type InsecureDevVerifier struct{}
 
 func (InsecureDevVerifier) Verify(_ context.Context, raw string) (User, error) {
-	parts := strings.SplitN(raw, ":", 3)
+	parts := strings.SplitN(raw, ":", 4)
 	u := User{Sub: parts[0], Name: parts[0], Roles: map[string]bool{}}
 	if len(parts) > 1 && parts[1] != "" {
 		u.Name = parts[1]
@@ -176,6 +177,9 @@ func (InsecureDevVerifier) Verify(_ context.Context, raw string) (User, error) {
 				u.Roles[r] = true
 			}
 		}
+	}
+	if len(parts) > 3 {
+		u.Email = parts[3]
 	}
 	return u, nil
 }

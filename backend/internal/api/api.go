@@ -32,6 +32,8 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/me", s.handleMe)
+	api.HandleFunc("PUT /api/v1/me/profile", s.handlePutProfile)
+	api.HandleFunc("GET /api/v1/members", s.handleMembers)
 	api.HandleFunc("GET /api/v1/places", s.handleListPlaces)
 	api.HandleFunc("POST /api/v1/places", s.adminOnly(s.handleCreatePlace))
 	api.HandleFunc("PUT /api/v1/places/{id}", s.adminOnly(s.handleUpdatePlace))
@@ -84,11 +86,18 @@ func AssemblePlaces(d *db.DB, now time.Time) ([]model.PlaceWithStatus, float64, 
 		return nil, 0, err
 	}
 	factor, _ := d.WateringFactor()
+	// Namen kommen aus den Profilen, nicht aus dem, was beim Melden
+	// eingefroren wurde (siehe model.NameResolver).
+	namen, err := d.NameResolver()
+	if err != nil {
+		return nil, 0, err
+	}
 
 	byPlace := map[int64][]model.TaskWithStatus{}
 	for _, t := range tasks {
 		var lc *model.Completion
 		if c, ok := last[t.ID]; ok {
+			c.UserName = namen.Resolve(c.UserSub, c.UserName)
 			lc = &c
 		}
 		// Der Hitzefaktor beschleunigt nur das Gießen — Jäten etc. bleiben normal.
@@ -154,8 +163,16 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	for role := range u.Roles {
 		roles = append(roles, role)
 	}
+	// Das eigene Profil kommt mit: Die App braucht es beim Start ohnehin
+	// (Anzeigename, Nickname) und spart sich so einen zweiten Aufruf.
+	profil, err := ProfileFor(s.DB, u, s.now())
+	if err != nil {
+		writeInternal(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sub": u.Sub, "name": u.Name, "email": u.Email, "roles": roles, "isAdmin": u.IsAdmin(),
+		"profile": profil,
 	})
 }
 
@@ -401,6 +418,14 @@ func (s *Server) handleListCompletions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeInternal(w, r, err)
 		return
+	}
+	namen, err := s.DB.NameResolver()
+	if err != nil {
+		writeInternal(w, r, err)
+		return
+	}
+	for i := range cs {
+		cs[i].UserName = namen.Resolve(cs[i].UserSub, cs[i].UserName)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"completions": cs})
 }

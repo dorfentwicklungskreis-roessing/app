@@ -89,6 +89,22 @@ func AssembleLeaderboard(d *db.DB, now time.Time, period model.Period, limit int
 	if len(entries) > limit {
 		entries = entries[:limit]
 	}
+
+	// Erst ganz zum Schluss die Namen aus den Profilen einsetzen: Gruppierung
+	// (SQL), Auszeichnungen und die Suche nach dem eigenen Eintrag arbeiten
+	// alle mit dem in der Meldung gespeicherten Namen. Erst für die Anzeige
+	// gilt der Nickname bzw. Anzeigename aus dem Profil.
+	namen, err := d.NameResolver()
+	if err != nil {
+		return model.Leaderboard{}, err
+	}
+	for i := range entries {
+		entries[i].UserName = namen.Resolve(entries[i].UserSub, entries[i].UserName)
+	}
+	if mine != nil {
+		mine.UserName = namen.Resolve(mine.UserSub, mine.UserName)
+	}
+
 	return model.Leaderboard{
 		Period: period, From: from.In(loc), To: to.In(loc),
 		Entries: entries, Totals: totals, Me: mine,
