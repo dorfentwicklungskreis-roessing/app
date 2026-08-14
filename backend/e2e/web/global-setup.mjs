@@ -55,6 +55,13 @@ export default async function globalSetup() {
       LISTEN_ADDR: `:${PORT}`,
       DB_PATH: path.join(outDir, 'e2e.sqlite'),
       AUTH_ISSUER: ISSUER,
+      // Empfängerprüfung wie in Produktion: Der Web-Admin tauscht den Code
+      // gegen ein Access-Token und lässt es vom selben Verifier prüfen. Zitadel
+      // trägt die Client-ID der anfragenden Anwendung als Empfänger ein — genau
+      // die steht hier. Dieser Test ist damit der Nachweis, dass die
+      // Produktionskonfiguration (Client-IDs in AUTH_AUDIENCE) trägt: Fiele die
+      // Client-ID nicht in den aud-Claim, käme hier keine Anmeldung mehr durch.
+      AUTH_AUDIENCE: boot.clientId,
       PUBLIC_URL: BASE_URL,
       ADMIN_CLIENT_ID: boot.clientId,
       SEED: '1',

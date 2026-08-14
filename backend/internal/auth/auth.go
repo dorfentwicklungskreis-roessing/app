@@ -4,7 +4,9 @@
 // Erwartete Konfiguration (Env):
 //
 //	AUTH_ISSUER   z.B. https://id.xn--rssing-wxa.de (leer = Auth deaktiviert, nur für Dev/Tests!)
-//	AUTH_AUDIENCE optionale, kommaseparierte Liste erlaubter Audiences (Project-ID/Client-ID)
+//	AUTH_AUDIENCE kommaseparierte Liste erlaubter Audiences (Client-ID der
+//	              jeweiligen Anwendung, bei Machine-Tokens auch die Projekt-ID).
+//	              Im OIDC-Modus Pflicht — siehe cmd/server/main.go.
 //
 // Rollen kommen aus dem Zitadel-Claim `urn:zitadel:iam:org:project:roles`.
 package auth
@@ -12,7 +14,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -56,10 +58,13 @@ type OIDCVerifier struct {
 }
 
 // NewOIDCVerifier lädt die Discovery-Konfiguration des Issuers.
-// audiences darf leer sein; dann wird die Audience nicht geprüft (so läuft es
-// bisher in Produktion). Ist die Liste gefüllt, muss das Token mindestens
-// einen der Einträge als Empfänger führen — sonst wäre jedes Token derselben
-// Rössing-ID hier gültig, auch das einer völlig anderen Anwendung.
+// Ist audiences gefüllt, muss das Token mindestens einen der Einträge als
+// Empfänger führen — sonst wäre jedes Token derselben Rössing-ID hier gültig,
+// auch das einer völlig anderen Anwendung.
+//
+// Eine leere Liste schaltet die Prüfung ab. Das ist nur für Tests gedacht;
+// der Server verweigert im OIDC-Modus inzwischen den Start ohne Empfängerliste
+// (siehe cmd/server/main.go), damit dieser Zustand nicht unbemerkt entsteht.
 func NewOIDCVerifier(ctx context.Context, issuer string, audiences []string) (*OIDCVerifier, error) {
 	provider, err := oidc.NewProvider(ctx, issuer)
 	if err != nil {
@@ -122,7 +127,12 @@ func (o *OIDCVerifier) Verify(ctx context.Context, raw string) (User, error) {
 		return User{}, err
 	}
 	if !o.audienceOK(tok) {
-		return User{}, errors.New("Token ist nicht für diese Anwendung ausgestellt")
+		// Die beobachtete Audience gehört in die Meldung: Ist die Liste einmal
+		// falsch gesetzt, sperrt das sonst alle Nutzer aus, und im Log steht
+		// nur ein nichtssagendes 401. Empfängerkennungen sind keine
+		// Geheimnisse — das Token selbst taucht hier bewusst nicht auf.
+		return User{}, fmt.Errorf("Token ist nicht für diese Anwendung ausgestellt (aud=%v, erlaubt=%v)",
+			tok.Audience, o.audiences)
 	}
 	var claims zitadelClaims
 	if err := tok.Claims(&claims); err != nil {
