@@ -32,20 +32,28 @@ keine Weitergabe. Nichts wird verkauft, es gibt keine Werbepartner.
 - **Zwecke:** App-Funktionalität, Kontoverwaltung
 - **Nur kurzzeitig verarbeitet:** nein — der Name wird zusammen mit jeder
   Erledigung dauerhaft gespeichert
+- **Zusätzlich seit der Profilverwaltung:** Anzeigename und Nickname lassen
+  sich im Profil frei setzen (Nickname erscheint in Rangliste und Meldungen).
+  Beide sind standardmäßig für angemeldete Dorfbewohner sichtbar — ohne sie
+  funktionieren Rangliste und Erledigungshistorie nicht.
 - **Beleg:** `AuthManager.kt` fordert die Scopes `openid profile email
   offline_access` an; `backend/internal/auth/auth.go` liest den Claim `name`;
-  `backend/internal/db/db.go` speichert `completions.user_name`
+  `backend/internal/db/db.go` speichert `completions.user_name`;
+  Profiltabelle in `backend/internal/db/`
 
 ### Personenbezogene Daten → E-Mail-Adresse
 
 - **Erhoben:** ja · **Geteilt:** nein
-- **Pflicht oder optional:** Pflicht
-- **Zwecke:** Kontoverwaltung
-- **Nur kurzzeitig verarbeitet:** ja — die Adresse steht im Token und wird von
-  `GET /api/v1/me` zurückgegeben, aber **nirgends in der Datenbank abgelegt**
-  (das Schema in `db.go` enthält keine E-Mail-Spalte)
+- **Pflicht oder optional:** Pflicht (aus der Anmeldung) bzw. optional (im Profil)
+- **Zwecke:** Kontoverwaltung, App-Funktionalität
+- **Nur kurzzeitig verarbeitet:** nein — seit der Profilverwaltung kann die
+  Adresse **dauerhaft gespeichert** werden: Sie ist im Profil mit dem Wert aus
+  der Rössing-ID vorbelegt und überschreibbar. Ohne Profil steht sie nur im
+  Token und wird nicht abgelegt.
+- **Sichtbarkeit:** standardmäßig **nur für Verwaltende**; erst ein bewusst
+  umgelegter Schalter gibt sie für andere angemeldete Dorfbewohner frei
 - **Beleg:** `zitadelClaims.Email` in `backend/internal/auth/auth.go`,
-  `MeDto.email` in `android/.../data/Model.kt`
+  Profiltabelle in `backend/internal/db/`, `PUT /api/v1/me/profile`
 
 ### Personenbezogene Daten → Nutzer-IDs
 
@@ -55,6 +63,20 @@ keine Weitergabe. Nichts wird verkauft, es gibt keine Werbepartner.
 - **Nur kurzzeitig verarbeitet:** nein
 - **Was genau:** die Subject-Kennung (`sub`) der Rössing-ID, gespeichert als
   `completions.user_sub`
+
+### Personenbezogene Daten → Telefonnummer
+
+- **Erhoben:** ja · **Geteilt:** nein
+- **Pflicht oder optional:** **optional** — freiwillige Angabe im Profil, die
+  App funktioniert vollständig ohne sie
+- **Zwecke:** App-Funktionalität (nachbarschaftliche Erreichbarkeit)
+- **Nur kurzzeitig verarbeitet:** nein
+- **Sichtbarkeit:** standardmäßig **nur für Verwaltende**; die Freigabe für
+  andere angemeldete Dorfbewohner erfordert einen bewusst umgelegten Schalter.
+  Nicht freigegebene Felder verlassen den Server nicht.
+- **Rechtsgrundlage:** Einwilligung, jederzeit durch Zurückstellen widerrufbar
+- **Beleg:** Profiltabelle in `backend/internal/db/`, `PUT /api/v1/me/profile`,
+  `GET /api/v1/members` (liefert je Eintrag nur die freigegebenen Felder)
 
 ### App-Aktivitäten → Sonstige Aktionen
 
