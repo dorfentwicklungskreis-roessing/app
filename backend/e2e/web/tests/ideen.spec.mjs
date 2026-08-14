@@ -74,7 +74,7 @@ test('Ideen: öffentlich einreichen, in der Verwaltung einordnen und löschen', 
   });
 
   await test.step('Die Liste zeigt Datum, Name, E-Mail, Wunsch und Stand', async () => {
-    const zeile = page.getByRole('row', { hasText: `E2E-Wunsch ${marke}` });
+    const zeile = page.getByRole('row').filter({ hasText: `E2E-Wunsch ${marke}` });
     await expect(zeile).toContainText('Erna E2E');
     await expect(zeile).toContainText('erna@example.org');
     await expect(zeile).toContainText('neu');
@@ -126,7 +126,7 @@ test('Ideen: öffentlich einreichen, in der Verwaltung einordnen und löschen', 
 
   await test.step('Die Danke-Idee wieder aufräumen', async () => {
     await page.goto('/admin/ideen/');
-    const zeile = page.getByRole('row', { hasText: `E2E-Danke ${marke}` });
+    const zeile = page.getByRole('row').filter({ hasText: `E2E-Danke ${marke}` });
     if (await zeile.count()) {
       await zeile.getByRole('link', { name: new RegExp(`E2E-Danke ${marke}`) }).click();
       await page.locator('#idee-loeschen').click();
