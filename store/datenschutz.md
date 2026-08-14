@@ -1,22 +1,19 @@
 # Datenschutz — Kurzfassung für den Play Store
 
 > **Achtung:** Dieses Dokument ist die Arbeitsgrundlage, **nicht** die verbindliche
-> Erklärung. Google Play verlangt eine **öffentlich erreichbare Datenschutzerklärung
-> unter einer eigenen URL**, die ohne Anmeldung, ohne PDF-Download und in der
-> Sprache der Store-Eintragung abrufbar ist. Diese Erklärung wird auf
-> **roessing.de** veröffentlicht; die URL trägt Levin in der Play Console unter
-> *App-Inhalte → Datenschutzerklärung* nach und ergänzt sie hier:
+> Erklärung. Verbindlich ist die veröffentlichte Fassung:
 >
-> **URL: _(noch einzutragen)_**
+> **URL: <https://xn--rssing-wxa.de/app/datenschutz/>**
+> (in der Play Console unter *App-Inhalte → Datenschutzerklärung* eingetragen)
 >
-> Der Text unten kann als Vorlage für diese Seite dienen.
+> Bei Abweichungen gilt die Website. Wer hier etwas ändert, das den Umgang mit
+> Daten betrifft, muss die Website nachziehen — nicht umgekehrt.
 
 ## Verantwortlich
 
-Dorfentwicklungskreis Rössing. Ladungsfähige Anschrift und E-Mail-Adresse müssen
-in der veröffentlichten Fassung stehen (Play prüft das stichprobenartig, und die
-DSGVO verlangt es ohnehin). — **offen: welche Anschrift und welche
-Kontaktadresse genau?**
+Dorfentwicklungskreis Rössing. Ladungsfähige Anschrift und E-Mail-Adresse stehen
+in der veröffentlichten Fassung (Play prüft das stichprobenartig, und die DSGVO
+verlangt es ohnehin).
 
 ## Welche Daten verarbeitet die App
 
@@ -48,20 +45,39 @@ Entfernungsangaben.
 **Mithelfen und Anfragen.** Wer sich an einem Ort als Helfer:in einträgt,
 hinterlegt damit: Kennung, Ort, ggf. Aufgabenart und Zeitpunkt. Steht dort
 etwas an, entsteht daraus eine Anfrage (gespeichert: Kennung, Anlass,
-Zeitpunkt, ob gelesen). Wer zusagt, ist mit Namen und Frist für die übrigen
-Eingetragenen sichtbar — sonst gießen zwei Leute denselben Kasten. Das
-Eintragen ist freiwillig und jederzeit widerrufbar; Anfragen und Vorgänge
-hängen an der Pflegeaufgabe und verschwinden mit ihr.
+Zeitpunkt, ob gelesen). Gefragt wird **nacheinander** im Abstand einer Stunde,
+damit nicht alle gleichzeitig losziehen. Sagt niemand zu, geht am Ende der
+Liste ein **Rundruf** an alle Eingetragenen gleichzeitig — ausgenommen, wessen
+Zusage in diesem Vorgang schon verfallen ist. Auch danach passiert nichts
+weiter: Der Ort bleibt fällig. Wer zusagt, ist mit Namen und Frist (24
+Stunden) für die übrigen Eingetragenen sichtbar — sonst gießen zwei Leute
+denselben Kasten. Das Eintragen ist freiwillig und jederzeit widerrufbar;
+Anfragen und Vorgänge hängen an der Pflegeaufgabe und verschwinden mit ihr.
 
 **Benachrichtigungen aufs Handy (freiwillig).** Wer zustimmt, bekommt Anfragen
 als Push-Nachricht. Dafür vergibt **Google (Firebase Cloud Messaging)** eine
 Kennung dieser App-Installation; die App meldet sie dem Dorfserver, damit er
-Nachrichten an dieses Gerät schicken kann. An Google gehen dabei die Kennung
-sowie Titel und Text der Meldung (Ortsname und Aufgabe) — Namen anderer
-Personen nie. Ohne Zustimmung wird keine Kennung erzeugt und nichts
-verschickt; die Anfragen stehen dann beim Öffnen in der App. Beim Abmelden aus
-der App wird die Kennung gelöscht, ebenso, wenn Google sie als ungültig
-meldet. Zwischen 21 und 7 Uhr wird nichts zugestellt.
+Nachrichten an dieses Gerät schicken kann. An Google gehen dabei:
+
+- die Kennung der App-Installation,
+- Titel und Text der Meldung (also Ortsname, Aufgabe und ggf. die Frist),
+- dazu ein technischer Datenteil, den die App braucht, um beim Antippen die
+  richtige Stelle zu öffnen: Ortsname, Aufgabenname, die internen Nummern von
+  Ort, Aufgabe, Vorgang und Benachrichtigung, die Art der Nachricht sowie der
+  Ablaufzeitpunkt einer Anfrage.
+
+**Namen anderer Personen stehen nie in einer solchen Nachricht.** Verschickt
+wird bei einer Anfrage, beim Rundruf und bei Hinweisen (Zusage abgelaufen oder
+aufgehoben, Aufgabe schon erledigt oder nicht mehr nötig). Die Anfragen stehen
+unabhängig davon beim Öffnen in der App — Push ist die Abkürzung, nicht der
+einzige Weg. Beim Abmelden aus der App wird die Kennung gelöscht, ebenso, wenn
+Google sie als ungültig meldet. Zwischen 21 und 7 Uhr wird nichts zugestellt.
+
+**Ideen an den Dorfentwicklungskreis (freiwillig).** Über „Idee vorschlagen"
+lässt sich ein frei getippter Wunsch einreichen, dazu wahlweise Name und
+E-Mail-Adresse für Rückfragen (aus dem Profil vorbelegt, änder- und leerbar).
+Die Einreichung ist nur für die Verwaltung sichtbar, wird nicht veröffentlicht
+und erscheint anderen Nutzern nirgends in der App.
 
 **Kein Tracking.** Keine Werbung, keine Analyse- oder Absturz-SDKs, keine
 Werbe-ID, kein Profiling. Das Firebase-SDK ist ausschließlich für die
@@ -79,19 +95,28 @@ Benachrichtigungen eingebunden.
 
 - **Google Ireland Ltd. / Google LLC (Firebase Cloud Messaging)** — nur, wenn
   Benachrichtigungen erlaubt sind: Google stellt die Nachrichten zu und erfährt
-  dabei die Gerätekennung sowie Titel und Text der Meldung. Rechtsgrundlage ist
+  dabei die Gerätekennung, Titel und Text der Meldung sowie den technischen
+  Datenteil (Ortsname, Aufgabenname, interne Nummern). Rechtsgrundlage ist
   die Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), erteilt über die
   Systemabfrage; sie lässt sich jederzeit in den Android-Einstellungen
   zurücknehmen. Datenübermittlung in die USA auf Grundlage der
   Standardvertragsklauseln bzw. des EU-US Data Privacy Framework.
 
-Darüber hinaus gibt es keine Weitergabe an Dritte. Nichts wird verkauft.
+Über diese drei hinaus gibt es keine Weitergabe an Dritte. Nichts wird
+verkauft, es gibt keine Werbe- und keine Analysepartner.
 
 ## Rechtsgrundlage
 
 Berechtigtes Interesse bzw. Vertragserfüllung (Art. 6 Abs. 1 lit. b und f DSGVO):
 Ohne Kennung und Namen lässt sich nicht darstellen, wer welchen Kasten wann
 gegossen hat — das ist der Sinn der gemeinsamen Übersicht.
+
+Auf **Einwilligung** (Art. 6 Abs. 1 lit. a DSGVO) beruhen dagegen: der Eintrag
+als Helfer:in samt der daraus entstehenden Anfragen, die Benachrichtigungen
+aufs Handy, die freiwilligen Profilfelder samt ihrer Sichtbarkeit und die
+Einreichung einer Idee. Jede dieser Einwilligungen lässt sich einzeln
+zurücknehmen — durch Austragen, durch Entziehen der Benachrichtigungserlaubnis
+in den Android-Einstellungen bzw. durch Leeren des Feldes.
 
 ## Speicherdauer und Löschung
 
@@ -100,9 +125,10 @@ gegossen hat — das ist der Sinn der gemeinsamen Übersicht.
   Meldung löschen.
 - Auf Wunsch werden alle Meldungen einer Person gelöscht bzw. anonymisiert und
   das Konto in der Rössing-ID entfernt. Anfragen an den Dorfentwicklungskreis.
-- **offen:** Google Play verlangt für Apps mit Konto zusätzlich eine
-  **öffentliche Web-Seite zur Löschung von Konto und Daten** (Abschnitt
-  *Datenlöschung* in der Play Console). Auch die muss auf roessing.de entstehen.
+- Die Gerätekennung für Benachrichtigungen wird beim Abmelden aus der App
+  gelöscht — und auch dann, wenn Google sie als ungültig meldet.
+- Die von Play verlangte öffentliche Seite zur Löschung von Konto und Daten
+  steht unter <https://xn--rssing-wxa.de/app/daten-loeschen/>.
 
 ## Rechte der Betroffenen
 

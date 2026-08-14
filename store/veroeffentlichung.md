@@ -64,19 +64,25 @@ deutschsprachig ist). Optional — kann auch weggelassen werden.
 
 Alles unter *App-Inhalte*. Vorbereitet in diesem Verzeichnis:
 
-- **Datenschutzerklärung** → URL auf roessing.de. **Muss vorher entstehen**,
-  Inhalt: `store/datenschutz.md`.
-- **Datenlöschung** → eigene öffentliche URL auf roessing.de, auf der man die
-  Löschung von Konto und Daten beantragen kann. Pflicht, weil die App ein Konto
-  voraussetzt. **Fehlt noch.**
+Zum Durchklicken mit fertigen Antworten: **`store/app-inhalte-klickanleitung.md`**.
+
+- **Datenschutzerklärung** → <https://xn--rssing-wxa.de/app/datenschutz/>
+  (verbindliche Fassung; Arbeitsgrundlage dazu: `store/datenschutz.md`).
+- **Datenlöschung** → <https://xn--rssing-wxa.de/app/daten-loeschen/>. Pflicht,
+  weil die App ein Konto voraussetzt.
 - **Datensicherheit** → Antworten stehen in `store/data-safety.md`.
-- **Altersfreigabe** → Antworten stehen in `store/content-rating.md`.
+  **Seit `0.1.7` ist „Daten werden geteilt" mit Ja zu beantworten** (Geräte-ID
+  an Google/Firebase Cloud Messaging).
+- **Altersfreigabe** → Antworten stehen in `store/content-rating.md`. Ebenfalls
+  seit `0.1.7` neu abzusenden (Weitergabe an Dritte → Ja).
 - **App-Zugriff** → **wichtig:** Die App ist ohne Rössing-ID nicht benutzbar.
   Hier „Alle Funktionen sind eingeschränkt" wählen und dem Prüfteam die
-  Zugangsdaten des Testkontos **`test-dorf`** hinterlegen, mit einem Satz
-  Erklärung („Anmeldung über den eigenen Identitätsdienst id.rössing.de, im
-  Anmeldebildschirm auf *Mit Rössing-ID anmelden* tippen"). Ohne funktionierendes
-  Testkonto wird die App abgelehnt.
+  Zugangsdaten des eigens dafür angelegten Kontos **`google-reviewer`**
+  hinterlegen (Passwort in `.env`, Schlüssel `GOOGLE_REVIEWER_PASSWORD`), mit
+  einem Satz Erklärung („Anmeldung über den eigenen Identitätsdienst
+  id.rössing.de, im Anmeldebildschirm auf *Mit Rössing-ID anmelden* tippen").
+  Ohne funktionierendes Testkonto wird die App abgelehnt. Bewusst getrennt vom
+  Konto `test-dorf` der automatischen Tests.
 - **Werbung**: enthält keine Werbung.
 - **Zielgruppe**: 18+ bzw. „nicht für Kinder"; nicht am Familienprogramm
   teilnehmen.
