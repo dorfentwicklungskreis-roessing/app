@@ -183,12 +183,25 @@ class RealLoginE2eTest {
         )
         val claims = JSONObject(nutzlast)
 
-        val rollenClaims = claims.keys().asSequence().filter { it.contains(":roles") }.toList()
-        Log.i(PROBE, "aud = ${claims.opt("aud")}")
-        Log.i(PROBE, "Rollen-Claims = $rollenClaims")
-        for (name in rollenClaims) Log.i(PROBE, "  $name = ${claims.opt(name)}")
-        if (rollenClaims.isEmpty()) {
-            Log.i(PROBE, "  (keine — mit diesem Token ist in der App niemand Verwaltung)")
+        Log.i(PROBE, "angeforderte Scopes = ${LOGIN_SCOPES.joinToString(" ")}")
+        Log.i(PROBE, "Access-Token: aud = ${claims.opt("aud")}")
+        protokolliereRollen("Access-Token", claims)
+
+        // Zitadel legt Rollen je nach Einstellung ins Access-Token, ins
+        // ID-Token oder — ohne „Rollen zusichern" am Projekt — in keines von
+        // beiden. Beide ansehen, sonst rät man.
+        val idToken = ctx.appContainer.authManager.letztesIdToken
+        if (idToken == null) {
+            Log.i(PROBE, "ID-Token: keines vorhanden")
+        } else {
+            val idTeile = idToken.split(".")
+            if (idTeile.size == 3) {
+                val idClaims = JSONObject(
+                    String(Base64.decode(idTeile[1], Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)),
+                )
+                Log.i(PROBE, "ID-Token: aud = ${idClaims.opt("aud")}")
+                protokolliereRollen("ID-Token", idClaims)
+            }
         }
 
         // Das Token muss an diese App gerichtet sein — sonst würde eine
@@ -255,6 +268,16 @@ class RealLoginE2eTest {
             }
         }
         error(fehler())
+    }
+
+    /** Schreibt die Rollen-Claims eines Tokens ins Log. */
+    private fun protokolliereRollen(welches: String, claims: JSONObject) {
+        val rollen = claims.keys().asSequence().filter { it.contains(":roles") }.toList()
+        Log.i(PROBE, "$welches: Rollen-Claims = $rollen")
+        for (name in rollen) Log.i(PROBE, "  $name = ${claims.opt(name)}")
+        if (rollen.isEmpty()) {
+            Log.i(PROBE, "  (keine — mit diesem Token ist in der App niemand Verwaltung)")
+        }
     }
 
     /** Schreibt den sichtbaren Bildschirm ins Log — Diagnose für die CI. */

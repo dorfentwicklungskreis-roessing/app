@@ -222,6 +222,15 @@ class AuthManager(private val context: Context) {
         }
     }
 
+    /**
+     * Das zuletzt erhaltene ID-Token — nur zur Diagnose im Login-Test.
+     *
+     * Zitadel legt Rollen je nach Einstellung ins Access-Token, ins ID-Token
+     * oder in keines von beiden. Wer wissen will, warum niemand Verwaltung
+     * ist, muss beide ansehen können.
+     */
+    val letztesIdToken: String? get() = authState?.idToken
+
     suspend fun logout() {
         authState = null
         devToken = null
