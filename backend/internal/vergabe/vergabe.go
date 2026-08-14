@@ -604,10 +604,14 @@ func (e *Engine) Beenden(taskID int64, grund, melder string) error {
 
 func (e *Engine) vorgangBeenden(a model.Assignment, grund, melder string, now time.Time) error {
 	var ausser []int64
-	// Wer zugesagt hatte und nicht selbst gemeldet hat, soll wissen, dass er
-	// nicht mehr losziehen muss.
-	if grund == model.EndDone && a.ClaimedBy != "" && a.ClaimedBy != melder {
-		hinweis, err := e.benachrichtigen(a, a.ClaimedBy, model.NotifyAssignmentDone, nil, now)
+	// Wer zugesagt hatte, soll wissen, dass er nicht mehr losziehen muss —
+	// egal ob jemand anderes gegossen hat oder der Kasten stillgelegt wurde.
+	if a.ClaimedBy != "" && a.ClaimedBy != melder {
+		art := model.NotifyAssignmentDropped
+		if grund == model.EndDone {
+			art = model.NotifyAssignmentDone
+		}
+		hinweis, err := e.benachrichtigen(a, a.ClaimedBy, art, nil, now)
 		if err != nil {
 			return err
 		}
@@ -735,6 +739,10 @@ func texte(n model.Notification, regeln model.AssignmentRules) (titel, text stri
 	case model.NotifyAssignmentDone:
 		return "Schon erledigt",
 			wo + " wurde bereits erledigt — du musst nichts mehr tun. Danke trotzdem!"
+	case model.NotifyAssignmentDropped:
+		return "Nicht mehr nötig",
+			wo + " steht nicht mehr an (stillgelegt oder nicht mehr fällig) — " +
+				"du musst nichts mehr tun."
 	}
 	return wo, wo
 }

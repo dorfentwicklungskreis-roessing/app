@@ -188,7 +188,8 @@ func TestAnmeldungPasstZurAufgabe(t *testing.T) {
 
 func TestNotificationTexteSindDeutsch(t *testing.T) {
 	for _, k := range []NotificationKind{
-		NotifyRequest, NotifyBroadcast, NotifyClaimExpired, NotifyClaimRevoked, NotifyAssignmentDone,
+		NotifyRequest, NotifyBroadcast, NotifyClaimExpired, NotifyClaimRevoked,
+		NotifyAssignmentDone, NotifyAssignmentDropped,
 	} {
 		if !ValidNotificationKind(k) {
 			t.Errorf("%q gilt als ungültig", k)

@@ -109,11 +109,15 @@ const (
 	NotifyClaimRevoked NotificationKind = "zusage_aufgehoben"
 	// NotifyAssignmentDone: der Vorgang wurde von jemand anderem erledigt.
 	NotifyAssignmentDone NotificationKind = "vorgang_beendet"
+	// NotifyAssignmentDropped: der Vorgang ist entfallen, weil die Aufgabe
+	// stillgelegt wurde oder nicht mehr ansteht.
+	NotifyAssignmentDropped NotificationKind = "vorgang_entfallen"
 )
 
 func ValidNotificationKind(k NotificationKind) bool {
 	switch k {
-	case NotifyRequest, NotifyBroadcast, NotifyClaimExpired, NotifyClaimRevoked, NotifyAssignmentDone:
+	case NotifyRequest, NotifyBroadcast, NotifyClaimExpired, NotifyClaimRevoked,
+		NotifyAssignmentDone, NotifyAssignmentDropped:
 		return true
 	}
 	return false

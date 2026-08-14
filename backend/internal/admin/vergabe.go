@@ -130,6 +130,8 @@ func zustellungsArt(k model.NotificationKind) string {
 		return "Zusage aufgehoben"
 	case model.NotifyAssignmentDone:
 		return "Hinweis: schon erledigt"
+	case model.NotifyAssignmentDropped:
+		return "Hinweis: nicht mehr nötig"
 	}
 	return string(k)
 }

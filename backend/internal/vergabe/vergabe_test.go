@@ -840,3 +840,40 @@ func TestFremdeBenachrichtigungNichtBestaetigbar(t *testing.T) {
 		t.Fatal("fremde Benachrichtigung ließ sich bestätigen")
 	}
 }
+
+// Wird eine Aufgabe stillgelegt, während jemand zugesagt hat, soll diese
+// Person das erfahren — sonst zieht sie mit der Gießkanne los.
+func TestStilllegungMeldetSichBeimZusagenden(t *testing.T) {
+	start := berlin(t, 2026, time.June, 10, 9, 0)
+	d, e, _, _, task := aufbau(t, start)
+	anmelden(t, d, task, "anna", start.AddDate(0, 0, -20))
+	durchlauf(t, e)
+	a := vorgang(t, d, task.ID)
+	if _, err := e.Zusagen(a.ID, "anna", "Anna"); err != nil {
+		t.Fatal(err)
+	}
+
+	task.Active = false
+	if err := d.UpdateTask(&task); err != nil {
+		t.Fatal(err)
+	}
+	durchlauf(t, e)
+
+	// Abgeholt wird der Hinweis wie in der App — mit fertigem Text.
+	offen, err := e.OffeneBenachrichtigungen("anna")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gefunden := false
+	for _, n := range offen {
+		if n.Kind == model.NotifyAssignmentDropped {
+			gefunden = true
+			if n.Text == "" || n.Title == "" {
+				t.Error("Hinweis ohne Klartext")
+			}
+		}
+	}
+	if !gefunden {
+		t.Fatalf("kein Hinweis auf die stillgelegte Aufgabe: %+v", offen)
+	}
+}
