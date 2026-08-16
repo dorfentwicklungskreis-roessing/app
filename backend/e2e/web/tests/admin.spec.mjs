@@ -57,6 +57,7 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
     await expect(page).toHaveURL(`${BASE_URL}/admin/`);
     await expect(page.locator('#seitentitel')).toHaveText('Verwaltung');
     await expect(page.locator('#bereich-mithelfen')).toBeVisible();
+    await expect(page.locator('#bereich-traeger')).toBeVisible();
     await expect(page.locator('#angemeldet-als')).toContainText(admin.userName);
     // Kein Token im Browser — die Sitzung hängt an einem HttpOnly-Cookie.
     expect(await page.evaluate(() => sessionStorage.length + localStorage.length)).toBe(0);
@@ -300,12 +301,14 @@ test('Verwaltung: Login, Bereiche, Karte, Ort, Aufgabe, Erledigung, Hitzefaktor,
   });
 });
 
-test('Mitglied ohne Admin-Rolle bekommt keine Verwaltung', async ({ page }) => {
+test('Mitglied ohne Verwaltungsrolle bekommt keine Verwaltung', async ({ page }) => {
   const { member } = state();
   await anmelden(page, member.userName, member.password);
 
+  // Herein kommt nur, wer etwas zu verwalten hat: der Betreiber der Dorf-App
+  // oder die Verwaltung eines Trägers. Ein bloßes Mitglied gehört in die App.
   await expect(page).toHaveURL(`${BASE_URL}/admin/`);
-  await expect(page.locator('#meldung')).toContainText('keine Admin-Rechte');
+  await expect(page.locator('#meldung')).toContainText('verwaltet weder die Dorf-App noch einen Träger');
   await expect(page.locator('#anmelden')).toBeVisible();
   expect(await page.context().cookies().then((cs) => cs.some((c) => c.name === 'dorf_admin_session'))).toBe(false);
 

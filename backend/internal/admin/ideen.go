@@ -256,6 +256,9 @@ func kurz(s string, max int) string {
 // Startseite, weil dort sonst niemand merkt, dass etwas hereingekommen ist.
 type bereichsDaten struct {
 	NeueIdeen int
+	// OffeneAntraege sind die unentschiedenen Befähigungs-Anträge über alle
+	// Träger hinweg — der Zähler auf der Träger-Kachel.
+	OffeneAntraege int
 }
 
 func (a *App) bereichsDaten() bereichsDaten {
@@ -263,5 +266,5 @@ func (a *App) bereichsDaten() bereichsDaten {
 	if err != nil {
 		return bereichsDaten{}
 	}
-	return bereichsDaten{NeueIdeen: anzahl[model.IdeeNeu]}
+	return bereichsDaten{NeueIdeen: anzahl[model.IdeeNeu], OffeneAntraege: a.offeneAntraege()}
 }

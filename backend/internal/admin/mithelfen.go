@@ -139,6 +139,8 @@ type ortFormularDaten struct {
 	// Ziel ist die Formular-Action.
 	Ziel      string
 	KarteJSON string
+	// Traeger sind die Vereine und Gruppen, unter denen der Ort stehen kann.
+	Traeger []model.Traeger
 }
 
 type ortDetailDaten struct {
@@ -163,10 +165,32 @@ func (a *App) ortNeuFormular(w http.ResponseWriter, r *http.Request, _ session) 
 }
 
 func (a *App) zeigeOrtNeu(w http.ResponseWriter, r *http.Request, status int, p model.Place, fehler string) {
+	traeger := a.traegerAuswahl()
+	// Ohne Angabe steht der neue Ort beim ersten Träger der Liste.
+	if p.TraegerID == 0 && len(traeger) > 0 {
+		p.TraegerID = traeger[0].ID
+	}
 	a.render(w, r, status, "pflege_ort_neu", view{
 		Title: "Neuer Ort", Nav: "mithelfen",
-		Data: ortFormularDaten{Neu: true, Ort: p, Fehler: fehler, Ziel: mithelfenBasis + "/orte/neu"},
+		Data: ortFormularDaten{Neu: true, Ort: p, Fehler: fehler,
+			Ziel: mithelfenBasis + "/orte/neu", Traeger: traeger},
 	})
+}
+
+// traegerAuswahl liefert die Träger, unter die sich ein Ort stellen lässt.
+// Gesperrte bleiben außen vor: Ihre Orte wären für niemanden sichtbar.
+func (a *App) traegerAuswahl() []model.Traeger {
+	alle, err := a.db.ListTraeger()
+	if err != nil {
+		return nil
+	}
+	out := []model.Traeger{}
+	for _, t := range alle {
+		if t.Status != model.TraegerGesperrt {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func (a *App) ortAnlegen(w http.ResponseWriter, r *http.Request, _ session) {
@@ -254,6 +278,7 @@ func (a *App) zeigeOrt(w http.ResponseWriter, r *http.Request, status int, id in
 				Ort: formularOrt, Fehler: fehler,
 				Ziel:      fmt.Sprintf("%s/orte/%d", mithelfenBasis, ort.ID),
 				KarteJSON: karteJSON([]model.PlaceWithStatus{*ort}),
+				Traeger:   a.traegerAuswahl(),
 			},
 			Ort:      *ort,
 			Historie: historie,
@@ -304,7 +329,12 @@ func ortAusFormular(r *http.Request) (model.Place, api.PlaceInput, error) {
 		Kind:        r.FormValue("art"),
 		Active:      &aktiv,
 	}
-	entwurf := model.Place{Name: in.Name, Description: in.Description, Kind: model.PlaceKind(in.Kind), Active: aktiv}
+	// 0 heißt „unverändert“ bzw. beim Anlegen „Platzhalter-Träger“.
+	if v, err := strconv.ParseInt(r.FormValue("traegerId"), 10, 64); err == nil {
+		in.TraegerID = v
+	}
+	entwurf := model.Place{Name: in.Name, Description: in.Description, Kind: model.PlaceKind(in.Kind),
+		Active: aktiv, TraegerID: in.TraegerID}
 
 	lat, errLat := formularZahl(r, "lat")
 	lon, errLon := formularZahl(r, "lon")
@@ -369,6 +399,9 @@ type aufgabeFormularDaten struct {
 	LiterText string
 	Fehler    string
 	Ziel      string
+	// Befaehigungen sind die Einweisungen des Trägers, dem der Ort gehört —
+	// nur aus ihnen lässt sich eine auswählen.
+	Befaehigungen []model.Befaehigung
 }
 
 func (a *App) aufgabeNeuFormular(w http.ResponseWriter, r *http.Request, _ session) {
@@ -391,7 +424,8 @@ func (a *App) zeigeAufgabeNeu(w http.ResponseWriter, r *http.Request, status int
 		Title: "Neue Aufgabe", Nav: "mithelfen",
 		Data: aufgabeFormularDaten{
 			Neu: true, Ort: p, Aufgabe: t, LiterText: liter, Fehler: fehler,
-			Ziel: fmt.Sprintf("%s/orte/%d/aufgaben/neu", mithelfenBasis, p.ID),
+			Ziel:          fmt.Sprintf("%s/orte/%d/aufgaben/neu", mithelfenBasis, p.ID),
+			Befaehigungen: a.befaehigungenVon(p),
 		},
 	})
 }
@@ -409,6 +443,10 @@ func (a *App) aufgabeAnlegen(w http.ResponseWriter, r *http.Request, _ session) 
 	}
 	entwurf, liter, in, err := aufgabeAusFormular(r)
 	if err != nil {
+		a.zeigeAufgabeNeu(w, r, http.StatusBadRequest, *p, entwurf, liter, err.Error())
+		return
+	}
+	if err := a.pruefeBefaehigung(in.BefaehigungID, p.TraegerID); err != nil {
 		a.zeigeAufgabeNeu(w, r, http.StatusBadRequest, *p, entwurf, liter, err.Error())
 		return
 	}
@@ -439,7 +477,8 @@ func (a *App) zeigeAufgabe(w http.ResponseWriter, r *http.Request, status int, p
 		Title: "Aufgabe bearbeiten", Nav: "mithelfen",
 		Data: aufgabeFormularDaten{
 			Ort: p, Aufgabe: t, LiterText: liter, Fehler: fehler,
-			Ziel: fmt.Sprintf("%s/aufgaben/%d", mithelfenBasis, t.ID),
+			Ziel:          fmt.Sprintf("%s/aufgaben/%d", mithelfenBasis, t.ID),
+			Befaehigungen: a.befaehigungenVon(p),
 		},
 	})
 }
@@ -451,6 +490,11 @@ func (a *App) aufgabeSpeichern(w http.ResponseWriter, r *http.Request, _ session
 	}
 	entwurf, liter, in, err := aufgabeAusFormular(r)
 	if err != nil {
+		entwurf.ID = t.ID
+		a.zeigeAufgabe(w, r, http.StatusBadRequest, *p, entwurf, liter, err.Error())
+		return
+	}
+	if err := a.pruefeBefaehigung(in.BefaehigungID, p.TraegerID); err != nil {
 		entwurf.ID = t.ID
 		a.zeigeAufgabe(w, r, http.StatusBadRequest, *p, entwurf, liter, err.Error())
 		return
@@ -766,10 +810,16 @@ func aufgabeAusFormular(r *http.Request) (model.CareTask, string, api.TaskInput,
 		OneOff:         einmalig,
 		RemoveWhenDone: r.FormValue("entfernen") != "",
 		Active:         &aktiv,
+		Sichtbarkeit:   r.FormValue("sichtbarkeit"),
+	}
+	if v, err := strconv.ParseInt(r.FormValue("befaehigungId"), 10, 64); err == nil {
+		in.BefaehigungID = v
 	}
 	entwurf := model.CareTask{
 		Kind: model.TaskKind(in.Kind), Title: in.Title, Active: aktiv,
 		OneOff: einmalig, RemoveWhenDone: in.RemoveWhenDone,
+		Sichtbarkeit:  model.TaskSichtbarkeit(in.Sichtbarkeit),
+		BefaehigungID: in.BefaehigungID,
 	}
 
 	if literText != "" {

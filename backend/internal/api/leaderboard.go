@@ -26,6 +26,21 @@ const (
 // wenn er außerhalb der ausgegebenen Plätze liegt oder noch gar nichts
 // gemeldet hat (dann mit Rang 0). Bei leerem Sub entfällt er.
 func AssembleLeaderboard(d *db.DB, now time.Time, period model.Period, limit int, me auth.User) (model.Leaderboard, error) {
+	// Ohne Zugriffssicht zählt alles — für die Verwaltung und den
+	// MCP-Endpunkt, die beide bereits die globale admin-Rolle verlangen.
+	return AssembleLeaderboardFuer(d, now, period, limit, me, db.SichtAlles())
+}
+
+// AssembleLeaderboardFuer baut die Rangliste in der Sicht dieser Person.
+//
+// Die Sicht filtert bereits in SQL: Erledigungen an internen Aufgaben
+// fließen für Außenstehende weder in die Zeilen noch in die Gesamtsummen und
+// auch nicht in die Auszeichnungen ein. Eine Rangliste, in der die Summe
+// nicht zu den sichtbaren Zeilen passt, verriete sonst genau das, was sie
+// verbergen soll.
+func AssembleLeaderboardFuer(d *db.DB, now time.Time, period model.Period, limit int,
+	me auth.User, sicht db.Sicht,
+) (model.Leaderboard, error) {
 	loc := model.Location()
 	from, to, err := model.PeriodRange(period, now, loc)
 	if err != nil {
@@ -37,15 +52,15 @@ func AssembleLeaderboard(d *db.DB, now time.Time, period model.Period, limit int
 	if err != nil {
 		return model.Leaderboard{}, err
 	}
-	entries, err := d.Leaderboard(from, to, factor)
+	entries, err := d.Leaderboard(from, to, factor, sicht)
 	if err != nil {
 		return model.Leaderboard{}, err
 	}
-	totals, err := d.LeaderboardTotals(from, to, factor)
+	totals, err := d.LeaderboardTotals(from, to, factor, sicht)
 	if err != nil {
 		return model.Leaderboard{}, err
 	}
-	awarded, err := d.Badges(from, to, now, loc, factor)
+	awarded, err := d.Badges(from, to, now, loc, factor, sicht)
 	if err != nil {
 		return model.Leaderboard{}, err
 	}
@@ -119,7 +134,12 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	u, _ := auth.FromContext(r.Context())
-	lb, err := AssembleLeaderboard(s.DB, s.now(), period, limit, u)
+	sicht, err := SichtVon(s.DB, s.zugriff(r))
+	if err != nil {
+		writeInternal(w, r, err)
+		return
+	}
+	lb, err := AssembleLeaderboardFuer(s.DB, s.now(), period, limit, u, sicht)
 	if err != nil {
 		writeInternal(w, r, err)
 		return

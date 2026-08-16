@@ -232,6 +232,7 @@ func (s *Server) registerTools() {
 				"lat":         num("Breitengrad"),
 				"lon":         num("Längengrad"),
 				"description": str("Optionale Beschreibung"),
+				"traegerId":   integer("ID des Trägers (Verein/Gruppe). Ohne Angabe der Dorfentwicklungskreis."),
 			}),
 			Handler: s.toolCreatePlace,
 		},
@@ -246,6 +247,7 @@ func (s *Server) registerTools() {
 				"lon":         num("Längengrad"),
 				"description": str("Beschreibung"),
 				"active":      boolean("Ort aktiv? Inaktive Orte erzeugen keine Erinnerungen."),
+				"traegerId":   integer("ID des Trägers (Verein/Gruppe), dem der Ort gehört"),
 			}),
 			Handler: s.toolUpdatePlace,
 		},
@@ -267,6 +269,8 @@ func (s *Server) registerTools() {
 				"kind":           enum("Art der Aufgabe", "giessen", "jaeten", "sonstiges"),
 				"title":          str("Optionaler Titel (v.a. für kind=sonstiges)"),
 				"liters":         num("Wassermenge pro Gießvorgang in Litern (nur giessen)"),
+				"sichtbarkeit":   enum("Wer sieht die Aufgabe (Standard: oeffentlich)", "oeffentlich", "nur_mitglieder"),
+				"befaehigungId":  integer("Verlangte Einweisung (ID einer Befähigung des Trägers); 0 = keine"),
 				"intervalDays":   num("Nur regelmäßig: Soll-Intervall in Tagen; danach wird die Aufgabe gelb"),
 				"redAfterDays":   num("Nur regelmäßig: nach so vielen Tagen ohne Erledigung wird sie rot"),
 				"oneOff":         boolean("Einmalige Aufgabe statt eines wiederkehrenden Plans"),
@@ -398,6 +402,7 @@ func (s *Server) toolUpdatePlace(args json.RawMessage, u auth.User) (any, error)
 		Lat         *float64 `json:"lat"`
 		Lon         *float64 `json:"lon"`
 		Description *string  `json:"description"`
+		TraegerID   *int64   `json:"traegerId"`
 		Active      *bool    `json:"active"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
@@ -410,6 +415,12 @@ func (s *Server) toolUpdatePlace(args json.RawMessage, u auth.User) (any, error)
 	vorher := *p
 	applyIf(&p.Name, in.Name)
 	applyIf(&p.Description, in.Description)
+	if in.TraegerID != nil {
+		if _, err := s.DB.GetTraeger(*in.TraegerID); err != nil {
+			return nil, fmt.Errorf("Träger %d nicht gefunden", *in.TraegerID)
+		}
+		p.TraegerID = *in.TraegerID
+	}
 	if in.Kind != nil {
 		if !model.ValidPlaceKind(model.PlaceKind(*in.Kind)) {
 			return nil, fmt.Errorf("ungültige Art: %s", *in.Kind)
@@ -456,6 +467,9 @@ func (s *Server) toolCreateTask(args json.RawMessage, u auth.User) (any, error) 
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
+	if err := pruefeBefaehigungGehoert(s.DB, in.BefaehigungID, in.PlaceID); err != nil {
+		return nil, err
+	}
 	t := model.CareTask{PlaceID: in.PlaceID, Active: true, CreatedAt: s.now()}
 	in.Apply(&t)
 	if err := s.DB.InsertTask(&t); err != nil {
@@ -476,6 +490,8 @@ func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) 
 		DueDate        *string  `json:"dueDate"`
 		RemoveWhenDone *bool    `json:"removeWhenDone"`
 		Active         *bool    `json:"active"`
+		Sichtbarkeit   *string  `json:"sichtbarkeit"`
+		BefaehigungID  *int64   `json:"befaehigungId"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
 		return nil, err
@@ -500,6 +516,18 @@ func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) 
 	applyIf(&t.OneOff, in.OneOff)
 	applyIf(&t.RemoveWhenDone, in.RemoveWhenDone)
 	applyIf(&t.Active, in.Active)
+	if in.Sichtbarkeit != nil {
+		if !model.ValidTaskSichtbarkeit(model.TaskSichtbarkeit(*in.Sichtbarkeit)) {
+			return nil, fmt.Errorf("sichtbarkeit muss oeffentlich oder nur_mitglieder sein")
+		}
+		t.Sichtbarkeit = model.TaskSichtbarkeit(*in.Sichtbarkeit)
+	}
+	if in.BefaehigungID != nil {
+		if err := pruefeBefaehigungGehoert(s.DB, *in.BefaehigungID, t.PlaceID); err != nil {
+			return nil, err
+		}
+		t.BefaehigungID = *in.BefaehigungID
+	}
 	if in.DueDate != nil {
 		termin, err := api.ParseTermin(*in.DueDate)
 		if err != nil {
@@ -653,4 +681,26 @@ func applyIf[T any](dst *T, src *T) {
 	if src != nil {
 		*dst = *src
 	}
+}
+
+// pruefeBefaehigungGehoert stellt sicher, dass eine Aufgabe nur eine
+// Einweisung ihres eigenen Trägers verlangt — dieselbe Regel wie in REST und
+// Web-Verwaltung. Sonst könnte ein Verein die Mitglieder eines anderen
+// aussperren.
+func pruefeBefaehigungGehoert(d *db.DB, befaehigungID, placeID int64) error {
+	if befaehigungID == 0 {
+		return nil
+	}
+	place, err := d.GetPlace(placeID)
+	if err != nil {
+		return fmt.Errorf("Ort %d nicht gefunden", placeID)
+	}
+	b, err := d.GetBefaehigung(befaehigungID)
+	if err != nil {
+		return fmt.Errorf("Befähigung %d nicht gefunden", befaehigungID)
+	}
+	if b.TraegerID != place.TraegerID {
+		return fmt.Errorf("eine Aufgabe kann nur eine Befähigung ihres eigenen Trägers verlangen")
+	}
+	return nil
 }

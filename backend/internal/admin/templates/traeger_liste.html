@@ -1,0 +1,63 @@
+{{/* Übersicht der Träger. Der Betreiber sieht alle (auch noch nicht
+     zugelassene), Verwaltende nur ihre eigenen. */}}
+{{define "seite"}}
+<div class="flex flex-wrap items-center justify-between gap-2">
+  <div>
+    <h1 class="text-2xl font-bold" id="seitentitel">Träger</h1>
+    <p class="mt-1 text-base-content/70">
+      Vereine und Gruppen, die Aufgaben einstellen. Jeder Träger ist ein eigenes
+      Projekt in der Rössing-ID mit den Rollen <code>admin</code> und <code>mitglied</code>.
+    </p>
+  </div>
+  {{if .Data.Betreiber}}
+    <a class="btn btn-primary" id="traeger-neu" href="/admin/traeger/neu">Neuer Träger</a>
+  {{end}}
+</div>
+
+{{if .Data.Veraltet}}
+  <div class="alert alert-warning mt-4" id="hinweis-veraltet">
+    <span>Die Rössing-ID ist gerade nicht erreichbar. Angezeigt wird der letzte bekannte
+      Stand der Mitgliedschaften — Änderungen sind vorübergehend gesperrt.</span>
+  </div>
+{{end}}
+
+{{if not .Data.Traeger}}
+  <div class="alert mt-6" id="keine-traeger"><span>Noch kein Träger angelegt.</span></div>
+{{else}}
+  <div class="mt-6 overflow-x-auto">
+    <table class="table bg-base-100" id="traeger-tabelle">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Zulassung</th>
+          <th>Sichtbarkeit</th>
+          <th>Zitadel-Projekt</th>
+          <th class="text-right">Orte</th>
+          <th class="text-right">Offene Anträge</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Data.Traeger}}
+          <tr id="traeger-{{.ID}}">
+            <td>
+              <a class="link link-primary font-medium" href="/admin/traeger/{{.ID}}">{{.Name}}</a>
+              {{if .Beschreibung}}<div class="text-sm text-base-content/60">{{.Beschreibung}}</div>{{end}}
+            </td>
+            <td><span class="badge {{traegerBadge .Status}}">{{traegerStatus .Status}}</span></td>
+            <td>{{traegerSichtbarkeit .Sichtbarkeit}}</td>
+            <td>
+              {{if .ProjektID}}<code>{{.ProjektID}}</code>
+              {{else}}<span class="text-warning">noch nicht eingerichtet</span>{{end}}
+            </td>
+            <td class="text-right">{{.Orte}}</td>
+            <td class="text-right">
+              {{if .OffeneAntraege}}<span class="badge badge-warning">{{.OffeneAntraege}}</span>
+              {{else}}0{{end}}
+            </td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+{{end}}
+{{end}}

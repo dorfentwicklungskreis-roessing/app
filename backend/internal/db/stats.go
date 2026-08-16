@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,7 +47,41 @@ func PersonKey(userSub, userName string) string { return userSub + "\n" + userNa
 // derselben Regel wie beim Melden (siehe model/cooldown.go). Der Faktor ist
 // eine tagesaktuelle Einstellung und wird nicht historisiert; er gilt nur
 // fürs Gießen.
-func gewertetSQL(factor float64) string {
+// Sicht sagt, wessen Erledigungen in eine Auswertung einfließen dürfen.
+//
+// Die Rangliste ist ein Weg nach außen wie jeder andere: Eine Erledigung an
+// einer Aufgabe mit „nur_mitglieder“ darf dort für Außenstehende weder als
+// Zeile noch in den Gesamtsummen auftauchen. Gefiltert wird deshalb in SQL,
+// nicht erst beim Anzeigen — sonst blieben die Summen verräterisch.
+type Sicht struct {
+	// Alles: der Plattform-Betreiber sieht jede Erledigung.
+	Alles bool
+	// TraegerIDs sind die Träger, denen die abrufende Person angehört.
+	TraegerIDs []int64
+}
+
+// SichtAlles ist die Sicht des Betreibers (und der Verwaltung).
+func SichtAlles() Sicht { return Sicht{Alles: true} }
+
+// filterSQL liefert die WHERE-Bedingung der Sicht. Werte werden direkt
+// eingesetzt statt gebunden: Es sind ausschließlich selbst erzeugte
+// Ganzzahlen aus der Datenbank, nie Eingaben von außen.
+func (s Sicht) filterSQL() string {
+	if s.Alles {
+		return "1=1"
+	}
+	eigene := "0"
+	if len(s.TraegerIDs) > 0 {
+		teile := make([]string, 0, len(s.TraegerIDs))
+		for _, id := range s.TraegerIDs {
+			teile = append(teile, strconv.FormatInt(id, 10))
+		}
+		eigene = "p.traeger_id IN (" + strings.Join(teile, ",") + ")"
+	}
+	return "(g.status = 'zugelassen' AND (t.sichtbarkeit = 'oeffentlich' OR " + eigene + "))"
+}
+
+func gewertetSQL(factor float64, sicht Sicht) string {
 	if factor <= 0 {
 		factor = 1
 	}
@@ -60,6 +95,13 @@ WITH alle AS (
          LAG(c.done_at) OVER (PARTITION BY c.task_id ORDER BY c.done_at) AS vorherige
     FROM completions c
     JOIN care_tasks t ON t.id = c.task_id
+    -- LEFT JOIN, damit ein Ort ohne gültigen Träger (Datenfehler) die
+    -- Erledigungen nicht aus der Auswertung des Betreibers reißt. Für alle
+    -- anderen fällt er durch die Bedingung unten heraus: kein Träger heißt
+    -- „nicht zugelassen“, und damit unsichtbar.
+    LEFT JOIN places p  ON p.id = t.place_id
+    LEFT JOIN traeger g ON g.id = p.traeger_id
+   WHERE %[5]s
 ),
 gewertet AS (
   SELECT * FROM alle
@@ -68,16 +110,16 @@ gewertet AS (
       -- Eine Sekunde Rundungsreserve: exakt an der Schwelle gemeldet zählt.
       OR julianday(done_at) - julianday(vorherige) >= sperre_tage - %[4]g
 )
-`, factor, model.CooldownShare, model.MinCooldown.Hours()/24, 1.0/86400.0)
+`, factor, model.CooldownShare, model.MinCooldown.Hours()/24, 1.0/86400.0, sicht.filterSQL())
 }
 
 // Leaderboard aggregiert die Erledigungen im Zeitraum [from, to) je Nutzer,
 // sortiert nach Anzahl, bei Gleichstand nach Litern (dann nach Name).
-func (d *DB) Leaderboard(from, to time.Time, factor float64) ([]model.LeaderboardEntry, error) {
+func (d *DB) Leaderboard(from, to time.Time, factor float64, sicht Sicht) ([]model.LeaderboardEntry, error) {
 	// Bare-Column-Regel von SQLite: steht MAX() in der Auswahl, stammen die
 	// nicht aggregierten Spalten (hier user_name) aus genau dieser Zeile —
 	// wir bekommen also den zuletzt gemeldeten Anzeigenamen.
-	rows, err := d.sql.Query(gewertetSQL(factor)+`
+	rows, err := d.sql.Query(gewertetSQL(factor, sicht)+`
 SELECT user_sub,
        user_name,
        COUNT(*) AS n,
@@ -116,10 +158,10 @@ SELECT user_sub,
 }
 
 // LeaderboardTotals liefert die Gesamtsummen des Dorfes im Zeitraum.
-func (d *DB) LeaderboardTotals(from, to time.Time, factor float64) (model.LeaderboardTotals, error) {
+func (d *DB) LeaderboardTotals(from, to time.Time, factor float64, sicht Sicht) (model.LeaderboardTotals, error) {
 	var t model.LeaderboardTotals
 	var giessen, jaeten, sonstiges int
-	err := d.sql.QueryRow(gewertetSQL(factor)+`
+	err := d.sql.QueryRow(gewertetSQL(factor, sicht)+`
 SELECT COUNT(*),
        COALESCE(SUM(CASE WHEN kind='giessen'   THEN 1 ELSE 0 END), 0),
        COALESCE(SUM(CASE WHEN kind='jaeten'    THEN 1 ELSE 0 END), 0),
@@ -139,7 +181,7 @@ SELECT COUNT(*),
 // Badges leitet die Auszeichnungen je Nutzer ab (Schlüssel: user_sub).
 // Die Regeln stehen bei den Konstanten in model/stats.go; hier steht ihre
 // SQL-Umsetzung. Alles wird gruppiert ausgewertet.
-func (d *DB) Badges(from, to, now time.Time, loc *time.Location, factor float64) (map[string][]model.Badge, error) {
+func (d *DB) Badges(from, to, now time.Time, loc *time.Location, factor float64, sicht Sicht) (map[string][]model.Badge, error) {
 	out := map[string][]model.Badge{}
 	award := func(key string, persons []string) {
 		badge, ok := model.BadgeByKey(key)
@@ -157,7 +199,7 @@ func (d *DB) Badges(from, to, now time.Time, loc *time.Location, factor float64)
 	if err != nil {
 		return nil, err
 	}
-	champions, err := d.wateringChampions(monthFrom, monthTo, factor)
+	champions, err := d.wateringChampions(monthFrom, monthTo, factor, sicht)
 	if err != nil {
 		return nil, err
 	}
@@ -165,9 +207,9 @@ func (d *DB) Badges(from, to, now time.Time, loc *time.Location, factor float64)
 
 	offset := localOffsetSQL("done_at", loc, from, to, now)
 	for key, query := range map[string]func() ([]string, error){
-		model.BadgeEarlyBird: func() ([]string, error) { return d.earlyBirds(from, to, offset, factor) },
-		model.BadgeRescuer:   func() ([]string, error) { return d.rescuers(from, to, factor) },
-		model.BadgeEndurance: func() ([]string, error) { return d.enduring(from, to, offset, factor) },
+		model.BadgeEarlyBird: func() ([]string, error) { return d.earlyBirds(from, to, offset, factor, sicht) },
+		model.BadgeRescuer:   func() ([]string, error) { return d.rescuers(from, to, factor, sicht) },
+		model.BadgeEndurance: func() ([]string, error) { return d.enduring(from, to, offset, factor, sicht) },
 	} {
 		persons, err := query()
 		if err != nil {
@@ -180,8 +222,8 @@ func (d *DB) Badges(from, to, now time.Time, loc *time.Location, factor float64)
 
 // wateringChampions: wer im Zeitraum am häufigsten gegossen hat.
 // Bei Gleichstand bekommen ihn alle, die vorn liegen.
-func (d *DB) wateringChampions(from, to time.Time, factor float64) ([]string, error) {
-	return d.queryPersons(gewertetSQL(factor)+`
+func (d *DB) wateringChampions(from, to time.Time, factor float64, sicht Sicht) ([]string, error) {
+	return d.queryPersons(gewertetSQL(factor, sicht)+`
 SELECT person FROM (
   SELECT `+personKey+` AS person, COUNT(*) AS n
     FROM gewertet
@@ -197,8 +239,8 @@ WHERE n = (SELECT MAX(n) FROM (
 }
 
 // earlyBirds: genug Erledigungen vor der Frühaufsteher-Stunde (Ortszeit).
-func (d *DB) earlyBirds(from, to time.Time, offset string, factor float64) ([]string, error) {
-	q := gewertetSQL(factor) + fmt.Sprintf(`
+func (d *DB) earlyBirds(from, to time.Time, offset string, factor float64, sicht Sicht) ([]string, error) {
+	q := gewertetSQL(factor, sicht) + fmt.Sprintf(`
 SELECT `+personKey+` FROM gewertet
  WHERE done_at >= ? AND done_at < ?
  GROUP BY user_sub, user_name
@@ -213,8 +255,8 @@ HAVING SUM(CASE WHEN CAST(strftime('%%H', done_at, %s) AS INTEGER) < %d THEN 1 E
 // gab es keine, zählt das Anlegedatum der Aufgabe. Der Hitzefaktor bleibt
 // hier bewusst außen vor — er ist eine tagesaktuelle Einstellung und für
 // eine rückblickende Auswertung nicht rekonstruierbar.
-func (d *DB) rescuers(from, to time.Time, factor float64) ([]string, error) {
-	return d.queryPersons(gewertetSQL(factor)+`
+func (d *DB) rescuers(from, to time.Time, factor float64, sicht Sicht) ([]string, error) {
+	return d.queryPersons(gewertetSQL(factor, sicht)+`
 SELECT `+personKey+` FROM (
   SELECT user_sub, user_name, done_at, task_created, red_after_days,
          LAG(done_at) OVER (PARTITION BY task_id ORDER BY done_at) AS prev_done
@@ -228,8 +270,8 @@ GROUP BY user_sub, user_name`, sqlTime(from), sqlTime(to))
 // enduring: Erledigungen in genügend aufeinanderfolgenden Wochen.
 // Klassisches „gaps and islands": die laufende Nummer der Wochen wird von
 // der Wochennummer abgezogen; gleiche Differenz = lückenlose Serie.
-func (d *DB) enduring(from, to time.Time, offset string, factor float64) ([]string, error) {
-	q := gewertetSQL(factor) + fmt.Sprintf(`
+func (d *DB) enduring(from, to time.Time, offset string, factor float64, sicht Sicht) ([]string, error) {
+	q := gewertetSQL(factor, sicht) + fmt.Sprintf(`
 SELECT person FROM (
   SELECT person, COUNT(*) AS len FROM (
     SELECT person, wk - ROW_NUMBER() OVER (PARTITION BY person ORDER BY wk) AS grp

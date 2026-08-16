@@ -81,6 +81,33 @@
           Die Erledigung bleibt und zählt weiter für die Rangliste.
         </p>
 
+        <label class="fieldset-legend" for="feld-sichtbarkeit">Wer sieht die Aufgabe?</label>
+        <select name="sichtbarkeit" id="feld-sichtbarkeit" class="select w-full">
+          <option value="oeffentlich" {{if ne (printf "%s" .Data.Aufgabe.Sichtbarkeit) "nur_mitglieder"}}selected{{end}}>
+            Öffentlich — alle im Dorf
+          </option>
+          <option value="nur_mitglieder" {{if eq (printf "%s" .Data.Aufgabe.Sichtbarkeit) "nur_mitglieder"}}selected{{end}}>
+            Nur Mitglieder des Trägers
+          </option>
+        </select>
+        <p class="text-sm text-base-content/70">
+          „Nur Mitglieder“ heißt wirklich nur: Die Aufgabe erscheint außerhalb des Trägers
+          nirgends — weder in Listen noch auf der Karte, weder in der Rangliste noch als
+          Benachrichtigung.
+        </p>
+
+        <label class="fieldset-legend" for="feld-befaehigung">Einweisung nötig?</label>
+        <select name="befaehigungId" id="feld-befaehigung" class="select w-full">
+          <option value="0">Keine</option>
+          {{range .Data.Befaehigungen}}
+            <option value="{{.ID}}" {{if eq .ID $.Data.Aufgabe.BefaehigungID}}selected{{end}}>{{.Name}}</option>
+          {{end}}
+        </select>
+        <p class="text-sm text-base-content/70">
+          Wer die Befähigung nicht hat, kann nicht zusagen und wird auch nicht gefragt.
+          Befähigungen pflegt der Träger unter <a class="link" href="/admin/traeger/">Träger</a>.
+        </p>
+
         <label class="fieldset-label mt-2">
           <input type="checkbox" name="aktiv" id="feld-aktiv" value="1" class="checkbox checkbox-primary"
                  {{if .Data.Aufgabe.Active}}checked{{end}}>

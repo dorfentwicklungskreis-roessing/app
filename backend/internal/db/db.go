@@ -188,15 +188,28 @@ CREATE INDEX IF NOT EXISTS idx_devices_person ON push_devices(user_sub);
 		`ALTER TABLE care_notifications ADD COLUMN place_name TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE care_notifications ADD COLUMN task_name TEXT NOT NULL DEFAULT ''`,
 	} {
-		if _, err := d.sql.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		if _, err := d.sql.Exec(stmt); err != nil && !istDoppelteSpalte(err) {
 			return err
 		}
 	}
 	if err := d.loeseNotificationsVomVorgang(); err != nil {
 		return err
 	}
+	// Träger, Befähigungen und die Zuordnung der Bestandsdaten. Muss vor den
+	// weiteren Bereichen laufen: Orte und Aufgaben bekommen hier ihre neuen
+	// Spalten, und ohne sie sind sie nicht lesbar.
+	if err := d.migrateTraeger(); err != nil {
+		return err
+	}
 	// Weitere Bereiche bringen ihre Tabellen selbst mit (rein additiv).
 	return d.migrateIdeen()
+}
+
+// istDoppelteSpalte erkennt den Fehler, mit dem SQLite ein bereits
+// ausgeführtes ALTER TABLE ADD COLUMN quittiert. Genau dieser Fall ist beim
+// Start einer bestehenden Datenbank der Normalfall.
+func istDoppelteSpalte(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "duplicate column")
 }
 
 // loeseNotificationsVomVorgang nimmt care_notifications den Fremdschlüssel
@@ -295,9 +308,20 @@ func (d *DB) SetWateringFactor(f float64) error {
 // --- Places -----------------------------------------------------------------
 
 func (d *DB) InsertPlace(p *model.Place) error {
-	res, err := d.sql.Exec(`INSERT INTO places(name,description,kind,lat,lon,active,created_at)
-		VALUES(?,?,?,?,?,?,?)`,
-		p.Name, p.Description, string(p.Kind), p.Lat, p.Lon, boolToInt(p.Active), p.CreatedAt.UTC().Format(timeFormat))
+	// Ein Ort ohne Träger gehört niemandem und wäre für niemanden sichtbar.
+	// Statt ihn heimatlos anzulegen, landet er beim Platzhalter-Träger —
+	// dieselbe Regel wie bei der Umstellung der Bestandsdaten.
+	if p.TraegerID == 0 {
+		dek, err := d.TraegerSicherstellen(model.SchluesselDEK, model.NameDEK)
+		if err != nil {
+			return err
+		}
+		p.TraegerID = dek.ID
+	}
+	res, err := d.sql.Exec(`INSERT INTO places(name,description,kind,lat,lon,active,created_at,traeger_id)
+		VALUES(?,?,?,?,?,?,?,?)`,
+		p.Name, p.Description, string(p.Kind), p.Lat, p.Lon, boolToInt(p.Active),
+		p.CreatedAt.UTC().Format(timeFormat), p.TraegerID)
 	if err != nil {
 		return err
 	}
@@ -306,8 +330,9 @@ func (d *DB) InsertPlace(p *model.Place) error {
 }
 
 func (d *DB) UpdatePlace(p *model.Place) error {
-	res, err := d.sql.Exec(`UPDATE places SET name=?,description=?,kind=?,lat=?,lon=?,active=? WHERE id=?`,
-		p.Name, p.Description, string(p.Kind), p.Lat, p.Lon, boolToInt(p.Active), p.ID)
+	res, err := d.sql.Exec(`UPDATE places SET name=?,description=?,kind=?,lat=?,lon=?,active=?,traeger_id=?
+		WHERE id=?`,
+		p.Name, p.Description, string(p.Kind), p.Lat, p.Lon, boolToInt(p.Active), p.TraegerID, p.ID)
 	if err != nil {
 		return err
 	}
@@ -323,12 +348,12 @@ func (d *DB) DeletePlace(id int64) error {
 }
 
 func (d *DB) GetPlace(id int64) (*model.Place, error) {
-	row := d.sql.QueryRow(`SELECT id,name,description,kind,lat,lon,active,created_at FROM places WHERE id=?`, id)
+	row := d.sql.QueryRow(`SELECT `+ortSpalten+` FROM places WHERE id=?`, id)
 	return scanPlace(row)
 }
 
 func (d *DB) ListPlaces() ([]model.Place, error) {
-	rows, err := d.sql.Query(`SELECT id,name,description,kind,lat,lon,active,created_at FROM places ORDER BY name`)
+	rows, err := d.sql.Query(`SELECT ` + ortSpalten + ` FROM places ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -346,11 +371,13 @@ func (d *DB) ListPlaces() ([]model.Place, error) {
 
 type scannable interface{ Scan(dest ...any) error }
 
+const ortSpalten = `id,name,description,kind,lat,lon,active,created_at,traeger_id`
+
 func scanPlace(row scannable) (*model.Place, error) {
 	var p model.Place
 	var active int
 	var created, kind string
-	err := row.Scan(&p.ID, &p.Name, &p.Description, &kind, &p.Lat, &p.Lon, &active, &created)
+	err := row.Scan(&p.ID, &p.Name, &p.Description, &kind, &p.Lat, &p.Lon, &active, &created, &p.TraegerID)
 	if err != nil {
 		return nil, err
 	}
@@ -363,12 +390,16 @@ func scanPlace(row scannable) (*model.Place, error) {
 // --- CareTasks --------------------------------------------------------------
 
 func (d *DB) InsertTask(t *model.CareTask) error {
+	if t.Sichtbarkeit == "" {
+		t.Sichtbarkeit = model.AufgabeOeffentlich
+	}
 	res, err := d.sql.Exec(`INSERT INTO care_tasks(place_id,kind,title,liters,interval_days,red_after_days,
-			one_off,due_date,remove_when_done,active,created_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+			one_off,due_date,remove_when_done,active,created_at,sichtbarkeit,befaehigung_id)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.PlaceID, string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays,
 		boolToInt(t.OneOff), zeitText(t.DueDate), boolToInt(t.RemoveWhenDone),
-		boolToInt(t.Active), t.CreatedAt.UTC().Format(timeFormat))
+		boolToInt(t.Active), t.CreatedAt.UTC().Format(timeFormat),
+		string(t.Sichtbarkeit), t.BefaehigungID)
 	if err != nil {
 		return err
 	}
@@ -377,11 +408,14 @@ func (d *DB) InsertTask(t *model.CareTask) error {
 }
 
 func (d *DB) UpdateTask(t *model.CareTask) error {
+	if t.Sichtbarkeit == "" {
+		t.Sichtbarkeit = model.AufgabeOeffentlich
+	}
 	res, err := d.sql.Exec(`UPDATE care_tasks SET kind=?,title=?,liters=?,interval_days=?,red_after_days=?,
-			one_off=?,due_date=?,remove_when_done=?,active=? WHERE id=?`,
+			one_off=?,due_date=?,remove_when_done=?,active=?,sichtbarkeit=?,befaehigung_id=? WHERE id=?`,
 		string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays,
 		boolToInt(t.OneOff), zeitText(t.DueDate), boolToInt(t.RemoveWhenDone),
-		boolToInt(t.Active), t.ID)
+		boolToInt(t.Active), string(t.Sichtbarkeit), t.BefaehigungID, t.ID)
 	if err != nil {
 		return err
 	}
@@ -410,7 +444,7 @@ func (d *DB) DeleteTask(id int64) error {
 }
 
 const taskSpalten = `id,place_id,kind,title,liters,interval_days,red_after_days,
-	one_off,due_date,remove_when_done,removed_at,active,created_at`
+	one_off,due_date,remove_when_done,removed_at,active,created_at,sichtbarkeit,befaehigung_id`
 
 // GetTask liefert auch abgeräumte Aufgaben — die Rangliste und die Historie
 // müssen ihre Erledigungen weiter zuordnen können.
@@ -441,12 +475,14 @@ func (d *DB) ListTasks() ([]model.CareTask, error) {
 func scanTask(row scannable) (*model.CareTask, error) {
 	var t model.CareTask
 	var active, oneOff, removeWhenDone int
-	var created, kind, dueDate, removedAt string
+	var created, kind, dueDate, removedAt, sichtbarkeit string
 	err := row.Scan(&t.ID, &t.PlaceID, &kind, &t.Title, &t.Liters, &t.IntervalDays, &t.RedAfterDays,
-		&oneOff, &dueDate, &removeWhenDone, &removedAt, &active, &created)
+		&oneOff, &dueDate, &removeWhenDone, &removedAt, &active, &created,
+		&sichtbarkeit, &t.BefaehigungID)
 	if err != nil {
 		return nil, err
 	}
+	t.Sichtbarkeit = model.TaskSichtbarkeit(sichtbarkeit)
 	t.Kind = model.TaskKind(kind)
 	t.OneOff = oneOff != 0
 	t.DueDate = zeitWert(dueDate)

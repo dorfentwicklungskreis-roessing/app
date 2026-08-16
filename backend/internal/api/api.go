@@ -15,6 +15,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/httpx"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
@@ -36,6 +37,11 @@ type Server struct {
 	// IdeenRedirects sind die Ursprünge, auf die nach dem Absenden
 	// weitergeleitet werden darf. Leer = aus der Umgebung.
 	IdeenRedirects []string
+	// Mitglieder liefert die Träger-Mitgliedschaften einer Person (Zitadel,
+	// über einen Dienst-Nutzer — siehe internal/mitglied). Ohne Angabe gibt
+	// es keine Träger-Rollen: Dann verwaltet der Betreiber alles, und alle
+	// anderen sehen die öffentlichen Aufgaben.
+	Mitglieder mitglied.Quelle
 
 	// ideenEinmal baut die Zugriffsgrenze des Ideen-Eingangs genau einmal.
 	ideenEinmal sync.Once
@@ -56,12 +62,15 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 	api.HandleFunc("PUT /api/v1/me/profile", s.handlePutProfile)
 	api.HandleFunc("GET /api/v1/members", s.handleMembers)
 	api.HandleFunc("GET /api/v1/places", s.handleListPlaces)
-	api.HandleFunc("POST /api/v1/places", s.adminOnly(s.handleCreatePlace))
-	api.HandleFunc("PUT /api/v1/places/{id}", s.adminOnly(s.handleUpdatePlace))
-	api.HandleFunc("DELETE /api/v1/places/{id}", s.adminOnly(s.handleDeletePlace))
-	api.HandleFunc("POST /api/v1/places/{id}/tasks", s.adminOnly(s.handleCreateTask))
-	api.HandleFunc("PUT /api/v1/tasks/{id}", s.adminOnly(s.handleUpdateTask))
-	api.HandleFunc("DELETE /api/v1/tasks/{id}", s.adminOnly(s.handleDeleteTask))
+	// Orte und Aufgaben pflegt der admin ihres Trägers (und der Betreiber) —
+	// die Prüfung sitzt in den Handlern, weil sie den betroffenen Träger
+	// erst aus dem Datensatz kennen.
+	api.HandleFunc("POST /api/v1/places", s.handleCreatePlace)
+	api.HandleFunc("PUT /api/v1/places/{id}", s.handleUpdatePlace)
+	api.HandleFunc("DELETE /api/v1/places/{id}", s.handleDeletePlace)
+	api.HandleFunc("POST /api/v1/places/{id}/tasks", s.handleCreateTask)
+	api.HandleFunc("PUT /api/v1/tasks/{id}", s.handleUpdateTask)
+	api.HandleFunc("DELETE /api/v1/tasks/{id}", s.handleDeleteTask)
 	api.HandleFunc("GET /api/v1/tasks/{id}/completions", s.handleListCompletions)
 	api.HandleFunc("POST /api/v1/tasks/{id}/completions", s.handleCreateCompletion)
 	api.HandleFunc("DELETE /api/v1/completions/{id}", s.handleDeleteCompletion)
@@ -71,6 +80,7 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 	api.HandleFunc("GET /api/v1/settings", s.handleGetSettings)
 	api.HandleFunc("PUT /api/v1/settings", s.adminOnly(s.handlePutSettings))
 	s.registerIdeenVerwaltung(api)
+	s.registerTraeger(api)
 
 	mux.Handle("/api/v1/", authMW(api))
 	// Der Ideen-Eingang hängt bewusst außerhalb der Anmeldepflicht (siehe
@@ -97,9 +107,25 @@ func (s *Server) now() time.Time {
 	return time.Now()
 }
 
-// AssemblePlaces baut die Orts-Liste mit Aufgaben und Ampel-Status.
-// Wird von REST-API und MCP-Server gemeinsam genutzt.
+// AssemblePlaces baut die Orts-Liste in der Sicht des Betreibers — alles,
+// ohne Filter. Für die Web-Verwaltung und den MCP-Endpunkt, die beide bereits
+// die globale admin-Rolle verlangen.
 func AssemblePlaces(d *db.DB, now time.Time) ([]model.PlaceWithStatus, float64, error) {
+	return AssemblePlacesFuer(d, now, model.Zugriff{Betreiber: true})
+}
+
+// AssemblePlacesFuer baut die Orts-Liste so, wie diese Person sie sehen darf.
+//
+// Hier hängt die schärfste Regel des Systems: Eine Aufgabe mit
+// „nur_mitglieder“ wird aus der Liste entfernt, bevor irgendetwas anderes
+// passiert — und ein Ort, an dem danach nichts Sichtbares übrig bleibt,
+// verschwindet gleich mit. Sonst verriete eine leere Nadel auf der Karte,
+// dass es dort intern etwas zu tun gibt.
+func AssemblePlacesFuer(d *db.DB, now time.Time, z model.Zugriff) ([]model.PlaceWithStatus, float64, error) {
+	filter, err := NeuerFilter(d, z)
+	if err != nil {
+		return nil, 0, err
+	}
 	places, err := d.ListPlaces()
 	if err != nil {
 		return nil, 0, err
@@ -120,8 +146,36 @@ func AssemblePlaces(d *db.DB, now time.Time) ([]model.PlaceWithStatus, float64, 
 		return nil, 0, err
 	}
 
+	// Orte einmal nachschlagbar machen — die Sichtbarkeit einer Aufgabe
+	// hängt am Träger ihres Ortes.
+	orteNachID := map[int64]model.Place{}
+	for _, p := range places {
+		orteNachID[p.ID] = p
+	}
+	// Namen der Befähigungen für die Anzeige.
+	befaehigungen, err := d.ListAlleBefaehigungen()
+	if err != nil {
+		return nil, 0, err
+	}
+	befaehigungName := map[int64]string{}
+	for _, b := range befaehigungen {
+		befaehigungName[b.ID] = b.Name
+	}
+
+	// alleAufgaben je Ort — auch die unsichtbaren. Ob ein Ort erscheinen
+	// darf, hängt an allen seinen Aufgaben, nicht nur an den sichtbaren.
+	alleAufgaben := map[int64][]model.CareTask{}
+	for _, t := range tasks {
+		alleAufgaben[t.PlaceID] = append(alleAufgaben[t.PlaceID], t)
+	}
+
 	byPlace := map[int64][]model.TaskWithStatus{}
 	for _, t := range tasks {
+		ort, ok := orteNachID[t.PlaceID]
+		if !ok || !filter.AufgabeSichtbar(ort, t) {
+			continue
+		}
+		t.BefaehigungName = befaehigungName[t.BefaehigungID]
 		var lc *model.Completion
 		if c, ok := last[t.ID]; ok {
 			c.UserName = namen.Resolve(c.UserSub, c.UserName)
@@ -141,6 +195,12 @@ func AssemblePlaces(d *db.DB, now time.Time) ([]model.PlaceWithStatus, float64, 
 
 	out := make([]model.PlaceWithStatus, 0, len(places))
 	for _, p := range places {
+		if !filter.OrtSichtbar(p, alleAufgaben[p.ID]) {
+			continue
+		}
+		if t, ok := filter.Traeger(p); ok {
+			p.TraegerName = t.Name
+		}
 		pws := model.PlaceWithStatus{Place: p, Tasks: byPlace[p.ID], Status: model.StatusGreen}
 		if pws.Tasks == nil {
 			pws.Tasks = []model.TaskWithStatus{}
@@ -208,7 +268,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListPlaces(w http.ResponseWriter, r *http.Request) {
-	places, factor, err := AssemblePlaces(s.DB, s.now())
+	places, factor, err := AssemblePlacesFuer(s.DB, s.now(), s.zugriff(r))
 	if err != nil {
 		writeInternal(w, r, err)
 		return
@@ -231,6 +291,10 @@ type PlaceInput struct {
 	Lat         float64 `json:"lat"`
 	Lon         float64 `json:"lon"`
 	Active      *bool   `json:"active"`
+	// TraegerID: der Verein bzw. die Gruppe, der der Ort gehört. Beim
+	// Anlegen Pflicht (ohne Träger gehört ein Ort niemandem); beim Ändern
+	// bedeutet 0 „unverändert lassen“.
+	TraegerID int64 `json:"traegerId"`
 }
 
 func (in *PlaceInput) Validate() error {
@@ -262,6 +326,9 @@ func (in *PlaceInput) Apply(p *model.Place) {
 	if in.Active != nil {
 		p.Active = *in.Active
 	}
+	if in.TraegerID != 0 {
+		p.TraegerID = in.TraegerID
+	}
 }
 
 func (s *Server) handleCreatePlace(w http.ResponseWriter, r *http.Request) {
@@ -274,7 +341,15 @@ func (s *Server) handleCreatePlace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	p := model.Place{Active: true, CreatedAt: s.now()}
+	// Ein Ort gehört immer einem Träger. Ohne Angabe nimmt er den einzigen,
+	// den der Aufrufer verwaltet — im Alltag ist das der Normalfall und
+	// erspart der App eine Auswahl.
+	traeger, err := s.zielTraeger(r, in.TraegerID)
+	if err != nil {
+		schreibeZugriffsfehler(w, r, err)
+		return
+	}
+	p := model.Place{Active: true, CreatedAt: s.now(), TraegerID: traeger.ID}
 	in.Apply(&p)
 	if err := s.DB.InsertPlace(&p); err != nil {
 		writeInternal(w, r, err)
@@ -294,6 +369,10 @@ func (s *Server) handleUpdatePlace(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "Ort nicht gefunden")
 		return
 	}
+	if _, err := s.darfOrtVerwalten(r, *existing); err != nil {
+		schreibeZugriffsfehler(w, r, err)
+		return
+	}
 	var in PlaceInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, "ungültiges JSON")
@@ -302,6 +381,14 @@ func (s *Server) handleUpdatePlace(w http.ResponseWriter, r *http.Request) {
 	if err := in.Validate(); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	// Ein Ort lässt sich nur dorthin verschieben, wo man ebenfalls verwaltet
+	// — sonst könnte ein Verein dem anderen Arbeit unterschieben.
+	if in.TraegerID != 0 && in.TraegerID != existing.TraegerID {
+		if _, err := s.zielTraeger(r, in.TraegerID); err != nil {
+			schreibeZugriffsfehler(w, r, err)
+			return
+		}
 	}
 	vorher := *existing
 	in.Apply(existing)
@@ -321,6 +408,15 @@ func (s *Server) handleDeletePlace(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
+		return
+	}
+	vorhanden, err := s.DB.GetPlace(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "Ort nicht gefunden")
+		return
+	}
+	if _, err := s.darfOrtVerwalten(r, *vorhanden); err != nil {
+		schreibeZugriffsfehler(w, r, err)
 		return
 	}
 	// Erst Bescheid sagen, dann löschen: Danach ist der Vorgang mitsamt
@@ -357,6 +453,11 @@ type TaskInput struct {
 	// RemoveWhenDone: nach dem Erledigen von Karte und Liste nehmen.
 	RemoveWhenDone bool  `json:"removeWhenDone"`
 	Active         *bool `json:"active"`
+	// Sichtbarkeit: „oeffentlich“ (Vorgabe) oder „nur_mitglieder“.
+	Sichtbarkeit string `json:"sichtbarkeit"`
+	// BefaehigungID: verlangte Einweisung (0 = keine). Sie muss demselben
+	// Träger gehören wie die Aufgabe.
+	BefaehigungID int64 `json:"befaehigungId"`
 
 	// termin ist das geprüfte DueDate. Validate() setzt es, Apply() nutzt es.
 	termin *time.Time
@@ -365,6 +466,14 @@ type TaskInput struct {
 func (in *TaskInput) Validate() error {
 	if !model.ValidTaskKind(model.TaskKind(in.Kind)) {
 		return errors.New("kind muss giessen, jaeten oder sonstiges sein")
+	}
+	// Ohne Angabe ist eine Aufgabe öffentlich: Die Dorf-App zeigt, was im
+	// Dorf ansteht — intern ist die Ausnahme, nicht die Regel.
+	if in.Sichtbarkeit == "" {
+		in.Sichtbarkeit = string(model.AufgabeOeffentlich)
+	}
+	if !model.ValidTaskSichtbarkeit(model.TaskSichtbarkeit(in.Sichtbarkeit)) {
+		return errors.New("sichtbarkeit muss oeffentlich oder nur_mitglieder sein")
 	}
 	if err := pruefeText("title", in.Title); err != nil {
 		return err
@@ -427,6 +536,8 @@ func ParseTermin(s string) (time.Time, error) {
 }
 
 func (in *TaskInput) Apply(t *model.CareTask) {
+	t.Sichtbarkeit = model.TaskSichtbarkeit(in.Sichtbarkeit)
+	t.BefaehigungID = in.BefaehigungID
 	t.Kind, t.Title = model.TaskKind(in.Kind), in.Title
 	t.Liters = in.Liters
 	t.IntervalDays, t.RedAfterDays = in.IntervalDays, in.RedAfterDays
@@ -442,8 +553,13 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
 		return
 	}
-	if _, err := s.DB.GetPlace(placeID); err != nil {
+	place, err := s.DB.GetPlace(placeID)
+	if err != nil {
 		writeErr(w, http.StatusNotFound, "Ort nicht gefunden")
+		return
+	}
+	if _, err := s.darfOrtVerwalten(r, *place); err != nil {
+		schreibeZugriffsfehler(w, r, err)
 		return
 	}
 	var in TaskInput
@@ -452,6 +568,10 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := in.Validate(); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.pruefeBefaehigungGehoert(in.BefaehigungID, place.TraegerID); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -475,12 +595,25 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "Aufgabe nicht gefunden")
 		return
 	}
+	place, err := s.DB.GetPlace(existing.PlaceID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "Ort nicht gefunden")
+		return
+	}
+	if _, err := s.darfOrtVerwalten(r, *place); err != nil {
+		schreibeZugriffsfehler(w, r, err)
+		return
+	}
 	var in TaskInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, "ungültiges JSON")
 		return
 	}
 	if err := in.Validate(); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.pruefeBefaehigungGehoert(in.BefaehigungID, place.TraegerID); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -502,6 +635,17 @@ func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
 		return
 	}
+	if vorhanden, err := s.DB.GetTask(id); err == nil {
+		place, perr := s.DB.GetPlace(vorhanden.PlaceID)
+		if perr != nil {
+			writeErr(w, http.StatusNotFound, "Ort nicht gefunden")
+			return
+		}
+		if _, aerr := s.darfOrtVerwalten(r, *place); aerr != nil {
+			schreibeZugriffsfehler(w, r, aerr)
+			return
+		}
+	}
 	AufgabeEntfaellt(s.DB, s.now(), s.Zusteller, id)
 	if err := s.DB.DeleteTask(id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -518,6 +662,10 @@ func (s *Server) handleListCompletions(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
+		return
+	}
+	if err := s.pruefeAufgabeSichtbar(r, id); err != nil {
+		schreibeZugriffsfehler(w, r, err)
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -541,6 +689,11 @@ func (s *Server) handleCreateCompletion(w http.ResponseWriter, r *http.Request) 
 	id, err := pathID(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
+		return
+	}
+	// Was man nicht sehen darf, kann man auch nicht melden.
+	if err := s.pruefeAufgabeSichtbar(r, id); err != nil {
+		schreibeZugriffsfehler(w, r, err)
 		return
 	}
 	// Ob es die Aufgabe gibt, prüft CreateCompletion mit (404).

@@ -145,8 +145,13 @@ func (a *App) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, ziel, http.StatusSeeOther)
 		return
 	}
-	if !user.IsAdmin() {
-		a.setFlash(w, "error", "Dieses Konto hat keine Admin-Rechte für die Verwaltung.")
+	// Herein kommt, wer etwas zu verwalten hat: der Plattform-Betreiber
+	// (globale admin-Rolle) und die Verwaltenden eines Trägers. Wer nur
+	// Mitglied ist, hat hier nichts zu tun — die App ist der Ort zum
+	// Mitmachen.
+	if !user.IsAdmin() && !a.verwaltetIrgendwas(r, user) {
+		a.setFlash(w, "error",
+			"Dieses Konto verwaltet weder die Dorf-App noch einen Träger.")
 		http.Redirect(w, r, ziel, http.StatusSeeOther)
 		return
 	}
@@ -164,7 +169,8 @@ func (a *App) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s := session{
-		Sub: user.Sub, Name: user.Name, Email: user.Email, Admin: true,
+		Sub: user.Sub, Name: user.Name, Email: user.Email, Admin: user.IsAdmin(),
+		Rollen:  rollenListe(user),
 		IDToken: tok.IDToken,
 		Exp:     time.Now().Add(8 * time.Hour).Unix(),
 	}
