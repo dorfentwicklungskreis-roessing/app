@@ -199,7 +199,9 @@ func AssemblePlacesFuer(d *db.DB, now time.Time, z model.Zugriff) ([]model.Place
 			continue
 		}
 		if t, ok := filter.Traeger(p); ok {
-			p.TraegerName = t.Name
+			// Nicht t.Name: Eine geschlossene Gruppe darf öffentlich
+			// ausschreiben, ohne sich dabei zu offenbaren.
+			p.TraegerName = z.TraegerAnzeigeName(t)
 		}
 		pws := model.PlaceWithStatus{Place: p, Tasks: byPlace[p.ID], Status: model.StatusGreen}
 		if pws.Tasks == nil {

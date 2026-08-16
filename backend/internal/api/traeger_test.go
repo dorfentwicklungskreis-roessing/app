@@ -3,7 +3,10 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
+
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
 // Der schärfste Test des ganzen Umbaus: Eine Aufgabe mit „nur_mitglieder“
@@ -380,5 +383,77 @@ func TestAlterClientSetztSichtbarkeitNichtZurueck(t *testing.T) {
 	nachher, _ = srv.DB.GetTask(aufgabeID)
 	if nachher.Intern() || nachher.BefaehigungID != 0 {
 		t.Errorf("die ausdrückliche Freigabe wirkte nicht: %+v", nachher)
+	}
+}
+
+// Eine geschlossene Gruppe schreibt öffentlich aus — ihr Name darf dabei
+// weder in der Ortsliste noch in einer Fehlermeldung nach außen dringen.
+func TestNameEinerGeschlossenenGruppeDringtNichtNachAussen(t *testing.T) {
+	ts, _ := newTestServer(t)
+	traegerID := traegerAnlegen(t, ts.URL, "Dorfpflege", "222")
+	resp := doReq(t, "PUT", fmt.Sprintf("%s/api/v1/traeger/%d", ts.URL, traegerID), betreiberToken,
+		map[string]any{"name": "Dorfpflege", "projektId": "222",
+			"status": "zugelassen", "sichtbarkeit": "geschlossen"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Träger schließen: HTTP %d", resp.StatusCode)
+	}
+	ortID, aufgabeID := ortMitAufgabe(t, ts.URL, traegerID, "Streuobstwiese", "oeffentlich")
+
+	// Die Aufgabe ist außen sichtbar — der Name der Gruppe nicht.
+	liste := decode[struct {
+		Places []struct {
+			ID          int64  `json:"id"`
+			TraegerName string `json:"traegerName"`
+			Tasks       []struct {
+				ID int64 `json:"id"`
+			} `json:"tasks"`
+		} `json:"places"`
+	}](t, doReq(t, "GET", ts.URL+"/api/v1/places", aussenToken, nil))
+
+	gefunden := false
+	for _, p := range liste.Places {
+		for _, task := range p.Tasks {
+			if task.ID != aufgabeID {
+				continue
+			}
+			gefunden = true
+			if p.TraegerName == "Dorfpflege" {
+				t.Error("der Name der geschlossenen Gruppe steht in der Ortsliste")
+			}
+			if p.TraegerName != model.TraegerNameVerdeckt {
+				t.Errorf("Ersatztext fehlt: %q", p.TraegerName)
+			}
+		}
+	}
+	if !gefunden {
+		t.Fatal("die öffentliche Aufgabe fehlt außen — sie muss sichtbar sein")
+	}
+
+	// Auch die Absage beim Ändern nennt ihn nicht. Sonst ließen sich
+	// geschlossene Gruppen durch Ausprobieren von Kennungen aufzählen.
+	resp = doReq(t, "PUT", fmt.Sprintf("%s/api/v1/places/%d", ts.URL, ortID), aussenToken,
+		map[string]any{"name": "Umbenannt", "kind": "beet", "lat": 52.21, "lon": 9.87})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("HTTP %d, erwartet 403", resp.StatusCode)
+	}
+	fehler := decode[map[string]any](t, resp)
+	if text, _ := fehler["error"].(string); strings.Contains(text, "Dorfpflege") {
+		t.Errorf("die Fehlermeldung verrät den Namen: %q", text)
+	}
+
+	// Für Mitglieder steht der richtige Name da.
+	liste = decode[struct {
+		Places []struct {
+			ID          int64  `json:"id"`
+			TraegerName string `json:"traegerName"`
+			Tasks       []struct {
+				ID int64 `json:"id"`
+			} `json:"tasks"`
+		} `json:"places"`
+	}](t, doReq(t, "GET", ts.URL+"/api/v1/places", dorfpflegeMitglied, nil))
+	for _, p := range liste.Places {
+		if p.ID == ortID && p.TraegerName != "Dorfpflege" {
+			t.Errorf("Mitglieder sehen den Namen nicht: %q", p.TraegerName)
+		}
 	}
 }

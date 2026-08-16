@@ -91,8 +91,11 @@ func verwaltungAbgelehnt(z model.Zugriff, t model.Traeger) error {
 			Message: "Die Rössing-ID ist gerade nicht erreichbar. Lesen geht weiter, " +
 				"Änderungen sind erst wieder möglich, wenn die Mitgliedschaften gesichert abgefragt werden können."}
 	}
+	// Der Name kommt über den Zugriff: Wer den Träger nicht sehen darf, soll
+	// ihn auch nicht aus einer Fehlermeldung erfahren — sonst ließen sich
+	// geschlossene Gruppen durch Ausprobieren von Kennungen aufzählen.
 	return &CompletionError{Status: http.StatusForbidden,
-		Message: "Das dürfen nur die Verwaltenden von " + zitat(t.Name) + "."}
+		Message: "Das dürfen nur die Verwaltenden von " + zitat(z.TraegerAnzeigeName(t)) + "."}
 }
 
 // schreibeZugriffsfehler beantwortet einen Zugriffsfehler.

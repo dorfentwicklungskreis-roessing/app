@@ -193,3 +193,33 @@ func TestVeralteterStandDarfNichtSchreiben(t *testing.T) {
 		t.Error("der Betreiber muss auch bei Zitadel-Ausfall verwalten können")
 	}
 }
+
+// Der Name einer geschlossenen Gruppe darf nicht über eine öffentliche
+// Aufgabe nach außen sickern.
+//
+// Eine geschlossene Gruppe schreibt öffentlich aus — das ist gewollt. Wer die
+// Aufgabe sieht, erführe dabei aber nebenbei, dass es die Gruppe gibt und wie
+// sie heißt, obwohl sie ausdrücklich nicht im Verzeichnis steht. Angezeigt
+// wird deshalb ein neutraler Ersatztext.
+func TestGeschlosseneGruppeVerraetIhrenNamenNicht(t *testing.T) {
+	geschlossen := geschlossenerTraeger()
+	offen := dek()
+
+	if got := aussenstehend().TraegerAnzeigeName(geschlossen); got == geschlossen.Name {
+		t.Errorf("der Name der geschlossenen Gruppe steht außen: %q", got)
+	}
+	if got := aussenstehend().TraegerAnzeigeName(geschlossen); got != TraegerNameVerdeckt {
+		t.Errorf("Ersatztext = %q, erwartet %q", got, TraegerNameVerdeckt)
+	}
+
+	// Für Mitglieder, Verwaltende und den Betreiber bleibt es beim Namen.
+	for _, z := range []Zugriff{mitgliedVon(geschlossen), adminVon(geschlossen), betreiber()} {
+		if got := z.TraegerAnzeigeName(geschlossen); got != geschlossen.Name {
+			t.Errorf("%s sieht %q statt des Namens", z.Sub, got)
+		}
+	}
+	// Eine offene Gruppe nennt sich selbstverständlich beim Namen.
+	if got := aussenstehend().TraegerAnzeigeName(offen); got != offen.Name {
+		t.Errorf("offene Gruppe verdeckt ihren Namen: %q", got)
+	}
+}

@@ -315,6 +315,30 @@ func (z Zugriff) SiehtOrt(t Traeger, aufgaben []TaskSichtbarkeit) bool {
 	return false
 }
 
+// TraegerNameVerdeckt steht dort, wo der echte Name nicht hingehört.
+//
+// Bewusst kein leerer String: Die Aufgabe gehört ja jemandem, und wer sie
+// sieht, soll erkennen, dass sie kuratiert ist und nicht von irgendwem
+// stammt — nur eben nicht, von wem.
+const TraegerNameVerdeckt = "Eine Gruppe aus dem Dorf"
+
+// TraegerAnzeigeName liefert den Namen, der dieser Person gezeigt werden darf.
+//
+// Eine geschlossene Gruppe darf öffentlich ausschreiben, ohne sich dabei zu
+// offenbaren: Sonst erführe über jede öffentliche Aufgabe die halbe Welt, dass
+// es die Gruppe gibt und wie sie heißt — obwohl sie ausdrücklich nicht im
+// Verzeichnis stehen wollte.
+//
+// Diese Funktion ist die einzige Stelle, an der ein Trägername für die Ausgabe
+// bestimmt wird. Wer einen Namen anzeigen oder in eine Meldung schreiben will,
+// holt ihn hier.
+func (z Zugriff) TraegerAnzeigeName(t Traeger) string {
+	if z.SiehtTraeger(t) {
+		return t.Name
+	}
+	return TraegerNameVerdeckt
+}
+
 // DarfVerwalten sagt, ob diese Person Orte, Aufgaben und Befähigungen des
 // Trägers anlegen, ändern und löschen darf.
 //
