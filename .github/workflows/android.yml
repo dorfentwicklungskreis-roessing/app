@@ -120,8 +120,12 @@ jobs:
           # IDEEN_*: Der Ideen-Eingang ist im Betrieb streng begrenzt (5 pro
           # Stunde). Im E2E reicht der Test mehrfach hintereinander ein; die
           # Grenze selbst hat einen eigenen Test in backend/internal/api.
+          # AUTH_ISSUER bleibt ebenfalls lokal: Im Dev-Modus wird nichts damit
+          # geprüft, aber die MCP-Metadaten tragen den Wert — und dort hat die
+          # Produktionsadresse in einem Testlauf nichts verloren.
           DB_PATH=/tmp/e2e.sqlite AUTH_MODE=insecure-dev SEED=1 LISTEN_ADDR=:8099 \
           PUBLIC_URL=http://localhost:8099 VERGABE_TAKT=5s \
+          AUTH_ISSUER=http://10.0.2.2:8123 \
           IDEEN_BURST=50 IDEEN_PRO_STUNDE=50 \
             go run ./cmd/server &
           for i in $(seq 1 30); do curl -sf localhost:8099/healthz && break; sleep 1; done
@@ -149,6 +153,9 @@ jobs:
       # und gleichzeitige Läufe teilen sich kein Konto mehr.
       - name: Zitadel einrichten (Projekt, Rollen, native App, Testkonto)
         if: matrix.api-level == 35
+        # Der Job arbeitet sonst in android/ (defaults oben) — hier werden aber
+        # Pfade aus beiden Bäumen gebraucht.
+        working-directory: .
         run: |
           node android/e2e/zitadel-bootstrap.mjs \
             --issuer http://10.0.2.2:8123 \
