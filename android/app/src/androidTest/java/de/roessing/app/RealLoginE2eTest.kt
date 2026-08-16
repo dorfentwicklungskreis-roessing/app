@@ -25,22 +25,38 @@ private const val PROBE = "TOKENPROBE"
 private const val LOGIN_PROBE = "LOGINPROBE"
 
 /**
- * Echter Ende-zu-Ende-Login gegen die Produktion (id.xn--rssing-wxa.de).
+ * Echter Ende-zu-Ende-Login gegen ein echtes Zitadel — ohne jeden Mock.
  *
- * Deckt genau den Weg ab, der in der Vergangenheit kaputt war: Browser-Login →
- * Rücksprung über AppAuths RedirectUriReceiverActivity → Token-Tausch →
- * angemeldete Ansicht. Ein Absturz beim Rücksprung (falsches Theme) oder ein
+ * Deckt genau den Weg ab, der in der Vergangenheit kaputt war: Browser-Login
+ * mit PKCE → Rücksprung über AppAuths RedirectUriReceiverActivity →
+ * Token-Tausch → angemeldete Ansicht → echter API-Aufruf mit dem erhaltenen
+ * Token. Ein Absturz beim Rücksprung (falsches Theme) oder ein
  * fehlgeschlagener Token-Tausch lässt diesen Test scheitern.
  *
- * Läuft nur, wenn die Zugangsdaten als Instrumentation-Argumente übergeben werden:
+ * **Der Aussteller ist ein LOKALES Zitadel**, das die CI im docker compose
+ * mitstartet (`backend/e2e/docker-compose.yml`, eingerichtet von
+ * `android/e2e/zitadel-bootstrap.mjs`). Früher meldete sich dieser Test an der
+ * Produktion an. Das war aus drei Gründen falsch: Die CI wurde rot, sobald der
+ * Server hustete; zwei gleichzeitige Läufe warfen sich gegenseitig aus der
+ * Sitzung desselben Testkontos; und ein Test mit gültiger Anmeldung kann in
+ * der Produktion Daten verändern. Geprüft wird seitdem dasselbe, nur eben
+ * gegen einen Aussteller auf demselben Rechner — **kein Mock, keine
+ * geringere Prüftiefe**.
+ *
+ * Aussteller, Client-ID und Backend kommen über Gradle-Properties herein,
+ * die Zugangsdaten als Instrumentation-Argumente:
  *
  *     ./gradlew connectedDebugAndroidTest \
+ *       -PoidcIssuer=http://10.0.2.2:8123 \
+ *       -PoidcClientId=… -PapiBaseUrl=http://10.0.2.2:8098 \
  *       -Pandroid.testInstrumentationRunnerArguments.realLoginUser=… \
  *       -Pandroid.testInstrumentationRunnerArguments.realLoginPassword=… \
  *       -Pandroid.testInstrumentationRunnerArguments.class=de.roessing.app.RealLoginE2eTest
  *
- * Ohne diese Argumente wird der Test übersprungen (Assume), damit lokale Läufe und
- * PRs ohne Secrets weiterhin grün sind.
+ * Ohne diese Argumente wird der Test übersprungen (Assume), damit ein
+ * Sammellauf auf einem Rechner ohne Zitadel nicht scheitert. In der CI ist das
+ * kein Schlupfloch: `android/ci-e2e.sh` bricht ab, wenn die Werte auf API 35
+ * fehlen.
  */
 class RealLoginE2eTest {
 
@@ -104,12 +120,19 @@ class RealLoginE2eTest {
 
         protokolliereBildschirm("nach dem Passwort")
 
-        // 3b) Zustimmung, falls die Rössing-ID danach fragt. Das tut sie,
-        //     wenn die App etwas Neues anfragt — etwa die Rollen. Ohne diesen
+        // 3b) Zustimmung, falls der Aussteller danach fragt. Das tut er, wenn
+        //     die App etwas Neues anfragt — etwa die Rollen. Ohne diesen
         //     Schritt bliebe der Login im Browser stehen.
-        if (device.wait(Until.hasObject(By.textContains("Rössing")), 5_000) &&
-            device.findObject(zustimmungButton) != null &&
-            !device.hasObject(By.textStartsWith("Moin"))
+        //
+        //     Bewusst NICHT am Text „Rössing" festgemacht: Der Aussteller im
+        //     Test ist ein frisch aufgesetztes lokales Zitadel und heißt
+        //     anders. Erkannt wird die Lage an dem, was wirklich zählt — wir
+        //     sind noch im Browser statt in der App, und dort steht ein
+        //     Zustimmungsknopf.
+        val eigenesPaket = InstrumentationRegistry.getInstrumentation().targetContext.packageName
+        if (!device.wait(Until.hasObject(By.textStartsWith("Moin")), 5_000) &&
+            device.currentPackageName != eigenesPaket &&
+            device.findObject(zustimmungButton) != null
         ) {
             protokolliereBildschirm("Zustimmung")
             runCatching { klickeRobust(zustimmungButton) { "Zustimmung nicht gefunden" } }

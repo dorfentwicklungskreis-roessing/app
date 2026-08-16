@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "generatedAt": "2026-01-01T00:00:00+01:00",
+  "events": [
+    {
+      "id": "e2e-blutspende",
+      "name": "E2E-Blutspende",
+      "description": "Termin aus der lokalen Testablage — nichts davon kommt aus dem Netz.",
+      "start": "2099-08-17",
+      "allDay": true,
+      "url": "http://10.0.2.2:8097/events/e2e-blutspende",
+      "external": false,
+      "location": { "name": "Dorfgemeinschaftshaus", "address": "Am Dorfplatz 1", "lat": 52.1843, "lon": 9.8162 },
+      "organizer": { "name": "E2E-Testlauf" }
+    },
+    {
+      "id": "e2e-grillen",
+      "name": "E2E-Grillen",
+      "description": "Zweiter Termin, damit die Liste mehr als eine Zeile hat.",
+      "start": "2099-08-20T18:00:00+02:00",
+      "end": "2099-08-20T22:00:00+02:00",
+      "allDay": false,
+      "url": "http://10.0.2.2:8097/events/e2e-grillen",
+      "external": false,
+      "organizer": { "name": "E2E-Testlauf" }
+    }
+  ]
+}

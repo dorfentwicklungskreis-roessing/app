@@ -6,10 +6,27 @@
 # `script:` zeilenweise über `sh -c` aus, mehrzeilige Konstrukte wie if/fi zerfallen
 # dabei und scheitern mit „Syntax error: end of file unexpected".
 #
+# ALLES läuft gegen lokale Dienste auf dem Runner — Backend, Zitadel, Website-
+# Feed und Kartenstil. Kein Schritt hier darf einen entfernten Server anfassen,
+# schon gar nicht die Produktion: Ein Test, der sich an der echten Rössing-ID
+# anmeldet, wird rot, sobald der Server hustet, und kann dort obendrein Daten
+# verändern.
+#
 # Erwartete Umgebungsvariablen:
-#   API_LEVEL                            API-Level des laufenden Emulators
-#   REAL_LOGIN_USER, REAL_LOGIN_PASSWORD Zugangsdaten für den echten Rössing-ID-Login
+#   API_LEVEL             API-Level des laufenden Emulators
+#   E2E_API_BASE_URL      Backend im Dev-Login-Modus (Schritte 1 und 1b)
+#   E2E_WEBSITE_BASE_URL  lokale Ablage mit events.json
+#   E2E_MAP_STYLE_URL     lokaler Kartenstil
+#   E2E_OIDC_ISSUER       lokales Zitadel aus dem docker compose (nur API 35)
+#   E2E_OIDC_CLIENT_ID    Client-ID der dort angelegten nativen App
+#   E2E_OIDC_API_BASE_URL Backend im OIDC-Modus gegen dieses Zitadel
+#   E2E_LOGIN_USER, E2E_LOGIN_PASSWORD  im lokalen Zitadel angelegtes Testkonto
 set -euo pipefail
+
+# Vorbelegungen für den Fall, dass jemand das Skript von Hand startet.
+API_BASE_URL="${E2E_API_BASE_URL:-http://10.0.2.2:8099}"
+WEBSITE_BASE_URL="${E2E_WEBSITE_BASE_URL:-http://10.0.2.2:8097}"
+MAP_STYLE_URL="${E2E_MAP_STYLE_URL:-http://10.0.2.2:8097/map-style.json}"
 
 # --- Beweisaufnahme ---------------------------------------------------------
 # „Instrumentation run failed due to Process crashed" sagt für sich genommen
@@ -73,8 +90,13 @@ trap aufraeumen EXIT
 adb emu geo fix 9.8162 52.1843 || true
 
 # 1) Instrumented- und E2E-Tests gegen das lokale Backend (Dev-Login).
+#    websiteBaseUrl und mapStyleUrl zeigen ebenfalls auf den Runner: sonst
+#    holte die App den Terminfeed von rössing.de und den Kartenstil von
+#    OpenFreeMap — beides entfernte Server mitten im Testlauf.
 ./gradlew connectedDebugAndroidTest \
-  -PapiBaseUrl=http://10.0.2.2:8099 \
+  -PapiBaseUrl="$API_BASE_URL" \
+  -PwebsiteBaseUrl="$WEBSITE_BASE_URL" \
+  -PmapStyleUrl="$MAP_STYLE_URL" \
   -PdevAuth=true \
   -Pandroid.testInstrumentationRunnerArguments.e2e=true
 
@@ -116,12 +138,15 @@ if ! echo "$ERGEBNIS" | grep -q "^OK "; then
   exit 1
 fi
 
-# 2) Echter Rössing-ID-Login gegen die Produktion — bewusst OHNE devAuth und ohne
-#    apiBaseUrl-Override. Deckt den Weg ab, der zuvor kaputt war: Browser-Login →
-#    Rücksprung über AppAuth → Token-Tausch → angemeldete Ansicht.
-#    Nur auf API 35, weil erst das google_apis-Image Chrome (und damit Custom Tabs)
-#    mitbringt; ohne Secrets wird der Lauf übersprungen.
-if [ "${API_LEVEL:-}" = "35" ] && [ -n "${REAL_LOGIN_USER:-}" ] && [ -n "${REAL_LOGIN_PASSWORD:-}" ]; then
+# 2) Echter OIDC-Login gegen das LOKALE Zitadel aus dem docker compose —
+#    bewusst OHNE devAuth. Geprüft wird unverändert der komplette Weg, der
+#    zuvor kaputt war: Browser-Login mit PKCE → Rücksprung über AppAuths
+#    RedirectUriReceiverActivity → Token-Tausch → angemeldete Ansicht →
+#    echter API-Aufruf mit dem erhaltenen Token. Nichts davon ist gemockt,
+#    nur der Aussteller steht jetzt auf demselben Rechner.
+#    Nur auf API 35, weil erst das google_apis-Image Chrome (und damit Custom
+#    Tabs) mitbringt.
+if [ "${API_LEVEL:-}" = "35" ] && [ -n "${E2E_OIDC_ISSUER:-}" ] && [ -n "${E2E_OIDC_CLIENT_ID:-}" ]; then
   # Chrome-Erststart-Dialoge unterdrücken, damit der Custom Tab direkt die
   # Zitadel-Anmeldung zeigt.
   adb shell 'echo "chrome --disable-fre --no-default-browser-check --no-first-run" > /data/local/tmp/chrome-command-line' || true
@@ -130,9 +155,14 @@ if [ "${API_LEVEL:-}" = "35" ] && [ -n "${REAL_LOGIN_USER:-}" ] && [ -n "${REAL_
   # gerade dann wertvoll, wenn der Login schiefging.
   LOGIN_ERGEBNIS=0
   ./gradlew connectedDebugAndroidTest \
+    -PapiBaseUrl="${E2E_OIDC_API_BASE_URL:?E2E_OIDC_API_BASE_URL fehlt}" \
+    -PoidcIssuer="$E2E_OIDC_ISSUER" \
+    -PoidcClientId="$E2E_OIDC_CLIENT_ID" \
+    -PwebsiteBaseUrl="$WEBSITE_BASE_URL" \
+    -PmapStyleUrl="$MAP_STYLE_URL" \
     -Pandroid.testInstrumentationRunnerArguments.class=de.roessing.app.RealLoginE2eTest \
-    -Pandroid.testInstrumentationRunnerArguments.realLoginUser="$REAL_LOGIN_USER" \
-    -Pandroid.testInstrumentationRunnerArguments.realLoginPassword="$REAL_LOGIN_PASSWORD" \
+    -Pandroid.testInstrumentationRunnerArguments.realLoginUser="${E2E_LOGIN_USER:?E2E_LOGIN_USER fehlt}" \
+    -Pandroid.testInstrumentationRunnerArguments.realLoginPassword="${E2E_LOGIN_PASSWORD:?E2E_LOGIN_PASSWORD fehlt}" \
     || LOGIN_ERGEBNIS=$?
 
   # Was im ECHTEN Token steht, gehört in die Ausgabe: Fehlt der Rollen-Claim,
@@ -147,6 +177,12 @@ if [ "${API_LEVEL:-}" = "35" ] && [ -n "${REAL_LOGIN_USER:-}" ] && [ -n "${REAL_
     adb logcat -d -s LOGINPROBE:I | sed -n 's/.*LOGINPROBE *: //p' || true
     exit "$LOGIN_ERGEBNIS"
   fi
+elif [ "${API_LEVEL:-}" = "35" ]; then
+  # Früher wurde hier still übersprungen, wenn die Secrets fehlten — ein roter
+  # Login-Weg wäre damit unbemerkt durchgerutscht. Das lokale Zitadel gehört
+  # zur CI-Umgebung, sein Fehlen ist ein Fehler und keine Ausnahme.
+  echo "E2E_OIDC_ISSUER/E2E_OIDC_CLIENT_ID fehlen — das lokale Zitadel wurde nicht eingerichtet." >&2
+  exit 1
 else
-  echo "Echter Login-Test übersprungen (API ${API_LEVEL:-unbekannt} bzw. keine Secrets)."
+  echo "Login-Test übersprungen: API ${API_LEVEL:-unbekannt} bringt kein Chrome mit (Custom Tabs nötig)."
 fi
