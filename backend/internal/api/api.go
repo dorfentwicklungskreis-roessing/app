@@ -453,11 +453,17 @@ type TaskInput struct {
 	// RemoveWhenDone: nach dem Erledigen von Karte und Liste nehmen.
 	RemoveWhenDone bool  `json:"removeWhenDone"`
 	Active         *bool `json:"active"`
-	// Sichtbarkeit: „oeffentlich“ (Vorgabe) oder „nur_mitglieder“.
+	// Sichtbarkeit: „oeffentlich“ oder „nur_mitglieder“.
+	//
+	// Fehlt das Feld, bleibt die Sichtbarkeit unverändert (beim Anlegen gilt
+	// „oeffentlich“). Das ist wichtig: Eine ältere App-Version schickt es
+	// nicht mit, und eine interne Aufgabe darf nicht dadurch öffentlich
+	// werden, dass jemand ihr Gießintervall ändert.
 	Sichtbarkeit string `json:"sichtbarkeit"`
-	// BefaehigungID: verlangte Einweisung (0 = keine). Sie muss demselben
-	// Träger gehören wie die Aufgabe.
-	BefaehigungID int64 `json:"befaehigungId"`
+	// BefaehigungID: verlangte Einweisung. Sie muss demselben Träger gehören
+	// wie die Aufgabe. Aus demselben Grund ein Zeiger: fehlt das Feld, bleibt
+	// die Einweisung, wie sie ist — ausdrückliche 0 nimmt sie weg.
+	BefaehigungID *int64 `json:"befaehigungId"`
 
 	// termin ist das geprüfte DueDate. Validate() setzt es, Apply() nutzt es.
 	termin *time.Time
@@ -467,12 +473,10 @@ func (in *TaskInput) Validate() error {
 	if !model.ValidTaskKind(model.TaskKind(in.Kind)) {
 		return errors.New("kind muss giessen, jaeten oder sonstiges sein")
 	}
-	// Ohne Angabe ist eine Aufgabe öffentlich: Die Dorf-App zeigt, was im
-	// Dorf ansteht — intern ist die Ausnahme, nicht die Regel.
-	if in.Sichtbarkeit == "" {
-		in.Sichtbarkeit = string(model.AufgabeOeffentlich)
-	}
-	if !model.ValidTaskSichtbarkeit(model.TaskSichtbarkeit(in.Sichtbarkeit)) {
+	// Leer heißt „unverändert“ und wird deshalb NICHT vorbelegt — sonst
+	// setzte jede Änderung durch einen älteren Client die Sichtbarkeit
+	// zurück. Beim Anlegen ergänzt die Datenbank „oeffentlich“.
+	if in.Sichtbarkeit != "" && !model.ValidTaskSichtbarkeit(model.TaskSichtbarkeit(in.Sichtbarkeit)) {
 		return errors.New("sichtbarkeit muss oeffentlich oder nur_mitglieder sein")
 	}
 	if err := pruefeText("title", in.Title); err != nil {
@@ -536,8 +540,13 @@ func ParseTermin(s string) (time.Time, error) {
 }
 
 func (in *TaskInput) Apply(t *model.CareTask) {
-	t.Sichtbarkeit = model.TaskSichtbarkeit(in.Sichtbarkeit)
-	t.BefaehigungID = in.BefaehigungID
+	// Nur übernehmen, was auch geschickt wurde — siehe TaskInput.
+	if in.Sichtbarkeit != "" {
+		t.Sichtbarkeit = model.TaskSichtbarkeit(in.Sichtbarkeit)
+	}
+	if in.BefaehigungID != nil {
+		t.BefaehigungID = *in.BefaehigungID
+	}
 	t.Kind, t.Title = model.TaskKind(in.Kind), in.Title
 	t.Liters = in.Liters
 	t.IntervalDays, t.RedAfterDays = in.IntervalDays, in.RedAfterDays
@@ -571,7 +580,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := s.pruefeBefaehigungGehoert(in.BefaehigungID, place.TraegerID); err != nil {
+	if err := s.pruefeBefaehigungGehoert(wertOder(in.BefaehigungID, 0), place.TraegerID); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -613,7 +622,8 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := s.pruefeBefaehigungGehoert(in.BefaehigungID, place.TraegerID); err != nil {
+	if err := s.pruefeBefaehigungGehoert(wertOder(in.BefaehigungID, existing.BefaehigungID),
+		place.TraegerID); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}

@@ -766,3 +766,13 @@ func (s *Server) pruefeOrtSichtbar(r *http.Request, placeID int64) error {
 	}
 	return nil
 }
+
+// wertOder löst einen optionalen Wert auf: fehlt er, gilt der bisherige.
+// Gebraucht wird das dort, wo „nicht geschickt“ etwas anderes heißen muss
+// als „auf null gesetzt“ (siehe TaskInput.BefaehigungID).
+func wertOder(v *int64, bisher int64) int64 {
+	if v == nil {
+		return bisher
+	}
+	return *v
+}

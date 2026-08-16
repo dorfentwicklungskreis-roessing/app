@@ -446,7 +446,7 @@ func (a *App) aufgabeAnlegen(w http.ResponseWriter, r *http.Request, _ session) 
 		a.zeigeAufgabeNeu(w, r, http.StatusBadRequest, *p, entwurf, liter, err.Error())
 		return
 	}
-	if err := a.pruefeBefaehigung(in.BefaehigungID, p.TraegerID); err != nil {
+	if err := a.pruefeBefaehigung(wertOderNull(in.BefaehigungID), p.TraegerID); err != nil {
 		a.zeigeAufgabeNeu(w, r, http.StatusBadRequest, *p, entwurf, liter, err.Error())
 		return
 	}
@@ -494,7 +494,7 @@ func (a *App) aufgabeSpeichern(w http.ResponseWriter, r *http.Request, _ session
 		a.zeigeAufgabe(w, r, http.StatusBadRequest, *p, entwurf, liter, err.Error())
 		return
 	}
-	if err := a.pruefeBefaehigung(in.BefaehigungID, p.TraegerID); err != nil {
+	if err := a.pruefeBefaehigung(wertOderNull(in.BefaehigungID), p.TraegerID); err != nil {
 		entwurf.ID = t.ID
 		a.zeigeAufgabe(w, r, http.StatusBadRequest, *p, entwurf, liter, err.Error())
 		return
@@ -812,14 +812,15 @@ func aufgabeAusFormular(r *http.Request) (model.CareTask, string, api.TaskInput,
 		Active:         &aktiv,
 		Sichtbarkeit:   r.FormValue("sichtbarkeit"),
 	}
+	// Das Formular schickt das Feld immer mit — auch die 0 („keine“).
 	if v, err := strconv.ParseInt(r.FormValue("befaehigungId"), 10, 64); err == nil {
-		in.BefaehigungID = v
+		in.BefaehigungID = &v
 	}
 	entwurf := model.CareTask{
 		Kind: model.TaskKind(in.Kind), Title: in.Title, Active: aktiv,
 		OneOff: einmalig, RemoveWhenDone: in.RemoveWhenDone,
 		Sichtbarkeit:  model.TaskSichtbarkeit(in.Sichtbarkeit),
-		BefaehigungID: in.BefaehigungID,
+		BefaehigungID: wertOderNull(in.BefaehigungID),
 	}
 
 	if literText != "" {

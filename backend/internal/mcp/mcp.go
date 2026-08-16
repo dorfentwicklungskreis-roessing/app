@@ -467,7 +467,7 @@ func (s *Server) toolCreateTask(args json.RawMessage, u auth.User) (any, error) 
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
-	if err := pruefeBefaehigungGehoert(s.DB, in.BefaehigungID, in.PlaceID); err != nil {
+	if err := pruefeBefaehigungGehoert(s.DB, wertOderNullMCP(in.BefaehigungID), in.PlaceID); err != nil {
 		return nil, err
 	}
 	t := model.CareTask{PlaceID: in.PlaceID, Active: true, CreatedAt: s.now()}
@@ -703,4 +703,12 @@ func pruefeBefaehigungGehoert(d *db.DB, befaehigungID, placeID int64) error {
 		return fmt.Errorf("eine Aufgabe kann nur eine Befähigung ihres eigenen Trägers verlangen")
 	}
 	return nil
+}
+
+// wertOderNullMCP löst die optionale Befähigung einer Eingabe auf.
+func wertOderNullMCP(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }

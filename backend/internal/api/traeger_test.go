@@ -326,3 +326,59 @@ func TestInterneAufgabeVerraetSichNichtUeberFehlercodes(t *testing.T) {
 		t.Fatalf("die Meldung wurde entfernt: %v", err)
 	}
 }
+
+// Ein Client, der die neuen Felder nicht kennt (eine ältere App-Version),
+// darf eine Aufgabe nicht versehentlich öffentlich machen.
+//
+// Das ist der gefährlichste Weg zurück: Die Verwaltung ändert in der App das
+// Gießintervall, schickt dabei kein „sichtbarkeit“ mit — und die interne
+// Aufgabe stünde plötzlich für das ganze Dorf da. Fehlende Felder müssen
+// deshalb „unverändert“ heißen, nicht „Vorgabewert“.
+func TestAlterClientSetztSichtbarkeitNichtZurueck(t *testing.T) {
+	ts, srv := newTestServer(t)
+	traegerID := traegerAnlegen(t, ts.URL, "Dorfpflege", "222")
+	befaehigung := befaehigungAnlegen(t, ts.URL, traegerID, "Motorsense")
+	_, aufgabeID := ortMitAufgabe(t, ts.URL, traegerID, "Gerätehaus", "nur_mitglieder")
+
+	// Die Aufgabe verlangt zusätzlich eine Einweisung.
+	resp := doReq(t, "PUT", fmt.Sprintf("%s/api/v1/tasks/%d", ts.URL, aufgabeID), dorfpflegeAdmin,
+		map[string]any{"kind": "jaeten", "intervalDays": 7, "redAfterDays": 14,
+			"sichtbarkeit": "nur_mitglieder", "befaehigungId": befaehigung})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Vorbereitung: HTTP %d", resp.StatusCode)
+	}
+
+	// Jetzt der alte Client: dieselbe Aufgabe, aber ohne die neuen Felder.
+	resp = doReq(t, "PUT", fmt.Sprintf("%s/api/v1/tasks/%d", ts.URL, aufgabeID), dorfpflegeAdmin,
+		map[string]any{"kind": "jaeten", "intervalDays": 10, "redAfterDays": 20})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Änderung: HTTP %d", resp.StatusCode)
+	}
+
+	nachher, err := srv.DB.GetTask(aufgabeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !nachher.Intern() {
+		t.Error("die interne Aufgabe wurde stillschweigend öffentlich")
+	}
+	if nachher.BefaehigungID != befaehigung {
+		t.Error("die verlangte Einweisung ging stillschweigend verloren")
+	}
+	// Die tatsächlich geschickte Änderung ist natürlich angekommen.
+	if nachher.IntervalDays != 10 {
+		t.Errorf("das Intervall wurde nicht geändert: %+v", nachher)
+	}
+
+	// Und wer sie ausdrücklich freigeben will, kann das weiterhin.
+	resp = doReq(t, "PUT", fmt.Sprintf("%s/api/v1/tasks/%d", ts.URL, aufgabeID), dorfpflegeAdmin,
+		map[string]any{"kind": "jaeten", "intervalDays": 10, "redAfterDays": 20,
+			"sichtbarkeit": "oeffentlich", "befaehigungId": 0})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Freigabe: HTTP %d", resp.StatusCode)
+	}
+	nachher, _ = srv.DB.GetTask(aufgabeID)
+	if nachher.Intern() || nachher.BefaehigungID != 0 {
+		t.Errorf("die ausdrückliche Freigabe wirkte nicht: %+v", nachher)
+	}
+}

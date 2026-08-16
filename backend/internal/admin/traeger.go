@@ -647,3 +647,11 @@ func rollenListe(u auth.User) []string {
 	sort.Strings(out)
 	return out
 }
+
+// wertOderNull liest einen optionalen Wert für die Wiedervorlage im Formular.
+func wertOderNull(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
