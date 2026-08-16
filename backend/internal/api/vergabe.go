@@ -265,6 +265,17 @@ func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
 		return
 	}
+	// Auch beim Zurückgeben zuerst die Sichtbarkeit: Sonst verriete der
+	// Unterschied zwischen 404 und 409 beim Durchprobieren von Kennungen,
+	// dass es zu einer internen Aufgabe einen Vorgang gibt.
+	if vorgang, err := s.DB.GetAssignment(id); err == nil {
+		if task, terr := s.DB.GetTask(vorgang.TaskID); terr == nil {
+			if serr := s.pruefeSichtbar(r, *task); serr != nil {
+				schreibeZugriffsfehler(w, r, serr)
+				return
+			}
+		}
+	}
 	u, _ := auth.FromContext(r.Context())
 	a, err := s.vergabeEngine().Zurueckgeben(id, u.Sub, u.IsAdmin())
 	if err != nil {

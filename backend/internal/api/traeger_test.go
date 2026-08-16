@@ -284,3 +284,45 @@ func TestInterneErledigungenZaehlenNurDrinnen(t *testing.T) {
 		t.Errorf("Mitglieder sehen ihre eigene Erledigung nicht (%d)", n)
 	}
 }
+
+// Auch die Nebenwege dürfen die Existenz einer internen Aufgabe nicht
+// verraten: Ein Unterschied zwischen 403 und 404 wäre beim Durchprobieren
+// von Kennungen schon die Auskunft „hier gibt es etwas“.
+func TestInterneAufgabeVerraetSichNichtUeberFehlercodes(t *testing.T) {
+	ts, srv := newTestServer(t)
+	traegerID := traegerAnlegen(t, ts.URL, "Dorfpflege", "222")
+	_, aufgabeID := ortMitAufgabe(t, ts.URL, traegerID, "Gerätehaus", "nur_mitglieder")
+
+	// Ein Mitglied meldet eine Erledigung und ein Vorgang läuft.
+	resp := doReq(t, "POST", fmt.Sprintf("%s/api/v1/tasks/%d/completions", ts.URL, aufgabeID),
+		dorfpflegeMitglied, map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("Erledigung: HTTP %d", resp.StatusCode)
+	}
+	meldungID := decode[struct {
+		ID int64 `json:"id"`
+	}](t, resp).ID
+	vorgangID := vorgangEroeffnen(t, srv, aufgabeID)
+
+	// Beides muss für Außenstehende schlicht nicht existieren.
+	resp = doReq(t, "DELETE", fmt.Sprintf("%s/api/v1/completions/%d", ts.URL, meldungID),
+		aussenToken, nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("Meldung zurücknehmen: HTTP %d, erwartet 404", resp.StatusCode)
+	}
+	resp = doReq(t, "POST", fmt.Sprintf("%s/api/v1/assignments/%d/release", ts.URL, vorgangID),
+		aussenToken, nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("Zusage zurückgeben: HTTP %d, erwartet 404", resp.StatusCode)
+	}
+	resp = doReq(t, "POST", fmt.Sprintf("%s/api/v1/assignments/%d/claim", ts.URL, vorgangID),
+		aussenToken, nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("Zusage: HTTP %d, erwartet 404", resp.StatusCode)
+	}
+
+	// Die Meldung bleibt dabei natürlich bestehen.
+	if _, err := srv.DB.GetCompletion(meldungID); err != nil {
+		t.Fatalf("die Meldung wurde entfernt: %v", err)
+	}
+}

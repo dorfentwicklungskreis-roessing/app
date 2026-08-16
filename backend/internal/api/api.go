@@ -736,6 +736,12 @@ func (s *Server) handleDeleteCompletion(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusNotFound, "Meldung nicht gefunden")
 		return
 	}
+	// Zu einer Aufgabe, die es für mich nicht gibt, gibt es auch keine
+	// Meldung — sonst unterschiede 403 von 404 und verriete ihre Existenz.
+	if err := s.pruefeAufgabeSichtbar(r, c.TaskID); err != nil {
+		schreibeZugriffsfehler(w, r, err)
+		return
+	}
 	u, _ := auth.FromContext(r.Context())
 	if c.UserSub != u.Sub && !u.IsAdmin() {
 		writeErr(w, http.StatusForbidden, "nur eigene Meldungen können zurückgenommen werden")
