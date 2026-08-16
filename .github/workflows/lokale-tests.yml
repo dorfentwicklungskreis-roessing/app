@@ -1,0 +1,35 @@
+name: Tests nur lokal
+
+# Wacht darüber, dass kein Test gegen einen entfernten Server läuft — weder
+# gegen die Rössing-ID noch gegen die Produktions-API, einen Kachelserver oder
+# Firebase. Anlass: `RealLoginE2eTest` meldete sich an der ECHTEN Rössing-ID
+# an; als der Server ausfiel, wurde die CI rot, obwohl am Code nichts falsch
+# war — und ein Test mit gültiger Anmeldung kann in der Produktion Daten
+# verändern.
+#
+# Bewusst OHNE Pfadfilter: Die Regel gilt für jede Änderung. Die
+# Auslieferungs-Workflows (release.yml mit Play-Upload und Firebase-Verteilung,
+# backend.yml mit GHCR-Push) sind von der Prüfung ausgenommen — die dürfen und
+# müssen nach außen.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: lokale-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Erst der Selbsttest: Eine Prüfung, die nichts mehr findet, weil sie
+      # selbst kaputt ist, wäre schlimmer als keine.
+      - name: Selbsttest der Prüfung
+        run: python3 .github/scripts/pruefe_lokale_tests.py --selbsttest
+      - name: Testquellen und Test-CI prüfen
+        run: python3 .github/scripts/pruefe_lokale_tests.py

@@ -1,0 +1,12 @@
+{
+  "version": 8,
+  "name": "E2E-Ersatzstil",
+  "sources": {},
+  "layers": [
+    {
+      "id": "hintergrund",
+      "type": "background",
+      "paint": { "background-color": "#e8e4dd" }
+    }
+  ]
+}

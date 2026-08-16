@@ -42,7 +42,12 @@ jobs:
           name: unit-test-reports
           path: android/app/build/reports/tests/
 
-  # E2E: echtes Backend + App auf Emulatoren (mehrere API-Level = Gerätevielfalt).
+  # E2E: echtes Backend + echtes Zitadel + App auf Emulatoren (mehrere
+  # API-Level = Gerätevielfalt).
+  #
+  # ALLES läuft auf dem Runner. Kein Schritt dieses Jobs darf einen entfernten
+  # Server anfassen — der Login-Test meldete sich früher an der PRODUKTIONS-
+  # Rössing-ID an und riss die CI mit, sobald dort etwas hakte.
   e2e:
     runs-on: ubuntu-latest
     strategy:
@@ -64,7 +69,47 @@ jobs:
         with:
           go-version: "1.23"
           cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: gradle/actions/setup-gradle@v4
+
+      # Der Emulator erreicht den Host ausschließlich unter 10.0.2.2. OIDC
+      # verlangt aber, dass ALLE Beteiligten wörtlich denselben Aussteller
+      # sehen — App, Zitadel und das Backend, das die Tokens prüft. Deshalb
+      # bekommt der Runner 10.0.2.2 als eigene Loopback-Adresse: Danach meint
+      # „10.0.2.2" im Emulator und auf dem Host dieselbe Zitadel-Instanz.
+      - name: Loopback-Adresse 10.0.2.2 anlegen
+        run: |
+          sudo ip addr add 10.0.2.2/32 dev lo || true
+          ip addr show dev lo | grep 10.0.2.2
+
+      # Beweis statt Behauptung: Für die Dauer des Jobs sind die
+      # Produktionsadressen auf dem Runner gesperrt. Läuft der Job trotzdem
+      # grün, kann kein Test sie benutzt haben — auch der Emulator nicht,
+      # dessen Verkehr über Sockets des Emulator-Prozesses auf dem Host geht.
+      - name: Produktionsadressen für den Testlauf sperren
+        run: |
+          set -u
+          for host in id.xn--rssing-wxa.de app.xn--rssing-wxa.de xn--rssing-wxa.de; do  # ci-extern-ok: werden hier GESPERRT, nicht benutzt
+            for ip in $(getent ahostsv4 "$host" 2>/dev/null | awk '{print $1}' | sort -u); do
+              sudo iptables -I OUTPUT -d "$ip" -j REJECT --reject-with icmp-admin-prohibited
+              echo "gesperrt: $host ($ip)"
+            done
+          done
+          sudo iptables -L OUTPUT -n | head -20
+
+      # Terminfeed und Kartenstil als statische Dateien vom Runner. Ohne das
+      # holte die App mitten im Testlauf /events.json von rössing.de und den
+      # Kartenstil von OpenFreeMap.
+      - name: Website-Ablage (events.json, Kartenstil) lokal bereitstellen
+        working-directory: android/e2e/fixtures
+        run: |
+          nohup python3 -m http.server 8097 --bind 0.0.0.0 >/tmp/fixtures.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://10.0.2.2:8097/events.json >/dev/null && break; sleep 1; done
+          curl -sf http://10.0.2.2:8097/events.json >/dev/null
+          curl -sf http://10.0.2.2:8097/map-style.json >/dev/null
+
       - name: Backend starten (insecure-dev + Seed)
         working-directory: backend
         run: |
@@ -75,20 +120,74 @@ jobs:
           # IDEEN_*: Der Ideen-Eingang ist im Betrieb streng begrenzt (5 pro
           # Stunde). Im E2E reicht der Test mehrfach hintereinander ein; die
           # Grenze selbst hat einen eigenen Test in backend/internal/api.
+          # AUTH_ISSUER bleibt ebenfalls lokal: Im Dev-Modus wird nichts damit
+          # geprüft, aber die MCP-Metadaten tragen den Wert — und dort hat die
+          # Produktionsadresse in einem Testlauf nichts verloren.
           DB_PATH=/tmp/e2e.sqlite AUTH_MODE=insecure-dev SEED=1 LISTEN_ADDR=:8099 \
           PUBLIC_URL=http://localhost:8099 VERGABE_TAKT=5s \
+          AUTH_ISSUER=http://10.0.2.2:8123 \
           IDEEN_BURST=50 IDEEN_PRO_STUNDE=50 \
             go run ./cmd/server &
           for i in $(seq 1 30); do curl -sf localhost:8099/healthz && break; sleep 1; done
+
+      # --- Ab hier: der echte OIDC-Login. Nur auf API 35, weil erst das
+      #     google_apis-Image Chrome (und damit Custom Tabs) mitbringt.
+
+      # Dieselbe Compose-Umgebung wie der Backend-E2E, nur mit
+      # ZITADEL_EXTERNALDOMAIN=10.0.2.2 — der Aussteller heißt dann
+      # http://10.0.2.2:8123 und ist unter genau dieser Adresse von der App im
+      # Emulator UND vom Backend auf dem Host erreichbar.
+      - name: Zitadel + Postgres starten
+        if: matrix.api-level == 35
+        working-directory: backend
+        env:
+          ZITADEL_EXTERNALDOMAIN: 10.0.2.2
+        run: |
+          mkdir -p e2e/machinekey && chmod 777 e2e/machinekey
+          docker compose -f e2e/docker-compose.yml up -d --wait --wait-timeout 180
+          curl -sf http://10.0.2.2:8123/.well-known/openid-configuration | head -c 200; echo
+
+      # Was bisher von Hand in der Produktions-Zitadel stand (Projekt, Rollen,
+      # native App mit PKCE, Testkonto), entsteht hier bei jedem Lauf neu.
+      # Damit sind die Secrets TEST_USER_LOGIN/TEST_USER_PASSWORD überflüssig,
+      # und gleichzeitige Läufe teilen sich kein Konto mehr.
+      - name: Zitadel einrichten (Projekt, Rollen, native App, Testkonto)
+        if: matrix.api-level == 35
+        # Der Job arbeitet sonst in android/ (defaults oben) — hier werden aber
+        # Pfade aus beiden Bäumen gebraucht.
+        working-directory: .
+        run: |
+          node android/e2e/zitadel-bootstrap.mjs \
+            --issuer http://10.0.2.2:8123 \
+            --key backend/e2e/machinekey/zitadel-admin-sa.json \
+            --out "$RUNNER_TEMP/zitadel.env"
+          cat "$RUNNER_TEMP/zitadel.env" >> "$GITHUB_ENV"
+
+      # Zweites Backend, diesmal im echten OIDC-Modus gegen das lokale Zitadel.
+      # Das erste (:8099) bleibt im Dev-Login-Modus für die übrigen E2E-Tests.
+      - name: Backend im OIDC-Modus starten (gegen das lokale Zitadel)
+        if: matrix.api-level == 35
+        working-directory: backend
+        run: |
+          DB_PATH=/tmp/e2e-oidc.sqlite SEED=1 LISTEN_ADDR=:8098 \
+          PUBLIC_URL=http://10.0.2.2:8098 VERGABE_TAKT=5s \
+          AUTH_ISSUER="$E2E_OIDC_ISSUER" AUTH_AUDIENCE="$E2E_OIDC_CLIENT_ID" \
+          IDEEN_BURST=50 IDEEN_PRO_STUNDE=50 \
+            go run ./cmd/server > /tmp/backend-oidc.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://10.0.2.2:8098/healthz && break; sleep 1; done
+          curl -sf http://10.0.2.2:8098/healthz
+
       # Beide Testläufe laufen bewusst im SELBEN Emulator-Schritt:
       # android-emulator-runner lässt sich pro Job nur einmal verwenden, ein
       # zweiter Aufruf findet den bereits laufenden Emulator nicht mehr.
       - name: Instrumented- und E2E-Tests auf Emulator (API ${{ matrix.api-level }})
         uses: reactivecircus/android-emulator-runner@v2
         env:
-          REAL_LOGIN_USER: ${{ secrets.TEST_USER_LOGIN }}
-          REAL_LOGIN_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
           API_LEVEL: ${{ matrix.api-level }}
+          E2E_API_BASE_URL: http://10.0.2.2:8099
+          E2E_WEBSITE_BASE_URL: http://10.0.2.2:8097
+          E2E_MAP_STYLE_URL: http://10.0.2.2:8097/map-style.json
+          E2E_OIDC_API_BASE_URL: http://10.0.2.2:8098
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
@@ -99,6 +198,15 @@ jobs:
           # `sh -c` aus, mehrzeilige if/fi-Blöcke zerfallen dabei. Die Logik steht
           # deshalb in android/ci-e2e.sh.
           script: bash ci-e2e.sh
+
+      - name: Zitadel- und Backend-Protokolle bei Fehler
+        if: failure() && matrix.api-level == 35
+        working-directory: backend
+        run: |
+          echo "--- Backend (OIDC-Modus)"
+          tail -80 /tmp/backend-oidc.log || true
+          echo "--- Zitadel"
+          docker compose -f e2e/docker-compose.yml logs --tail 120 || true
 
       - name: E2E-Berichte hochladen
         if: failure()

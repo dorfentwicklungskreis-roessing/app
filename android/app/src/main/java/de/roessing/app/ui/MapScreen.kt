@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import de.roessing.app.BuildConfig
 import de.roessing.app.data.LatLon
 import de.roessing.app.data.PlaceDto
 import de.roessing.app.data.ROESSING_BOUNDS
@@ -54,8 +55,10 @@ import org.maplibre.geojson.Point
 // da sind, rechnet startView() den richtigen Ausschnitt (siehe Geo.kt).
 private val ROESSING_CENTER = LatLng(ROESSING_BOUNDS.center.lat, ROESSING_BOUNDS.center.lon)
 private val START_ZOOM = zoomForBounds(ROESSING_BOUNDS, widthDp = 360.0, heightDp = 640.0)
-// Freie Vektor-Kacheln ohne API-Key (OpenFreeMap, OSM-Daten).
-private const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
+// Freie Vektor-Kacheln ohne API-Key (OpenFreeMap, OSM-Daten). Die Adresse steht
+// in BuildConfig, damit die E2E-Läufe einen lokalen Ersatzstil einsetzen können
+// und kein Test einen fremden Server anfassen muss.
+private val STYLE_URL = BuildConfig.MAP_STYLE_URL
 private const val SOURCE_ID = "places"
 private const val LAYER_ID = "places-layer"
 private const val AUSWAHL_SOURCE_ID = "auswahl"

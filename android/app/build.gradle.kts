@@ -46,6 +46,14 @@ android {
         buildConfigField("String", "OIDC_ISSUER", "\"${prop("oidcIssuer", "https://id.xn--rssing-wxa.de")}\"")
         buildConfigField("String", "OIDC_CLIENT_ID", "\"${prop("oidcClientId", "385941807986376899")}\"")
         buildConfigField("String", "OIDC_REDIRECT_URI", "\"de.roessing.app:/oauth2redirect\"")
+        // Kartenstil (freie Vektor-Kacheln, OSM-Daten). Übersteuerbar, damit die
+        // E2E-Läufe auch dafür keinen fremden Server brauchen — siehe
+        // android/e2e/fixtures/map-style.json.
+        buildConfigField(
+            "String",
+            "MAP_STYLE_URL",
+            "\"${prop("mapStyleUrl", "https://tiles.openfreemap.org/styles/liberty")}\"",
+        )
 
         // AppAuth: Redirect-Scheme für den Browser-Rücksprung.
         manifestPlaceholders["appAuthRedirectScheme"] = "de.roessing.app"
