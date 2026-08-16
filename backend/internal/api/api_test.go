@@ -12,6 +12,7 @@ import (
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
 )
 
 // newTestServer baut einen Server mit frischer SQLite-DB und Dev-Auth.
@@ -23,7 +24,10 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	srv := &Server{DB: d, Now: func() time.Time { return time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC) }}
+	// Im Test kommen die Träger-Mitgliedschaften aus dem Dev-Token
+	// („<projektId>@<rolle>“); im Betrieb aus Zitadel (internal/mitglied).
+	srv := &Server{DB: d, Mitglieder: mitglied.DevQuelle{},
+		Now: func() time.Time { return time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC) }}
 	ts := httptest.NewServer(srv.Handler(auth.Middleware(auth.InsecureDevVerifier{}), nil))
 	t.Cleanup(ts.Close)
 	return ts, srv

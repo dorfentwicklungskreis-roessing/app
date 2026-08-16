@@ -82,6 +82,12 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "Ort nicht gefunden")
 		return
 	}
+	// Wer den Ort nicht sehen darf, meldet sich dort auch nicht zum
+	// Mithelfen an — sonst ließe sich seine Existenz erraten.
+	if err := s.pruefeOrtSichtbar(r, placeID); err != nil {
+		schreibeZugriffsfehler(w, r, err)
+		return
+	}
 	// Beim Anmelden das Profil anlegen, falls es noch keins gibt: Sonst
 	// stünde in der Verwaltung eine Kennung ohne Namen.
 	if _, err := ProfileFor(s.DB, u, s.now()); err != nil {
@@ -144,6 +150,10 @@ func (s *Server) handlePlaceSignups(w http.ResponseWriter, r *http.Request) {
 	placeID, err := pathID(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
+		return
+	}
+	if err := s.pruefeOrtSichtbar(r, placeID); err != nil {
+		schreibeZugriffsfehler(w, r, err)
 		return
 	}
 	liste, err := s.DB.ListSignupsForPlace(placeID)
@@ -222,6 +232,23 @@ func (s *Server) handleClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, _ := auth.FromContext(r.Context())
+	// Vor allem anderen: Darf diese Person die Aufgabe überhaupt sehen — und
+	// hat sie die verlangte Einweisung? Beides wird hier durchgesetzt und
+	// nicht in der Oberfläche.
+	vorgang, err := s.DB.GetAssignment(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "Diesen Vorgang gibt es nicht (mehr).")
+		return
+	}
+	task, err := s.DB.GetTask(vorgang.TaskID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "Die Aufgabe zu diesem Vorgang gibt es nicht mehr.")
+		return
+	}
+	if err := PruefeZusage(s.DB, s.zugriff(r), *task); err != nil {
+		schreibeZugriffsfehler(w, r, err)
+		return
+	}
 	a, err := s.vergabeEngine().Zusagen(id, u.Sub, u.Name)
 	if err != nil {
 		writeVergabeErr(w, r, err)
@@ -237,6 +264,17 @@ func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "ungültige ID")
 		return
+	}
+	// Auch beim Zurückgeben zuerst die Sichtbarkeit: Sonst verriete der
+	// Unterschied zwischen 404 und 409 beim Durchprobieren von Kennungen,
+	// dass es zu einer internen Aufgabe einen Vorgang gibt.
+	if vorgang, err := s.DB.GetAssignment(id); err == nil {
+		if task, terr := s.DB.GetTask(vorgang.TaskID); terr == nil {
+			if serr := s.pruefeSichtbar(r, *task); serr != nil {
+				schreibeZugriffsfehler(w, r, serr)
+				return
+			}
+		}
 	}
 	u, _ := auth.FromContext(r.Context())
 	a, err := s.vergabeEngine().Zurueckgeben(id, u.Sub, u.IsAdmin())

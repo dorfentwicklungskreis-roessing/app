@@ -89,6 +89,33 @@ spec:
             # wird vom Controller im Cluster entschlüsselt.
             - name: FCM_CREDENTIALS_FILE
               value: /secrets/fcm/firebase-admin.json
+            # ZITADEL_SERVICE_USER_KEY_FILE (noch nicht eingerichtet):
+            # Damit fragt das Backend die Träger-Mitgliedschaften (welcher
+            # Verein, welche Rolle) über die Zitadel-Management-API ab. Sie
+            # kommen bewusst NICHT aus dem Token — sonst bräuchte jeder neue
+            # Verein ein App-Update und eine erneute Anmeldung auf jedem Gerät.
+            #
+            # Solange der Wert fehlt, läuft alles unverändert weiter: Es gibt
+            # dann keine Träger-Rollen, die Verwaltung liegt allein beim
+            # Betreiber (globale admin-Rolle), und alle sehen die öffentlichen
+            # Aufgaben. Zum Einrichten:
+            #
+            #   1. In der Rössing-ID einen Machine-User anlegen
+            #      (z.B. „dorf-app-rollen"), Access-Token-Typ JWT,
+            #      JSON-Key erzeugen.
+            #   2. Ihm NUR Leserechte auf Rollenzuweisungen geben
+            #      (ORG_USER_GRANT_VIEWER). Er darf keine Nutzer anlegen und
+            #      keine Rollen vergeben.
+            #   3. Den Key als SealedSecret ablegen (wie sealed-fcm.yaml),
+            #      unter /secrets/zitadel einhängen und die beiden Zeilen
+            #      unten einkommentieren.
+            #
+            # - name: ZITADEL_SERVICE_USER_KEY_FILE
+            #   value: /secrets/zitadel/service-user.json
+            # ZITADEL_ROLLEN_TTL (optional, Vorgabe 45s): So lange gilt eine
+            # Mitgliedschafts-Auskunft als frisch. Kurz genug, dass eine neue
+            # Mitgliedschaft praktisch sofort wirkt.
+            #
             # SESSION_KEY (optional): signiert die Cookies der Verwaltung.
             # Ohne ihn erzeugt der Server beim Start einen zufälligen Schlüssel
             # — Anmeldungen überleben dann kein Rollout. Für dauerhafte

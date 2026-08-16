@@ -1,0 +1,16 @@
+{{/* Neuen Träger anlegen — nur der Betreiber. */}}
+{{define "seite"}}
+<div class="breadcrumbs text-sm">
+  <ul><li><a href="/admin/traeger/">Träger</a></li><li>Neu</li></ul>
+</div>
+
+<div class="card mx-auto max-w-2xl bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h1 class="card-title" id="seitentitel">Neuer Träger</h1>
+    {{if .Data.Fehler}}
+      <div class="alert alert-error" id="formularfehler"><span>{{.Data.Fehler}}</span></div>
+    {{end}}
+    {{template "traegerFelder" .Data}}
+  </div>
+</div>
+{{end}}

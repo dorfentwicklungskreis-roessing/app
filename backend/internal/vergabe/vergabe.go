@@ -69,6 +69,8 @@ type Config struct {
 	Zusteller Zusteller
 	// Takt ist der Abstand der Hintergrund-Durchläufe (Vorgabe 1 Minute).
 	Takt time.Duration
+	// Mitgliedschaften liefert die Träger-Rollen einer Person (siehe Engine).
+	Mitgliedschaften func(userSub string) (model.Mitgliedschaften, error)
 }
 
 // DefaultTakt: einmal je Minute reicht — die Staffelung rechnet in Stunden.
@@ -78,10 +80,19 @@ type Engine struct {
 	db        *db.DB
 	now       func() time.Time
 	zusteller Zusteller
+	// Mitgliedschaften liefert die Träger-Rollen einer Person. Gebraucht
+	// wird das nur für interne Aufgaben: Sie dürfen niemandem außerhalb des
+	// Trägers angeboten werden — eine Anfrage und erst recht ein Push sind
+	// ein Weg nach außen wie jede Liste.
+	//
+	// Ohne Quelle (nil) wird eine interne Aufgabe an NIEMANDEN ausgespielt.
+	// Im Zweifel weniger: Eine ausgebliebene Anfrage ist ein Ärgernis, eine
+	// verratene interne Aufgabe ein Vertrauensbruch.
+	Mitgliedschaften func(userSub string) (model.Mitgliedschaften, error)
 }
 
 func New(d *db.DB, cfg Config) *Engine {
-	e := &Engine{db: d, now: cfg.Now, zusteller: cfg.Zusteller}
+	e := &Engine{db: d, now: cfg.Now, zusteller: cfg.Zusteller, Mitgliedschaften: cfg.Mitgliedschaften}
 	if e.now == nil {
 		e.now = time.Now
 	}
@@ -278,6 +289,16 @@ func (e *Engine) vorgaengeEroeffnen(now time.Time, regeln model.AssignmentRules)
 		if !faellig || !passtJemand(anmeldungen, task) {
 			continue
 		}
+		// Ein Vorgang ohne jeden zulässigen Kandidaten wäre eine leere
+		// Hülse: Er stünde in der App als „wird gerade vergeben“, ohne dass
+		// je jemand gefragt werden könnte.
+		kandidaten, err := e.kandidaten(task)
+		if err != nil {
+			return err
+		}
+		if len(kandidaten) == 0 {
+			continue
+		}
 		vorhanden, err := e.db.ActiveAssignment(task.ID)
 		if err != nil {
 			return err
@@ -397,9 +418,52 @@ func (e *Engine) kandidaten(task model.CareTask) ([]model.Candidate, error) {
 	}
 	liste := make([]model.Candidate, 0, len(proPerson))
 	for _, c := range proPerson {
+		darf, err := e.darfAngefragtWerden(task, c.UserSub)
+		if err != nil {
+			return nil, err
+		}
+		if !darf {
+			continue
+		}
 		liste = append(liste, c)
 	}
 	return model.OrderCandidates(liste), nil
+}
+
+// darfAngefragtWerden hält die beiden Grenzen ein, die auch für jede Liste
+// gelten: Sichtbarkeit des Trägers und verlangte Einweisung.
+//
+// Die Einweisung wird schon hier geprüft und nicht erst beim Zusagen: Eine
+// Anfrage an jemanden, der ohnehin nicht zusagen darf, wäre eine sinnlose
+// Störung — und beim Rundruf eine ganze Reihe davon.
+func (e *Engine) darfAngefragtWerden(task model.CareTask, userSub string) (bool, error) {
+	if task.BefaehigungID != 0 && !e.db.HatBefaehigung(userSub, task.BefaehigungID) {
+		return false, nil
+	}
+	if !task.Intern() {
+		return true, nil
+	}
+	place, err := e.db.GetPlace(task.PlaceID)
+	if err != nil {
+		return false, nil
+	}
+	traeger, err := e.db.GetTraeger(place.TraegerID)
+	if err != nil {
+		return false, nil
+	}
+	if e.Mitgliedschaften == nil {
+		// Keine gesicherte Auskunft — dann wird eine interne Aufgabe nicht
+		// von sich aus verteilt. Sichtbar ist sie für Mitglieder trotzdem,
+		// sie kommt nur nicht ungefragt zu ihnen.
+		return false, nil
+	}
+	rollen, err := e.Mitgliedschaften(userSub)
+	if err != nil {
+		slog.Warn("Vergabe: Mitgliedschaft nicht prüfbar — interne Aufgabe wird nicht angeboten",
+			"person", userSub, "aufgabe", task.ID, "err", err)
+		return false, nil
+	}
+	return rollen.IstMitglied(traeger.ProjektID), nil
 }
 
 // naechsterKandidat liefert die Person, die als Nächste gefragt wird — oder

@@ -51,6 +51,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/httpx"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mcp"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/push"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
@@ -134,10 +135,16 @@ func main() {
 	// Push-Weg (Firebase). Ohne Schlüssel bleibt es bei der Abrufliste.
 	zusteller := pushEinrichten(database)
 
+	// Träger-Mitgliedschaften aus der Rössing-ID (Dienst-Nutzer über die
+	// Management-API). Ohne Schlüsseldatei bleibt es bei „nur der Betreiber
+	// verwaltet“ — siehe internal/mitglied.
+	mitglieder := mitgliederEinrichten(authMode, issuer)
+
 	// OptionalAuth versorgt nur den öffentlichen Ideen-Eingang: Wer aus der
 	// angemeldeten App einreicht, bekommt die Idee dem Konto zugeordnet;
 	// wer über die Website kommt, reicht anonym ein.
-	srv := &api.Server{DB: database, Zusteller: zusteller, OptionalAuth: auth.Optional(verifier)}
+	srv := &api.Server{DB: database, Zusteller: zusteller, OptionalAuth: auth.Optional(verifier),
+		Mitglieder: mitglieder}
 	handler := srv.Handler(auth.Middleware(verifier), func(mux *http.ServeMux) {
 		// MCP: OAuth gegen die Rössing-ID, admin-Rolle erforderlich.
 		// MCP_CLIENT_ID: PKCE-Client, den Dynamic Client Registration
@@ -152,6 +159,7 @@ func main() {
 			DB: database, Verifier: verifier, Issuer: issuer,
 			ClientID: clientID, PublicURL: publicURL,
 			SessionKey: []byte(os.Getenv("SESSION_KEY")),
+			Mitglieder: mitglieder,
 		})
 		if clientID != "" {
 			slog.Info("Web-Admin aktiv unter /admin", "redirect_uri", publicURL+"/admin/")
@@ -176,7 +184,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	backupFertig := backupStarten(ctx, database, dbPath)
-	vergabeFertig := vergabeStarten(ctx, database, zusteller)
+	vergabeFertig := vergabeStarten(ctx, database, zusteller, mitglieder)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -289,15 +297,63 @@ func backupStarten(ctx context.Context, database *db.DB, dbPath string) <-chan s
 // Server und nicht als eigener Dienst — aus demselben Grund wie die
 // Sicherung: Es gibt genau einen Pod mit genau einer Schreibverbindung zur
 // SQLite-Datenbank.
-func vergabeStarten(ctx context.Context, database *db.DB, zusteller vergabe.Zusteller) <-chan struct{} {
+func vergabeStarten(ctx context.Context, database *db.DB, zusteller vergabe.Zusteller,
+	mitglieder mitglied.Quelle,
+) <-chan struct{} {
 	cfg, an := vergabe.FromEnv()
 	if !an {
 		slog.Warn("Vergabe abgeschaltet (VERGABE=off) — es werden keine Anfragen zugestellt")
 		return nil
 	}
 	cfg.Zusteller = zusteller
+	// Interne Aufgaben werden nur Mitgliedern angeboten. Ohne Quelle gar
+	// niemandem (siehe vergabe.Engine.Mitgliedschaften).
+	if mitglieder != nil {
+		cfg.Mitgliedschaften = func(userSub string) (model.Mitgliedschaften, error) {
+			stand := mitglieder.Fuer(ctx, auth.User{Sub: userSub})
+			if stand.Veraltet {
+				// Ohne gesicherte Auskunft wird eine interne Aufgabe nicht
+				// von sich aus verteilt — ein Push ist nicht zurückzuholen.
+				return nil, errStandVeraltet
+			}
+			return stand.Rollen, nil
+		}
+	}
 	slog.Info("Vergabe-Zeitgeber aktiv", "takt", cfg.Takt.String())
 	return vergabe.Start(ctx, database, cfg)
+}
+
+// errStandVeraltet meldet der Vergabe, dass die Mitgliedschaften gerade nicht
+// gesichert abfragbar sind.
+var errStandVeraltet = errors.New("Mitgliedschaften sind gerade nicht gesichert abfragbar")
+
+// mitgliederEinrichten baut die Auskunft über Träger-Mitgliedschaften.
+//
+// Im Dev-Modus kommen sie aus dem Token („<projektId>@<rolle>“), sonst aus
+// der Rössing-ID über einen Dienst-Nutzer. Fehlt dessen Schlüssel, gibt es
+// keine Träger-Rollen: Der Betreiber verwaltet dann alles, alle anderen sehen
+// die öffentlichen Aufgaben. Genau das ist der Zustand, solange für die
+// Produktion noch kein Zitadel-Zugang eingerichtet ist.
+func mitgliederEinrichten(authMode, issuer string) mitglied.Quelle {
+	if authMode == "insecure-dev" {
+		slog.Warn("Träger-Mitgliedschaften kommen aus dem Token (AUTH_MODE=insecure-dev)")
+		return mitglied.DevQuelle{}
+	}
+	q, err := mitglied.FromEnv(issuer)
+	if err != nil {
+		// Kein Grund, den Dorf-Server anzuhalten: Ohne die Auskunft läuft
+		// alles weiter, nur eben ohne Träger-Rollen.
+		slog.Error("Träger-Mitgliedschaften nicht eingerichtet — nur der Betreiber verwaltet",
+			"err", err)
+		return nil
+	}
+	if q == nil {
+		slog.Warn("ZITADEL_SERVICE_USER_KEY_FILE fehlt — keine Träger-Rollen, " +
+			"nur der Betreiber verwaltet")
+		return nil
+	}
+	slog.Info("Träger-Mitgliedschaften kommen aus der Rössing-ID", "issuer", issuer)
+	return q
 }
 
 // pushEinrichten baut den Push-Versand über Firebase Cloud Messaging.

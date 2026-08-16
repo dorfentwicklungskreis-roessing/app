@@ -108,6 +108,18 @@
     <label class="fieldset-legend" for="feld-beschreibung">Beschreibung</label>
     <input type="text" name="beschreibung" id="feld-beschreibung" value="{{.Ort.Description}}" class="input w-full">
 
+    {{/* Jeder Ort gehört einem Träger — dem Verein oder der Gruppe, die
+         sich darum kümmert. */}}
+    <label class="fieldset-legend" for="feld-traeger">Träger</label>
+    <select name="traegerId" id="feld-traeger" class="select w-full">
+      {{range .Traeger}}
+        <option value="{{.ID}}" {{if eq .ID $.Ort.TraegerID}}selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+    <p class="text-sm text-base-content/70">
+      Aufgaben stellen Vereine und Gruppen ein — die Dorf-App baut keine Parallelstruktur daneben auf.
+    </p>
+
     <div class="grid grid-cols-2 gap-3">
       <div>
         <label class="fieldset-legend" for="feld-lat">Breitengrad</label>
@@ -126,4 +138,66 @@
       Ort ist aktiv
     </label>
   </fieldset>
+{{end}}
+
+{{/* traegerFelder ist das Formular selbst — Detailseite und Neuanlage teilen
+     es sich, damit die Felder nicht auseinanderlaufen. */}}
+{{define "traegerFelder"}}
+<form method="post" action="{{.Ziel}}" class="mt-2 grid gap-4">
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend">Name</legend>
+    <input class="input w-full" type="text" name="name" id="name"
+           value="{{.Traeger.Name}}" required maxlength="500">
+  </fieldset>
+
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend">Beschreibung</legend>
+    <textarea class="textarea w-full" name="beschreibung" id="beschreibung"
+              rows="3" maxlength="500">{{.Traeger.Beschreibung}}</textarea>
+  </fieldset>
+
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend">Sichtbarkeit</legend>
+    <select class="select w-full" name="sichtbarkeit" id="sichtbarkeit">
+      <option value="offen" {{if eq (printf "%s" .Traeger.Sichtbarkeit) "offen"}}selected{{end}}>
+        offen — steht im Verzeichnis, jede und jeder findet die Gruppe
+      </option>
+      <option value="geschlossen" {{if eq (printf "%s" .Traeger.Sichtbarkeit) "geschlossen"}}selected{{end}}>
+        geschlossen — nur Mitglieder sehen die Gruppe im Verzeichnis
+      </option>
+    </select>
+    <p class="label text-base-content/60">
+      Das gilt nur für die Gruppe selbst. Öffentliche Aufgaben bleiben auch bei einer
+      geschlossenen Gruppe für alle sichtbar.
+    </p>
+  </fieldset>
+
+  {{if .Betreiber}}
+    <div class="divider text-sm">Nur der Betreiber</div>
+
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Zitadel-Projekt-ID</legend>
+      <input class="input w-full" type="text" name="projektId" id="projektId"
+             value="{{.Traeger.ProjektID}}" inputmode="numeric" pattern="[0-9]*">
+      <p class="label text-base-content/60">
+        Die numerische ID des Projekts in der Rössing-ID. Solange sie fehlt, hat der
+        Träger keine Mitglieder und keine Verwaltenden — nur der Betreiber kann ihn pflegen.
+      </p>
+    </fieldset>
+
+    <fieldset class="fieldset">
+      <legend class="fieldset-legend">Zulassung</legend>
+      <select class="select w-full" name="status" id="status">
+        <option value="beantragt" {{if eq (printf "%s" .Traeger.Status) "beantragt"}}selected{{end}}>beantragt — noch unsichtbar</option>
+        <option value="zugelassen" {{if eq (printf "%s" .Traeger.Status) "zugelassen"}}selected{{end}}>zugelassen</option>
+        <option value="gesperrt" {{if eq (printf "%s" .Traeger.Status) "gesperrt"}}selected{{end}}>gesperrt</option>
+      </select>
+    </fieldset>
+  {{end}}
+
+  <div class="card-actions justify-end">
+    <a class="btn btn-ghost" href="/admin/traeger/">Abbrechen</a>
+    <button class="btn btn-primary" type="submit" id="speichern">Speichern</button>
+  </div>
+</form>
 {{end}}

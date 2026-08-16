@@ -26,7 +26,13 @@ type session struct {
 	Sub   string `json:"sub"`
 	Name  string `json:"name"`
 	Email string `json:"email,omitempty"`
-	Admin bool   `json:"admin"`
+	// Admin ist die globale Betreiber-Rolle der Plattform.
+	Admin bool `json:"admin"`
+	// Rollen sind die Projektrollen aus dem Token. Gebraucht werden sie nur
+	// im Dev-Modus, in dem die Träger-Mitgliedschaften daraus gelesen werden
+	// („<projektId>@<rolle>“); im Betrieb kommen sie aus der Rössing-ID und
+	// dieses Feld bleibt ohne Wirkung.
+	Rollen []string `json:"rollen,omitempty"`
 	// IDToken dient nur als id_token_hint beim OIDC-Logout.
 	IDToken string `json:"idt,omitempty"`
 	Exp     int64  `json:"exp"`

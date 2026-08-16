@@ -259,6 +259,13 @@ func TestEndToEnd(t *testing.T) {
 		"IDEEN_ZIELE=https://xn--rssing-wxa.de",
 		"IDEEN_BURST=100",
 		"IDEEN_PRO_STUNDE=100",
+		// Träger-Mitgliedschaften: Das Backend fragt sie mit einem
+		// Dienst-Nutzer über die echte Management-API ab. Im E2E ist das
+		// derselbe Machine-Key, mit dem auch der Bootstrap läuft.
+		"ZITADEL_SERVICE_USER_KEY_FILE="+machineKeyPfad(t),
+		// Kurze Frist, damit der Test nicht auf den Zwischenspeicher wartet.
+		// Im Betrieb sind es 45 Sekunden.
+		"ZITADEL_ROLLEN_TTL=1s",
 	)
 	srv.Stdout, srv.Stderr = os.Stderr, os.Stderr
 	if err := srv.Start(); err != nil {
@@ -1116,6 +1123,228 @@ func TestEndToEnd(t *testing.T) {
 			t.Fatalf("zweite Meldung auf einmalige Aufgabe: HTTP %d, erwartet 409: %v", resp.StatusCode, out)
 		}
 	})
+
+	// --- Träger, Sichtbarkeit und Befähigungen ---------------------------
+	//
+	// Der Kern der Umstellung, gegen ein ECHTES Zitadel: Ein zweites Projekt
+	// ist ein zweiter Verein. Seine Rollen stehen in KEINEM Token — das
+	// Backend fragt sie mit dem Dienst-Nutzer über die Management-API ab.
+	t.Run("Träger: Rollen aus einem fremden Zitadel-Projekt greifen", func(t *testing.T) {
+		// 1. Ein echtes zweites Projekt mit den zwei Rollen anlegen.
+		traegerProjekt := zapi(t, iamToken, "POST", "/management/v1/projects",
+			map[string]any{"name": fmt.Sprintf("dorfpflege-e2e-%d", time.Now().UnixNano())})
+		traegerProjektID := traegerProjekt["id"].(string)
+		for _, rolle := range []map[string]any{
+			{"roleKey": "admin", "displayName": "Verwaltung"},
+			{"roleKey": "mitglied", "displayName": "Mitglied"},
+		} {
+			zapi(t, iamToken, "POST", "/management/v1/projects/"+traegerProjektID+"/roles", rolle)
+		}
+
+		// 2. Den Träger im Backend anlegen und zulassen (nur der Betreiber).
+		resp, traeger := request(t, "POST", "/api/v1/traeger", adminToken, map[string]any{
+			"name": "Dorfpflege", "projektId": traegerProjektID,
+			"status": "zugelassen", "sichtbarkeit": "offen",
+		})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Träger anlegen: HTTP %d: %v", resp.StatusCode, traeger)
+		}
+		traegerID := traeger["id"].(float64)
+
+		// 3. Ein Vorstandsmitglied mit der admin-Rolle DIESES Projekts.
+		// Sein Token trägt die Rolle nicht — es ist für die Dorf-App
+		// ausgestellt, nicht für den Verein.
+		vorstandUser := newMachine("Dorfpflege-Vorstand", nil)
+		zapi(t, iamToken, "POST", "/management/v1/users/"+vorstandUser.UserID+"/grants",
+			map[string]any{"projectId": traegerProjektID, "roleKeys": []string{"admin"}})
+		vorstandToken := fetchToken(t, vorstandUser, scope)
+
+		// 4. Der Vorstand legt einen Ort mit einer INTERNEN Aufgabe an.
+		resp, ort := request(t, "POST", "/api/v1/places", vorstandToken, map[string]any{
+			"name": "Gerätehaus", "kind": "sonstiges", "lat": 52.212, "lon": 9.871,
+			"traegerId": traegerID})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Der Träger-Admin darf keinen Ort anlegen: HTTP %d: %v", resp.StatusCode, ort)
+		}
+		ortID := ort["id"].(float64)
+
+		resp, intern := request(t, "POST", fmt.Sprintf("/api/v1/places/%.0f/tasks", ortID),
+			vorstandToken, map[string]any{"kind": "sonstiges", "title": "Interne Prüfung",
+				"intervalDays": 30, "redAfterDays": 60, "sichtbarkeit": "nur_mitglieder"})
+		if resp.StatusCode != 201 {
+			t.Fatalf("interne Aufgabe: HTTP %d: %v", resp.StatusCode, intern)
+		}
+		internID := intern["id"].(float64)
+
+		// 5. Das gewöhnliche Mitglied der Dorf-App gehört dem Verein NICHT an
+		// und darf die Aufgabe auf keinem Weg sehen.
+		sieht := func(token string, taskID float64) bool {
+			_, liste := request(t, "GET", "/api/v1/places", token, nil)
+			for _, p := range liste["places"].([]any) {
+				for _, roh := range p.(map[string]any)["tasks"].([]any) {
+					if roh.(map[string]any)["id"] == taskID {
+						return true
+					}
+				}
+			}
+			return false
+		}
+		if sieht(memberToken, internID) {
+			t.Fatal("die interne Aufgabe ist außerhalb des Trägers sichtbar")
+		}
+		resp, _ = request(t, "GET", fmt.Sprintf("/api/v1/tasks/%.0f/completions", internID),
+			memberToken, nil)
+		if resp.StatusCode != 404 {
+			t.Errorf("Historie der internen Aufgabe: HTTP %d, erwartet 404", resp.StatusCode)
+		}
+		resp, _ = request(t, "POST", fmt.Sprintf("/api/v1/tasks/%.0f/completions", internID),
+			memberToken, map[string]any{})
+		if resp.StatusCode != 404 {
+			t.Errorf("Meldung auf die interne Aufgabe: HTTP %d, erwartet 404", resp.StatusCode)
+		}
+		if !sieht(vorstandToken, internID) {
+			t.Fatal("der Träger-Admin sieht seine eigene interne Aufgabe nicht")
+		}
+
+		// 6. DAS Versprechen des Entwurfs: Eine frisch erteilte Mitgliedschaft
+		// wirkt sofort — mit DEMSELBEN Token, ohne Ab- und Anmelden.
+		zapi(t, iamToken, "POST", "/management/v1/users/"+memberUser.UserID+"/grants",
+			map[string]any{"projectId": traegerProjektID, "roleKeys": []string{"mitglied"}})
+		sichtbarGeworden := false
+		for i := 0; i < 20; i++ {
+			if sieht(memberToken, internID) {
+				sichtbarGeworden = true
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		if !sichtbarGeworden {
+			t.Fatal("die neue Mitgliedschaft wirkt nicht ohne erneute Anmeldung")
+		}
+
+		// 7. Mitglied ist nicht Verwaltung: Ändern bleibt verwehrt.
+		resp, _ = request(t, "PUT", fmt.Sprintf("/api/v1/tasks/%.0f", internID), memberToken,
+			map[string]any{"kind": "sonstiges", "intervalDays": 5, "redAfterDays": 10})
+		if resp.StatusCode != 403 {
+			t.Errorf("Mitglied ändert die Aufgabe: HTTP %d, erwartet 403", resp.StatusCode)
+		}
+
+		// 8. Befähigung: ohne Einweisung keine Zusage.
+		resp, befaehigung := request(t, "POST",
+			fmt.Sprintf("/api/v1/traeger/%.0f/befaehigungen", traegerID), vorstandToken,
+			map[string]any{"name": "Motorsense", "beschreibung": "Einweisung am Gerät"})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Befähigung: HTTP %d: %v", resp.StatusCode, befaehigung)
+		}
+		befaehigungID := befaehigung["id"].(float64)
+
+		// Die Aufgabe ist einmalig mit einem Termin von gestern — damit ist
+		// sie sofort fällig und der Zeitgeber eröffnet einen Vorgang.
+		gestern := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+		resp, mit := request(t, "POST", fmt.Sprintf("/api/v1/places/%.0f/tasks", ortID),
+			vorstandToken, map[string]any{"kind": "sonstiges", "title": "Rasenmähen",
+				"oneOff": true, "dueDate": gestern, "sichtbarkeit": "oeffentlich",
+				"befaehigungId": befaehigungID})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Aufgabe mit Einweisung: HTTP %d: %v", resp.StatusCode, mit)
+		}
+		mitID := mit["id"].(float64)
+
+		// Anmelden zum Mithelfen darf jede und jeder — daran hängt die
+		// Einweisung nicht.
+		for _, token := range []string{memberToken, vorstandToken} {
+			resp, out := request(t, "POST", fmt.Sprintf("/api/v1/places/%.0f/signup", ortID),
+				token, map[string]any{})
+			if resp.StatusCode >= 300 {
+				t.Fatalf("Anmelden: HTTP %d: %v", resp.StatusCode, out)
+			}
+		}
+
+		// Der Vorstand hat die Einweisung (er trägt sie sich selbst ein — er
+		// verwaltet den Träger). Damit gibt es überhaupt jemanden, den die
+		// Vergabe fragen kann, und der Vorgang entsteht.
+		befaehigungErteilen(t, befaehigungID, vorstandToken, vorstandToken)
+		vorgangID := warteAufVorgang(t, memberToken, mitID)
+
+		// Das Mitglied ohne Einweisung kann NICHT zusagen — serverseitig.
+		resp, out := request(t, "POST", fmt.Sprintf("/api/v1/assignments/%.0f/claim", vorgangID),
+			memberToken, nil)
+		if resp.StatusCode != 403 {
+			t.Fatalf("Zusage ohne Einweisung: HTTP %d, erwartet 403: %v", resp.StatusCode, out)
+		}
+		if text, _ := out["error"].(string); text == "" {
+			t.Error("403 ohne verständliche Begründung")
+		}
+
+		// Beantragen — und niemand entscheidet über sich selbst, wenn er den
+		// Träger nicht verwaltet.
+		resp, antrag := request(t, "POST",
+			fmt.Sprintf("/api/v1/befaehigungen/%.0f/antrag", befaehigungID), memberToken,
+			map[string]any{"begruendung": "War bei der Einweisung dabei"})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Antrag: HTTP %d: %v", resp.StatusCode, antrag)
+		}
+		antragID := antrag["id"].(float64)
+
+		resp, _ = request(t, "POST", fmt.Sprintf("/api/v1/antraege/%.0f", antragID), memberToken,
+			map[string]any{"status": "erteilt"})
+		if resp.StatusCode != 403 {
+			t.Errorf("Selbstfreigabe: HTTP %d, erwartet 403", resp.StatusCode)
+		}
+		resp, out = request(t, "POST", fmt.Sprintf("/api/v1/antraege/%.0f", antragID), vorstandToken,
+			map[string]any{"status": "erteilt", "notiz": "eingewiesen"})
+		if resp.StatusCode != 200 {
+			t.Fatalf("Freigabe: HTTP %d: %v", resp.StatusCode, out)
+		}
+		resp, out = request(t, "POST", fmt.Sprintf("/api/v1/assignments/%.0f/claim", vorgangID),
+			memberToken, nil)
+		if resp.StatusCode != 200 {
+			t.Fatalf("Zusage mit Einweisung: HTTP %d, erwartet 200: %v", resp.StatusCode, out)
+		}
+
+		// 9. Sperrt der Betreiber den Träger, verschwindet alles davon.
+		resp, _ = request(t, "PUT", fmt.Sprintf("/api/v1/traeger/%.0f", traegerID), adminToken,
+			map[string]any{"name": "Dorfpflege", "projektId": traegerProjektID,
+				"status": "gesperrt", "sichtbarkeit": "offen"})
+		if resp.StatusCode != 200 {
+			t.Fatalf("Sperren: HTTP %d", resp.StatusCode)
+		}
+		if sieht(memberToken, mitID) {
+			t.Error("die Aufgabe eines gesperrten Trägers ist noch sichtbar")
+		}
+	})
+}
+
+// befaehigungErteilen stellt einen Antrag und gibt ihn gleich frei. Der
+// Träger-Admin darf beides — er verwaltet den Verein.
+func befaehigungErteilen(t *testing.T, befaehigungID float64, antragsToken, adminToken string) {
+	t.Helper()
+	resp, antrag := request(t, "POST",
+		fmt.Sprintf("/api/v1/befaehigungen/%.0f/antrag", befaehigungID), antragsToken,
+		map[string]any{"begruendung": "Einweisung durchgeführt"})
+	if resp.StatusCode != 201 {
+		t.Fatalf("Antrag: HTTP %d: %v", resp.StatusCode, antrag)
+	}
+	resp, out := request(t, "POST", fmt.Sprintf("/api/v1/antraege/%.0f", antrag["id"].(float64)),
+		adminToken, map[string]any{"status": "erteilt"})
+	if resp.StatusCode != 200 {
+		t.Fatalf("Freigabe: HTTP %d: %v", resp.StatusCode, out)
+	}
+}
+
+// warteAufVorgang pollt die Orts-Liste, bis der Zeitgeber einen
+// Vergabe-Vorgang für die Aufgabe eröffnet hat.
+func warteAufVorgang(t *testing.T, token string, taskID float64) float64 {
+	t.Helper()
+	for i := 0; i < 60; i++ {
+		_, liste := request(t, "GET", "/api/v1/places", token, nil)
+		if a := vergabeStandVon(t, liste, taskID); a != nil {
+			return a["id"].(float64)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Fatal("es wurde kein Vergabe-Vorgang eröffnet")
+	return 0
 }
 
 // formular schickt ein klassisches HTML-Formular (so kommt es von der
@@ -1194,6 +1423,17 @@ func waitFor(t *testing.T, url string) {
 		time.Sleep(500 * time.Millisecond)
 	}
 	t.Fatalf("%s wurde nicht bereit", url)
+}
+
+// machineKeyPfad liefert den absoluten Pfad des Machine-Keys aus dem
+// Compose-Volume — das Backend läuft mit einem anderen Arbeitsverzeichnis.
+func machineKeyPfad(t *testing.T) string {
+	t.Helper()
+	pfad, err := filepath.Abs("machinekey/zitadel-admin-sa.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pfad
 }
 
 func base64Decode(s string) ([]byte, error) {

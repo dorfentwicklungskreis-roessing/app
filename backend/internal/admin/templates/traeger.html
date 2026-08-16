@@ -1,0 +1,197 @@
+{{/* Detailseite eines Trägers: Stammdaten, Befähigungen, Anträge, Orte.
+     Alles als echte Seiten und Formulare — keine Modals, ohne JavaScript
+     vollständig bedienbar. */}}
+{{define "seite"}}
+<div class="breadcrumbs text-sm">
+  <ul><li><a href="/admin/traeger/">Träger</a></li><li>{{.Data.Traeger.Name}}</li></ul>
+</div>
+
+<div class="flex flex-wrap items-center gap-2">
+  <h1 class="text-2xl font-bold" id="seitentitel">{{.Data.Traeger.Name}}</h1>
+  <span class="badge {{traegerBadge .Data.Traeger.Status}}" id="zulassungsstand">
+    {{traegerStatus .Data.Traeger.Status}}
+  </span>
+</div>
+
+{{if not .Data.Traeger.ProjektID}}
+  <div class="alert alert-warning mt-4" id="kein-projekt">
+    <span>Diesem Träger ist noch kein Zitadel-Projekt zugeordnet. Bis dahin hat er
+      weder Mitglieder noch Verwaltende — nur der Betreiber kann ihn pflegen.</span>
+  </div>
+{{end}}
+
+{{if .Data.Betreiber}}
+  <div class="card mt-4 bg-base-100 shadow-sm">
+    <div class="card-body flex flex-wrap items-center gap-3">
+      <span class="font-medium">Zulassung:</span>
+      {{if ne (printf "%s" .Data.Traeger.Status) "zugelassen"}}
+        <form method="post" action="/admin/traeger/{{.Data.Traeger.ID}}/zulassung">
+          <input type="hidden" name="status" value="zugelassen">
+          <button class="btn btn-success btn-sm" type="submit" id="zulassen">Zulassen</button>
+        </form>
+      {{end}}
+      {{if ne (printf "%s" .Data.Traeger.Status) "gesperrt"}}
+        <form method="post" action="/admin/traeger/{{.Data.Traeger.ID}}/zulassung">
+          <input type="hidden" name="status" value="gesperrt">
+          <button class="btn btn-error btn-sm" type="submit" id="sperren">Sperren</button>
+        </form>
+      {{end}}
+      <span class="text-sm text-base-content/60">
+        Ein gesperrter Träger behält seine Daten, ist aber mit allen Aufgaben unsichtbar.
+      </span>
+    </div>
+  </div>
+{{end}}
+
+{{if .Data.Formular.Fehler}}
+  <div class="alert alert-error mt-4" id="formularfehler"><span>{{.Data.Formular.Fehler}}</span></div>
+{{end}}
+
+<div class="card mt-6 bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title text-lg">Stammdaten</h2>
+    {{template "traegerFelder" .Data.Formular}}
+  </div>
+</div>
+
+{{/* --- Befähigungen --- */}}
+<div class="card mt-6 bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title text-lg">Befähigungen</h2>
+    <p class="text-base-content/70">
+      Einweisungen, die dieser Träger vergibt (z.B. „Motorsense“, „Schlüssel Gerätehaus“).
+      Eine Aufgabe kann eine davon voraussetzen; wer sie nicht hat, kann nicht zusagen.
+      Die Befähigung gilt für die Person, nicht für eine einzelne Wiese.
+    </p>
+
+    {{if .Data.Befaehigungen}}
+      <div class="mt-2 overflow-x-auto">
+        <table class="table" id="befaehigungen">
+          <thead><tr><th>Name</th><th>Beschreibung</th><th></th></tr></thead>
+          <tbody>
+            {{/* Ein <form> darf nicht direkt in einer <tr> stehen — Browser
+                 heben es sonst aus der Tabelle heraus und die Felder gehören
+                 zu nichts mehr. Das Formular steht deshalb in der letzten
+                 Zelle, die Felder verweisen per form-Attribut darauf. Ohne
+                 JavaScript, wie der Rest der Verwaltung. */}}
+            {{range .Data.Befaehigungen}}
+              <tr id="befaehigung-{{.ID}}">
+                <td><input class="input input-sm w-full" type="text" form="befaehigung-form-{{.ID}}"
+                           name="name" value="{{.Name}}" required maxlength="500"></td>
+                <td><input class="input input-sm w-full" type="text" form="befaehigung-form-{{.ID}}"
+                           name="beschreibung" value="{{.Beschreibung}}" maxlength="500"></td>
+                <td class="whitespace-nowrap text-right">
+                  <form id="befaehigung-form-{{.ID}}" method="post"
+                        action="/admin/traeger/{{.TraegerID}}/befaehigungen/{{.ID}}"></form>
+                  <button class="btn btn-sm" type="submit" form="befaehigung-form-{{.ID}}">Speichern</button>
+                  <a class="btn btn-ghost btn-sm text-error"
+                     href="/admin/traeger/{{.TraegerID}}/befaehigungen/{{.ID}}/loeschen">Löschen</a>
+                </td>
+              </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    {{else}}
+      <div class="alert mt-2" id="keine-befaehigungen">
+        <span>Noch keine Befähigung angelegt.</span>
+      </div>
+    {{end}}
+
+    <form method="post" action="/admin/traeger/{{.Data.Traeger.ID}}/befaehigungen"
+          class="mt-4 flex flex-wrap items-end gap-2">
+      <fieldset class="fieldset grow">
+        <legend class="fieldset-legend">Neue Befähigung</legend>
+        <input class="input w-full" type="text" name="name" id="befaehigung-name"
+               placeholder="z.B. Motorsense" required maxlength="500">
+      </fieldset>
+      <fieldset class="fieldset grow">
+        <legend class="fieldset-legend">Beschreibung</legend>
+        <input class="input w-full" type="text" name="beschreibung"
+               id="befaehigung-beschreibung" placeholder="Einweisung am Gerät" maxlength="500">
+      </fieldset>
+      <button class="btn btn-primary" type="submit" id="befaehigung-anlegen">Anlegen</button>
+    </form>
+  </div>
+</div>
+
+{{/* --- Anträge --- */}}
+<div class="card mt-6 bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title text-lg">
+      Anträge
+      {{if .Data.OffeneAntraege}}
+        <span class="badge badge-warning" id="antraege-offen">{{len .Data.OffeneAntraege}}</span>
+      {{else}}
+        <span class="badge badge-ghost" id="antraege-offen">0</span>
+      {{end}}
+    </h2>
+
+    {{if .Data.OffeneAntraege}}
+      <div class="overflow-x-auto">
+        <table class="table" id="offene-antraege">
+          <thead><tr><th>Person</th><th>Befähigung</th><th>Begründung</th><th>Gestellt</th><th></th></tr></thead>
+          <tbody>
+            {{range .Data.OffeneAntraege}}
+              <tr id="antrag-{{.ID}}">
+                <td>{{.UserName}}</td>
+                <td>{{.BefaehigungName}}</td>
+                <td class="max-w-xs">{{.Begruendung}}</td>
+                <td class="whitespace-nowrap">{{datum .CreatedAt}}</td>
+                <td class="whitespace-nowrap text-right">
+                  <form method="post" action="/admin/traeger/{{.TraegerID}}/antraege/{{.ID}}"
+                        class="flex flex-wrap items-center justify-end gap-1">
+                    <input class="input input-sm" type="text" name="notiz"
+                           placeholder="Notiz (optional)" maxlength="500">
+                    <button class="btn btn-success btn-sm" type="submit" name="status" value="erteilt">Erteilen</button>
+                    <button class="btn btn-ghost btn-sm" type="submit" name="status" value="abgelehnt">Ablehnen</button>
+                  </form>
+                </td>
+              </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    {{else}}
+      <div class="alert" id="keine-antraege"><span>Keine offenen Anträge.</span></div>
+    {{end}}
+
+    {{if .Data.Entschieden}}
+      <h3 class="mt-4 font-medium">Bereits entschieden</h3>
+      <div class="overflow-x-auto">
+        <table class="table table-sm" id="entschiedene-antraege">
+          <thead><tr><th>Person</th><th>Befähigung</th><th>Stand</th><th>Am</th><th>Notiz</th></tr></thead>
+          <tbody>
+            {{range .Data.Entschieden}}
+              <tr>
+                <td>{{.UserName}}</td>
+                <td>{{.BefaehigungName}}</td>
+                <td><span class="badge {{antragBadge .Status}}">{{antragStatus .Status}}</span></td>
+                <td class="whitespace-nowrap">{{datumOpt .EntschiedenAm}}</td>
+                <td>{{.Notiz}}</td>
+              </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    {{end}}
+  </div>
+</div>
+
+{{/* --- Orte --- */}}
+<div class="card mt-6 bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title text-lg">Orte dieses Trägers</h2>
+    {{if .Data.Orte}}
+      <ul class="mt-2 list-inside list-disc" id="traeger-orte">
+        {{range .Data.Orte}}
+          <li><a class="link link-primary" href="/admin/mithelfen/orte/{{.ID}}">{{.Name}}</a>
+            <span class="text-base-content/60">({{ortsart .Kind}})</span></li>
+        {{end}}
+      </ul>
+    {{else}}
+      <div class="alert"><span>Diesem Träger gehört noch kein Ort.</span></div>
+    {{end}}
+  </div>
+</div>
+{{end}}

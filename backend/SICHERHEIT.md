@@ -361,6 +361,58 @@ Für die Play-Datensicherheit ändert sich nichts Neues gegenüber den
 Profildaten: *Name* und *Email address* sind bereits als optional erhoben
 deklariert, dazu kommt *Personal info → Other info* für den Wunschtext.
 
+## Träger und Befähigungen (Stand 16.08.2026)
+
+**Was neu verarbeitet wird.** Zwei Dinge: die **Vereinszugehörigkeit** einer
+Person (welche Rolle sie in welchem Zitadel-Projekt hat) und ihre
+**Befähigungen** (erteilte Einweisungen samt Antrag, Begründung, Entscheidung
+und interner Notiz des Trägers).
+
+**Woher die Zugehörigkeit kommt.** Nicht aus dem Token, sondern über einen
+**Dienst-Nutzer** aus der Zitadel-Management-API. Zweck: Nur so wirkt eine
+neue Mitgliedschaft sofort, ohne dass die App für jeden neuen Verein einen
+weiteren Scope lernen und sich jedes Gerät neu anmelden muss. Die Auskunft
+wird **nur im Arbeitsspeicher** zwischengespeichert (Vorgabe 45 Sekunden,
+`ZITADEL_ROLLEN_TTL`) und **nirgends in die Datenbank geschrieben** — der
+Bestand bleibt bei Zitadel, wo er hingehört. In Logs landen weder
+Mitgliedschaften noch das Dienst-Token.
+
+**Rechte des Dienst-Nutzers.** Er braucht ausschließlich **Lesezugriff** auf
+Rollenzuweisungen (`ORG_USER_GRANT_VIEWER` bzw. „Org User Manager" nur lesend).
+Er darf ausdrücklich keine Nutzer anlegen, ändern oder Rollen vergeben. Sein
+Schlüssel liegt als Datei (im Cluster ein SealedSecret), das Access-Token wird
+kurzlebig selbst erzeugt — **kein statisches Token in der Konfiguration.**
+
+**Was ein Ausfall bedeutet.** Fällt Zitadel aus, gilt der letzte bekannte
+Stand aus dem Zwischenspeicher, gekennzeichnet als „veraltet". Damit wird
+weiter **gelesen**, aber nicht mehr **geschrieben** (`503` statt `403`, mit
+Erklärung). Begründung: Ein zu lange gültiger Lesezugriff ist heilbar, eine
+Änderung, die jemand nach seinem Austritt vornimmt, nicht. Ist gar nichts
+bekannt, gibt es **keine** Mitgliedschaften — man sieht dann nur, was ohnehin
+öffentlich ist. Ein Ausfall macht die App also vorsichtiger, nie großzügiger.
+Die globale Betreiber-Rolle steckt im Token und bleibt handlungsfähig, damit
+im Ernstfall jemand eingreifen kann.
+
+**Interne Aufgaben.** `nur_mitglieder` ist als harte Grenze umgesetzt und
+nicht als Anzeige-Einstellung: Die Aufgabe fehlt in der Ortsliste, ihre
+Historie und eine Meldung darauf ergeben **404** (nicht 403 — die bloße
+Existenz soll nicht durchsickern), sie zählt für Außenstehende nicht in der
+Rangliste (gefiltert bereits in SQL, damit nicht die Gesamtsumme verrät, was
+die Zeilen verschweigen) und die Vergabe bietet sie niemandem außerhalb an.
+Ein Ort, dessen sämtliche Aufgaben intern sind, verschwindet mit — eine leere
+Nadel auf der Karte wäre schon ein Hinweis. Ohne gesicherte
+Mitgliedschafts-Auskunft wird eine interne Aufgabe **von sich aus an
+niemanden** verteilt: Ein Push ist nicht zurückzuholen.
+
+**Befähigungen als personenbezogene Daten.** Antrag, Begründung, Entscheidung
+und Notiz stehen in der Datenbank und sind für die **Verwaltenden des
+jeweiligen Trägers** sichtbar — nicht für andere Träger und nicht für andere
+Mitglieder. Rechtsgrundlage: berechtigtes Interesse an der sicheren Nutzung
+von Geräten (Art. 6 Abs. 1 lit. f DSGVO); ohne Nachweis der Einweisung darf
+niemand mit der Motorsense losgeschickt werden. Speicherdauer: solange die
+Person dem Träger angehört. Für die App-Nutzung ändert sich an der
+Play-Datensicherheit nichts — es kommen keine neuen Kategorien hinzu.
+
 ## Wenn doch etwas klemmt
 
 Alle Riegel sind über die Umgebung steuerbar, ohne neues Image:

@@ -71,6 +71,11 @@ export default async function globalSetup() {
       IDEEN_ZIELE: 'https://xn--rssing-wxa.de',
       IDEEN_BURST: '100',
       IDEEN_PRO_STUNDE: '100',
+      // Träger-Mitgliedschaften kommen wie in Produktion aus der Rössing-ID:
+      // Das Backend fragt sie mit dem Dienst-Nutzer über die Management-API
+      // ab. Im E2E ist das derselbe Machine-Key wie beim Bootstrap.
+      ZITADEL_SERVICE_USER_KEY_FILE: path.resolve(backendDir, 'e2e/machinekey/zitadel-admin-sa.json'),
+      ZITADEL_ROLLEN_TTL: '1s',
     },
     stdio: ['ignore', log, log],
     detached: true,

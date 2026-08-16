@@ -47,6 +47,61 @@ Anfang.
     „Mithelfen" liegt unter `/admin/mithelfen/…` (der frühere Pfad
     `/admin/dorfpflege/…` leitet dauerhaft per 308 dorthin um)
   - SQLite im WAL-Modus auf einem PVC (`/data/dorfapp.sqlite`)
+- **Träger**: Alles, was in der App steht, gehört einem **Verein oder einer
+  Gruppe**. Die Dorf-App vermittelt ausdrücklich **nicht** zwischen
+  Privatleuten, sondern verwaltet die **Allmende** — das, was dem Dorf
+  gemeinsam gehört. Aufgaben entstehen deshalb nicht spontan von Einzelnen,
+  sondern werden von Trägern **kuratiert** eingestellt; neben den bestehenden
+  Vereinen entsteht keine Parallelstruktur.
+  **Ein Träger = ein Zitadel-Projekt** mit genau zwei Rollen, `admin` und
+  `mitglied` (ohne Vereinspräfix — sie sind im Projekt eindeutig).
+  Ein Träger hat einen **Zulassungsstand** (`beantragt`, `zugelassen`,
+  `gesperrt`; zulassen darf **nur der Plattform-Betreiber**, sonst ist er
+  unsichtbar) und eine **Sichtbarkeit** (`offen` = steht im Verzeichnis,
+  `geschlossen` = nur Mitglieder finden ihn). Erster Träger ist der
+  **Dorfentwicklungskreis** als Platzhalter; ihm gehören die bestehenden
+  Aufgaben („Blumengießen Unter den Eichen"), bis die **Dorfpflege** offiziell
+  zugestimmt hat und ihre Orte übernimmt.
+- **Mitgliedschaften kommen nicht aus dem Token.** Zitadel legt Rollen eines
+  Projekts nur dann ins Token, wenn die App genau dieses Projekt als Empfänger
+  anfordert (`urn:zitadel:iam:org:project:id:<id>:aud`) — für jeden neuen
+  Verein hieße das App-Update und erneute Anmeldung auf jedem Gerät.
+  Stattdessen fragt das Backend die Rollenzuweisungen mit einem eigenen
+  **Dienst-Nutzer** (Machine User) über die Management-API ab
+  (`POST /management/v1/users/grants/_search`, gefiltert nach `userId`) und
+  puffert die Auskunft kurz (`ZITADEL_ROLLEN_TTL`, Vorgabe 45 s). Der gewollte
+  Vorteil: Eine neue Mitgliedschaft wirkt **sofort**, ohne Ab- und Anmelden.
+  Code: `backend/internal/mitglied`.
+  **Fällt Zitadel aus**, gilt der letzte bekannte Stand aus dem
+  Zwischenspeicher — als „veraltet" markiert. Damit wird weiter **gelesen**,
+  aber nicht mehr **geschrieben**: Ein zu lange gültiger Lesezugriff ist
+  heilbar, eine Änderung nach dem Austritt nicht. Ist gar nichts bekannt, gibt
+  es keine Mitgliedschaften (man sieht nur Öffentliches). Die globale
+  Betreiber-Rolle steckt im Token und bleibt davon unberührt — der Betreiber
+  bleibt handlungsfähig. Kurz: Ein Ausfall macht die App vorsichtiger, nie
+  großzügiger.
+- **Sichtbarkeit einer Aufgabe**: `oeffentlich` oder `nur_mitglieder`. Eine
+  **geschlossene Gruppe kann sehr wohl öffentlich ausschreiben** — die
+  Sichtbarkeit des Trägers betrifft nur das Verzeichnis. Umgekehrt gilt für
+  `nur_mitglieder` die schärfste Regel des Systems: Die Aufgabe erscheint
+  außerhalb des Trägers **auf keinem Weg** — nicht in Listen, nicht auf der
+  Karte, nicht in Historie oder Rangliste (dort wird schon in SQL gefiltert,
+  damit nicht die Gesamtsumme verrät, was die Zeilen verschweigen) und nicht
+  als Anfrage oder Push. Ein Ort, dessen sämtliche Aufgaben intern sind,
+  verschwindet gleich mit: Eine leere Nadel auf der Karte wäre schon ein
+  Hinweis. Entschieden wird das an genau einer Stelle,
+  `model.Zugriff` (`backend/internal/model/traeger.go`).
+- **Befähigungen** („Einweisung nötig"): Ein Träger definiert Befähigungen
+  (z.B. „Motorsense", „Schlüssel Gerätehaus"); eine Aufgabe kann eine
+  voraussetzen. Wer sie nicht hat, **kann nicht zusagen** — serverseitig
+  durchgesetzt, nicht bloß in der Oberfläche ausgeblendet — und wird von der
+  Vergabe erst gar nicht gefragt. Beantragt wird sie von der Person,
+  freigegeben oder abgelehnt vom Träger-`admin`. Bewusst als Befähigung der
+  **Person** modelliert und nicht je Aufgabe: Wer einmal eingewiesen ist, ist
+  es überall — sonst müsste jede einzelne Wiese neu freigegeben werden.
+- **Wer darf was (Träger)**: Orte, Aufgaben und Befähigungen eines Trägers
+  pflegt ausschließlich dessen `admin`. Die bestehende globale `admin`-Rolle
+  bleibt die **Betreiberrolle**: Träger zulassen und sperren, alles sehen.
 - **Domänenmodell**: Orte (`blumenkasten`, `beet`, `sonstiges`) haben
   Pflegeaufgaben (`giessen` mit Litern, `jaeten`, `sonstiges`). Eine Aufgabe
   ist entweder **regelmäßig** — Intervall (→ gelb) und Rot-Schwelle — oder
@@ -319,6 +374,8 @@ Distribution und der GHCR-Push müssen selbstverständlich nach außen.
 | `MCP_CLIENT_ID` | PKCE-Client für die MCP-Anbindung |
 | `SEED` | `1` → Beispieldaten anlegen, falls die DB leer ist |
 | `AUTH_AUDIENCE` | kommaseparierte Liste erlaubter Token-Empfänger — die Client-IDs der Anwendungen, die dieses Backend nutzen dürfen. **Im OIDC-Modus Pflicht:** ohne sie prüft das Backend nur Aussteller und Signatur, und ein Token für ein anderes Projekt derselben Rössing-ID käme durch. Der Server verweigert deshalb ohne diesen Wert den Start |
+| `ZITADEL_SERVICE_USER_KEY_FILE` | JSON-Schlüssel des Dienst-Nutzers, mit dem die Träger-Mitgliedschaften über die Management-API abgefragt werden. **Fehlt er, gibt es keine Träger-Rollen**: Dann verwaltet nur der Betreiber, und alle anderen sehen die öffentlichen Aufgaben. Der Betrieb läuft dabei unverändert weiter |
+| `ZITADEL_ROLLEN_TTL` | Wie lange eine Mitgliedschafts-Auskunft als frisch gilt (Vorgabe `45s`) |
 | `RATE_LIMIT` | `off` schaltet die Zugriffsbegrenzung ab |
 | `RATE_LIMIT_BURST` / `RATE_LIMIT_PER_MINUTE` | Eimergröße (60) und Nachfüllrate pro Minute (120) |
 | `MAX_BODY_BYTES` | Obergrenze je Anfrage, Standard 1 MiB |

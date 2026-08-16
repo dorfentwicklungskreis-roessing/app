@@ -25,6 +25,7 @@ import (
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
@@ -57,6 +58,9 @@ type Config struct {
 	// SessionKey signiert die Cookies. Leer = zufälliger Schlüssel beim Start
 	// (dann sind Sessions nach einem Neustart ungültig).
 	SessionKey []byte
+	// Mitglieder liefert die Träger-Mitgliedschaften (Zitadel-Dienst-Nutzer,
+	// siehe internal/mitglied). Ohne Angabe verwaltet nur der Betreiber.
+	Mitglieder mitglied.Quelle
 	Now        func() time.Time
 }
 
@@ -71,6 +75,7 @@ type App struct {
 	discovery     *discoverer
 	now           func() time.Time
 	pages         map[string]*template.Template
+	mitglieder    mitglied.Quelle
 }
 
 // Register hängt Startseite und Verwaltung an den Mux.
@@ -90,6 +95,7 @@ func newApp(cfg Config) *App {
 		discovery:     &discoverer{issuer: cfg.Issuer},
 		now:           cfg.Now,
 		pages:         parsePages(),
+		mitglieder:    cfg.Mitglieder,
 	}
 	if a.now == nil {
 		a.now = time.Now
@@ -118,6 +124,7 @@ func (a *App) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/logout", a.handleLogout)
 
 	a.registerMithelfen(mux)
+	a.registerTraeger(mux)
 	a.registerIdeen(mux)
 	a.registerDorfbewohner(mux)
 }
@@ -151,6 +158,13 @@ var funcs = template.FuncMap{
 	"vergabeStand":   vergabeStandText,
 	"ortsart":        ortsart,
 	"aufgabenart":    aufgabenart,
+	// Träger: Zulassungsstand, Sichtbarkeit und Anträge im Klartext.
+	"traegerStatus":       traegerStatusText,
+	"traegerBadge":        traegerBadge,
+	"traegerSichtbarkeit": traegerSichtbarkeitText,
+	"antragStatus":        antragStatusText,
+	"antragBadge":         antragBadge,
+	"aufgabenSicht":       aufgabenSichtText,
 	// Alle Zeiten stehen in der Ortszeit des Dorfes (Europe/Berlin) — der
 	// Server läuft in UTC, gelesen wird die Seite aber in Rössing.
 	"datum":     func(t time.Time) string { return ortszeit(t).Format("02.01.2006") },
@@ -303,6 +317,67 @@ func statusBadge(s model.Status) string {
 	default:
 		return "badge-success"
 	}
+}
+
+// --- Träger im Klartext -----------------------------------------------------
+
+func traegerStatusText(s model.TraegerStatus) string {
+	switch s {
+	case model.TraegerZugelassen:
+		return "zugelassen"
+	case model.TraegerGesperrt:
+		return "gesperrt"
+	default:
+		return "beantragt"
+	}
+}
+
+func traegerBadge(s model.TraegerStatus) string {
+	switch s {
+	case model.TraegerZugelassen:
+		return "badge-success"
+	case model.TraegerGesperrt:
+		return "badge-error"
+	default:
+		return "badge-warning"
+	}
+}
+
+func traegerSichtbarkeitText(s model.TraegerSichtbarkeit) string {
+	if s == model.TraegerGeschlossen {
+		return "geschlossen"
+	}
+	return "offen"
+}
+
+func antragStatusText(s model.AntragStatus) string {
+	switch s {
+	case model.AntragErteilt:
+		return "erteilt"
+	case model.AntragAbgelehnt:
+		return "abgelehnt"
+	default:
+		return "beantragt"
+	}
+}
+
+func antragBadge(s model.AntragStatus) string {
+	switch s {
+	case model.AntragErteilt:
+		return "badge-success"
+	case model.AntragAbgelehnt:
+		return "badge-ghost"
+	default:
+		return "badge-warning"
+	}
+}
+
+// aufgabenSichtText benennt die Sichtbarkeit einer Aufgabe.
+func aufgabenSichtText(s model.TaskSichtbarkeit) string {
+	if s == model.AufgabeNurMitglieder {
+		return "nur Mitglieder"
+	}
+	return "öffentlich"
 }
 
 func ortsart(k model.PlaceKind) string {

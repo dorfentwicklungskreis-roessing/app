@@ -59,6 +59,13 @@ type Place struct {
 	Lon         float64   `json:"lon"`
 	Active      bool      `json:"active"`
 	CreatedAt   time.Time `json:"createdAt"`
+	// TraegerID: der Verein bzw. die Gruppe, der dieser Ort gehört (siehe
+	// traeger.go). Über ihn hängt auch jede Aufgabe des Ortes an einem
+	// Träger — es gibt bewusst nur diese eine Zuordnung, damit Ort und
+	// Aufgabe nicht auseinanderlaufen können.
+	TraegerID int64 `json:"traegerId"`
+	// TraegerName ist ein Anzeigefeld (nicht gespeichert).
+	TraegerName string `json:"traegerName,omitempty"`
 }
 
 // CareTask ist eine wiederkehrende Pflegeaufgabe an einem Ort.
@@ -92,7 +99,19 @@ type CareTask struct {
 	RemovedAt *time.Time `json:"removedAt,omitempty"`
 	Active    bool       `json:"active"`
 	CreatedAt time.Time  `json:"createdAt"`
+	// Sichtbarkeit: „oeffentlich“ (jeder im Dorf) oder „nur_mitglieder“
+	// (ausschließlich Mitglieder des Trägers). Eine interne Aufgabe darf
+	// außerhalb auf keinem Weg erscheinen — siehe Zugriff.SiehtAufgabe.
+	Sichtbarkeit TaskSichtbarkeit `json:"sichtbarkeit"`
+	// BefaehigungID: verlangte Einweisung (0 = keine). Ohne sie kann
+	// niemand zusagen; durchgesetzt wird das serverseitig.
+	BefaehigungID int64 `json:"befaehigungId,omitempty"`
+	// BefaehigungName ist ein Anzeigefeld (nicht gespeichert).
+	BefaehigungName string `json:"befaehigungName,omitempty"`
 }
+
+// Intern sagt, ob die Aufgabe den Träger nicht verlassen darf.
+func (t CareTask) Intern() bool { return t.Sichtbarkeit == AufgabeNurMitglieder }
 
 // OneOffLeadTime ist die Vorwarnzeit einer einmaligen Aufgabe: So lange vor
 // dem Termin wird sie gelb. Drei Tage sind im Dorf die richtige Größe —
