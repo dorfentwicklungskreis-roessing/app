@@ -48,7 +48,12 @@ test('Träger: anlegen, zulassen, Befähigung pflegen, interne Aufgabe einstelle
     await page.locator('#befaehigung-name').fill('Motorsense');
     await page.locator('#befaehigung-beschreibung').fill('Einweisung am Gerät');
     await page.locator('#befaehigung-anlegen').click();
-    await expect(page.locator('#befaehigungen')).toContainText('Motorsense');
+    // Die Liste ist gleich das Bearbeitungsformular — der Name steht also in
+    // einem Eingabefeld und nicht im Text der Zelle.
+    await expect(page.locator('#befaehigungen input[name="name"]')).toHaveValue('Motorsense');
+    await expect(page.locator('#befaehigungen input[name="beschreibung"]')).toHaveValue(
+      'Einweisung am Gerät',
+    );
     await expect(page.locator('#antraege-offen')).toHaveText('0');
   });
 
