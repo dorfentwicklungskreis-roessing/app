@@ -53,13 +53,13 @@ async function zapiSoft(issuer, token, method, path, body) {
 }
 
 /**
- * Legt Projekt, Rollen, eine User-Agent-App mit PKCE und zwei menschliche
- * Nutzer (mit Passwort) an. Gibt Client-ID und Zugangsdaten zurück.
+ * Stellt die Login-Policy der Instanz so ein, dass ein Passwort-Login ohne
+ * Zwischenseiten durchläuft.
+ *
+ * Wird von beiden Browser-Anmeldungen gebraucht (Web-Admin im Chromium,
+ * Android-App im Custom Tab), deshalb hier und nicht in `bootstrap()`.
  */
-export async function bootstrap({ issuer, keyPath, redirectUri }) {
-  const token = await iamToken(issuer, keyPath);
-  const stamp = Date.now();
-
+export async function loginPolicyFuerTests(issuer, token) {
   // Zweitfaktor-Prompt abschalten: sonst schiebt die Login-UI nach dem
   // Passwort eine „2FA einrichten"-Seite dazwischen und der Flow wird flaky.
   for (const f of ['SECOND_FACTOR_TYPE_OTP', 'SECOND_FACTOR_TYPE_U2F', 'SECOND_FACTOR_TYPE_OTP_EMAIL', 'SECOND_FACTOR_TYPE_OTP_SMS']) {
@@ -91,6 +91,35 @@ export async function bootstrap({ issuer, keyPath, redirectUri }) {
 
   const kontrolle = await zapiSoft(issuer, token, 'GET', '/admin/v1/policies/login');
   console.log('   Login-Policy:', JSON.stringify(kontrolle?.policy ?? {}));
+}
+
+/**
+ * Legt einen menschlichen Nutzer mit Passwort an und erteilt ihm die Rollen.
+ * Die E-Mail-Adresse zeigt bewusst auf `.invalid` — es wird nie etwas versandt.
+ */
+export async function menschAnlegen({ issuer, token, projectId, userName, password, roleKeys = [] }) {
+  const u = await zapi(issuer, token, 'POST', '/management/v1/users/human/_import', {
+    userName,
+    profile: { firstName: 'E2E', lastName: userName, displayName: userName, preferredLanguage: 'de' },
+    email: { email: `${userName}@e2e.invalid`, isEmailVerified: true },
+    password,
+    passwordChangeRequired: false,
+  });
+  if (roleKeys.length) {
+    await zapi(issuer, token, 'POST', `/management/v1/users/${u.userId}/grants`, { projectId, roleKeys });
+  }
+  return { userName, password, userId: u.userId };
+}
+
+/**
+ * Legt Projekt, Rollen, eine User-Agent-App mit PKCE und zwei menschliche
+ * Nutzer (mit Passwort) an. Gibt Client-ID und Zugangsdaten zurück.
+ */
+export async function bootstrap({ issuer, keyPath, redirectUri }) {
+  const token = await iamToken(issuer, keyPath);
+  const stamp = Date.now();
+
+  await loginPolicyFuerTests(issuer, token);
 
   const project = await zapi(issuer, token, 'POST', '/management/v1/projects', {
     name: `dorf-app-web-e2e-${stamp}`,
@@ -118,19 +147,8 @@ export async function bootstrap({ issuer, keyPath, redirectUri }) {
     idTokenRoleAssertion: true,
   });
 
-  const newHuman = async (userName, password, roleKeys) => {
-    const u = await zapi(issuer, token, 'POST', '/management/v1/users/human/_import', {
-      userName,
-      profile: { firstName: 'E2E', lastName: userName, displayName: userName, preferredLanguage: 'de' },
-      email: { email: `${userName}@e2e.invalid`, isEmailVerified: true },
-      password,
-      passwordChangeRequired: false,
-    });
-    if (roleKeys.length) {
-      await zapi(issuer, token, 'POST', `/management/v1/users/${u.userId}/grants`, { projectId, roleKeys });
-    }
-    return { userName, password, userId: u.userId };
-  };
+  const newHuman = (userName, password, roleKeys) =>
+    menschAnlegen({ issuer, token, projectId, userName, password, roleKeys });
 
   // Der Nutzername „test-dorf" spiegelt den Test-Account der Produktion.
   const admin = await newHuman(`test-dorf-${stamp}`, 'Test-Dorf-2026!', ['admin']);

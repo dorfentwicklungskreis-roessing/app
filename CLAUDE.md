@@ -26,6 +26,14 @@ Details: siehe `README.md`.
 - **Android**: Version Catalog (`gradle/libs.versions.toml`) pflegen, keine
   neuen DI-Frameworks — manuelle DI über `AppContainer`. UI-Strings nach
   `res/values/strings.xml` (deutsch). Unit-Tests für ViewModels Pflicht.
+- **Tests laufen ausschließlich lokal.** Kein Test — auch kein E2E — darf
+  einen entfernten Server anfassen, erst recht nicht die Produktion. Zitadel
+  gehört zur CI-Umgebung (`backend/e2e/docker-compose.yml`), Terminfeed und
+  Kartenstil kommen aus `android/e2e/fixtures/`. Wer eine neue Adresse
+  braucht: den Dienst in der CI mitstarten, nicht nach draußen zeigen.
+  `.github/workflows/lokale-tests.yml` prüft das bei jeder Änderung. Ausgenommen
+  ist allein die **Auslieferung** (Play-Upload, Firebase-Verteilung,
+  GHCR-Push). E2E ohne Mocks bleibt Vorgabe — lokal heißt nicht gemockt.
 - **Docker-Images**: Immer native ARM-Runner (`ubuntu-24.04-arm`), niemals
   QEMU — siehe Workflow-Muster in `.github/workflows/backend.yml`.
 - **SQLite**: eine Schreibverbindung (`SetMaxOpenConns(1)`), WAL-Modus wird

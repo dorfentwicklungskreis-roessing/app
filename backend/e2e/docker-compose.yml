@@ -5,6 +5,17 @@
 #
 # Start:  docker compose up -d --wait   (dauert beim ersten Mal ~1 min)
 # Tests:  cd .. && go test -tags e2e ./e2e/ -v
+#
+# ZITADEL_EXTERNALDOMAIN/-PORT sind übersteuerbar, weil OIDC verlangt, dass
+# ALLE Beteiligten denselben Aussteller sehen. Für den Android-E2E ist das
+# nicht „localhost": der Emulator erreicht den Host ausschließlich unter
+# 10.0.2.2, also läuft Zitadel dort mit
+#
+#   ZITADEL_EXTERNALDOMAIN=10.0.2.2 docker compose up -d --wait
+#
+# und der Runner legt sich 10.0.2.2 als Loopback-Adresse an, damit auch das
+# Backend auf dem Host denselben Aussteller auflöst
+# (siehe .github/workflows/android.yml).
 services:
   db:
     image: postgres:16-alpine
@@ -33,8 +44,8 @@ services:
       ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
       ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: postgres
       ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
-      ZITADEL_EXTERNALDOMAIN: localhost
-      ZITADEL_EXTERNALPORT: "8123"
+      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_EXTERNALDOMAIN:-localhost}
+      ZITADEL_EXTERNALPORT: "${ZITADEL_EXTERNALPORT:-8123}"
       ZITADEL_EXTERNALSECURE: "false"
       # Beim Init einen IAM-Admin-Machine-User anlegen und dessen
       # JSON-Key nach /machinekey schreiben — damit bootstrappen die Tests.
@@ -45,7 +56,9 @@ services:
       # Für den Healthcheck (`zitadel ready` liest die Env, nicht die CLI-Flags):
       ZITADEL_TLS_ENABLED: "false"
     ports:
-      - "8123:8080"
+      # Bewusst auf allen Adressen des Hosts: Der Android-E2E spricht dieselbe
+      # Instanz unter 10.0.2.2 an (Loopback-Alias auf dem Runner).
+      - "${ZITADEL_EXTERNALPORT:-8123}:8080"
     volumes:
       - ./machinekey:/machinekey
     healthcheck:

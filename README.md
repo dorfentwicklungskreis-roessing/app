@@ -260,6 +260,51 @@ Geprüft werden echte Seitenwechsel (URL-Vergleich), das Anlegen von Ort und
 Aufgabe, Erledigungen, Hitzefaktor, Löschen über die Bestätigungsseite, das
 Rollen-Gating — und ein kompletter Durchlauf **mit abgeschaltetem JavaScript**.
 
+### Alle Tests laufen ausschließlich lokal
+
+**Kein Test greift auf einen entfernten Server zu — erst recht nicht auf die
+Produktion.** Das gilt ausnahmslos: Zitadel, Dorf-API, Terminfeed der Website,
+Kartenkacheln und Firebase stehen im Testlauf allesamt auf dem Rechner, der
+den Test ausführt.
+
+Der Anlass ist nicht theoretisch: Der Android-Login-Test meldete sich früher an
+der echten Rössing-ID an. Fiel der Server aus, wurde die CI rot, obwohl am Code
+nichts falsch war; zwei gleichzeitige Läufe warfen sich gegenseitig aus der
+Sitzung desselben Testkontos; und ein Test mit gültiger Anmeldung kann in der
+Produktion Daten verändern.
+
+Was die CI dafür selbst hochfährt (`.github/workflows/android.yml`):
+
+| Dienst | Adresse im Test | Woher |
+|---|---|---|
+| Zitadel | `http://10.0.2.2:8123` | `backend/e2e/docker-compose.yml` mit `ZITADEL_EXTERNALDOMAIN=10.0.2.2` |
+| Backend (Dev-Login) | `http://10.0.2.2:8099` | `go run ./cmd/server`, `AUTH_MODE=insecure-dev` |
+| Backend (echtes OIDC) | `http://10.0.2.2:8098` | `go run ./cmd/server` gegen obiges Zitadel |
+| Terminfeed, Kartenstil | `http://10.0.2.2:8097` | `android/e2e/fixtures/` über `python3 -m http.server` |
+
+`10.0.2.2` ist die Adresse, unter der der Emulator den Host erreicht. Weil OIDC
+verlangt, dass **alle** Beteiligten wörtlich denselben Aussteller sehen, legt
+der Runner sich diese Adresse zusätzlich als Loopback an
+(`ip addr add 10.0.2.2/32 dev lo`) — danach meint „10.0.2.2" im Emulator und
+auf dem Host dieselbe Zitadel-Instanz, und das Backend prüft Tokens gegen genau
+den Aussteller, den die App angefragt hat.
+
+Projekt, Rollen, die native PKCE-App und das Testkonto legt
+`android/e2e/zitadel-bootstrap.mjs` bei jedem Lauf neu an — reproduzierbar,
+ohne Handarbeit und ohne GitHub-Secrets. Jeder Lauf bekommt sein eigenes Konto,
+gleichzeitige Läufe stören sich also nicht mehr.
+
+Damit das so bleibt, prüft `.github/workflows/lokale-tests.yml` bei **jeder**
+Änderung, ob in Testquellen oder Test-CI wieder eine entfernte Adresse steht:
+
+```sh
+python3 .github/scripts/pruefe_lokale_tests.py            # Prüfung
+python3 .github/scripts/pruefe_lokale_tests.py --selbsttest  # prüft die Prüfung
+```
+
+Die Auslieferungs-Workflows sind davon ausgenommen — Play-Upload, Firebase App
+Distribution und der GHCR-Push müssen selbstverständlich nach außen.
+
 ### Konfiguration des Backends (Env)
 
 | Variable | Bedeutung |

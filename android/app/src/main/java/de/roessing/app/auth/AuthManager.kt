@@ -81,7 +81,14 @@ sealed interface LoginResult {
  */
 class AuthManager(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val authService by lazy { AuthorizationService(context) }
+
+    /**
+     * AppAuth spricht standardmäßig nur https. Für den E2E-Lauf steht der
+     * Aussteller lokal (`http://10.0.2.2:8123`), damit sich kein Test an der
+     * Produktion anmeldet — [appAuthKonfiguration] macht daraus die eng
+     * begrenzte Ausnahme. Im Release-Build ist es die strenge Vorbelegung.
+     */
+    private val authService by lazy { AuthorizationService(context, appAuthKonfiguration) }
     private val stateKey = stringPreferencesKey("authState")
     private val devKey = stringPreferencesKey("devToken")
 
@@ -121,24 +128,31 @@ class AuthManager(private val context: Context) {
 
     /** Baut den Browser-Intent für den OIDC-Login. */
     suspend fun buildLoginIntent(): Intent = suspendCancellableCoroutine { cont ->
-        AuthorizationServiceConfiguration.fetchFromIssuer(Uri.parse(BuildConfig.OIDC_ISSUER)) { config, ex ->
-            if (config == null) {
-                cont.cancel(ex ?: IllegalStateException("OIDC-Discovery fehlgeschlagen"))
-                return@fetchFromIssuer
-            }
-            val request = AuthorizationRequest.Builder(
-                config,
-                BuildConfig.OIDC_CLIENT_ID,
-                ResponseTypeValues.CODE,
-                Uri.parse(BuildConfig.OIDC_REDIRECT_URI),
-            )
-                .setScopes(LOGIN_SCOPES)
-                // Bewusst KEIN prompt-Parameter: Zitadel kennt nur none/login/
-                // select_account/create. Ein unbekannter Wert wie "consent" ist
-                // laut Spec zwar zu ignorieren, ist aber unnötiges Risiko.
-                .build()
-            cont.resume(authService.getAuthorizationRequestIntent(request))
-        }
+        AuthorizationServiceConfiguration.fetchFromIssuer(
+            Uri.parse(BuildConfig.OIDC_ISSUER),
+            { config, ex ->
+                if (config == null) {
+                    cont.cancel(ex ?: IllegalStateException("OIDC-Discovery fehlgeschlagen"))
+                    return@fetchFromIssuer
+                }
+                val request = AuthorizationRequest.Builder(
+                    config,
+                    BuildConfig.OIDC_CLIENT_ID,
+                    ResponseTypeValues.CODE,
+                    Uri.parse(BuildConfig.OIDC_REDIRECT_URI),
+                )
+                    .setScopes(LOGIN_SCOPES)
+                    // Bewusst KEIN prompt-Parameter: Zitadel kennt nur none/login/
+                    // select_account/create. Ein unbekannter Wert wie "consent" ist
+                    // laut Spec zwar zu ignorieren, ist aber unnötiges Risiko.
+                    .build()
+                cont.resume(authService.getAuthorizationRequestIntent(request))
+            },
+            // Die Discovery läuft über denselben Aufbau wie der Token-Tausch —
+            // sonst scheitert sie am lokalen Aussteller, bevor der Browser
+            // überhaupt aufgeht.
+            oidcVerbindungsaufbau,
+        )
     }
 
     /**
