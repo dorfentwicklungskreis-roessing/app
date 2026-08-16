@@ -186,3 +186,27 @@ func TestOrtUndAufgabeMitTraegerUndSichtbarkeit(t *testing.T) {
 		t.Fatalf("Sichtbarkeit verloren: %+v %v", geleseneAufgabe, err)
 	}
 }
+
+// Eine ganz frische Datenbank soll keinen Träger auf Vorrat anlegen — er
+// entsteht erst, wenn der erste Ort ihn braucht.
+func TestFrischeDatenbankLegtErstBeiBedarfAn(t *testing.T) {
+	d := testDB(t)
+	liste, err := d.ListTraeger()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(liste) != 0 {
+		t.Fatalf("Träger auf Vorrat angelegt: %+v", liste)
+	}
+	p := model.Place{Name: "Kasten", Kind: model.PlaceFlowerbox, Lat: 52.2, Lon: 9.87, Active: true}
+	if err := d.InsertPlace(&p); err != nil {
+		t.Fatal(err)
+	}
+	if p.TraegerID == 0 {
+		t.Fatal("der Ort blieb ohne Träger")
+	}
+	dek, err := d.GetTraegerBySchluessel(model.SchluesselDEK)
+	if err != nil || dek == nil || dek.ID != p.TraegerID {
+		t.Fatalf("nicht dem Platzhalter zugeordnet: %+v %v", dek, err)
+	}
+}
