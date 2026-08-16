@@ -2,6 +2,7 @@ package de.roessing.app.auth
 
 import android.net.Uri
 import de.roessing.app.BuildConfig
+import net.openid.appauth.AppAuthConfiguration
 import net.openid.appauth.connectivity.ConnectionBuilder
 import net.openid.appauth.connectivity.DefaultConnectionBuilder
 import java.net.HttpURLConnection
@@ -66,12 +67,42 @@ private object KlartextVerbindungsaufbau : ConnectionBuilder {
 }
 
 /**
- * Der Verbindungsaufbau, den AuthManager verwendet: streng, es sei denn beide
- * Riegel oben sind offen.
+ * Ist der lokale Aussteller freigeschaltet? Einmal ausgewertet, damit beide
+ * Lockerungen unten garantiert an derselben Bedingung hängen.
+ */
+private val lokalerAussteller =
+    klartextAusstellerErlaubt(BuildConfig.DEBUG, BuildConfig.OIDC_ISSUER)
+
+/**
+ * Der Verbindungsaufbau für die Discovery: streng, es sei denn beide Riegel
+ * oben sind offen.
  */
 val oidcVerbindungsaufbau: ConnectionBuilder =
-    if (klartextAusstellerErlaubt(BuildConfig.DEBUG, BuildConfig.OIDC_ISSUER)) {
-        KlartextVerbindungsaufbau
+    if (lokalerAussteller) KlartextVerbindungsaufbau else DefaultConnectionBuilder.INSTANCE
+
+/**
+ * Die AppAuth-Konfiguration des [AuthManager].
+ *
+ * AppAuth hat **zwei** getrennte https-Riegel, und beide müssen für den
+ * lokalen Aussteller fallen:
+ *
+ *  * `ConnectionBuilder` — sonst schon die Discovery:
+ *    `IllegalArgumentException: only https connections are permitted`.
+ *  * `skipIssuerHttpsCheck` — die Prüfung des **ID-Tokens** verlangt
+ *    zusätzlich einen https-Aussteller. Ohne diesen Schalter bricht der Login
+ *    erst ganz am Ende ab, mit der wenig sprechenden Meldung
+ *    „Anmeldung fehlgeschlagen (0.9)" (`ID_TOKEN_VALIDATION_ERROR`).
+ *
+ * Gelockert wird ausschließlich die https-Pflicht. Alle inhaltlichen
+ * Prüfungen des ID-Tokens bleiben: dass der Aussteller der erwartete ist,
+ * dass das Token an diese App gerichtet ist und dass es nicht abgelaufen ist.
+ */
+val appAuthKonfiguration: AppAuthConfiguration =
+    if (lokalerAussteller) {
+        AppAuthConfiguration.Builder()
+            .setConnectionBuilder(KlartextVerbindungsaufbau)
+            .setSkipIssuerHttpsCheck(true)
+            .build()
     } else {
-        DefaultConnectionBuilder.INSTANCE
+        AppAuthConfiguration.DEFAULT
     }

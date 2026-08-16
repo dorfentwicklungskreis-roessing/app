@@ -1,7 +1,10 @@
 package de.roessing.app
 
+import de.roessing.app.auth.appAuthKonfiguration
 import de.roessing.app.auth.klartextAusstellerErlaubt
+import net.openid.appauth.connectivity.DefaultConnectionBuilder
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -48,5 +51,27 @@ class KlartextAusstellerTest {
         assertFalse(klartextAusstellerErlaubt(debug = true, issuer = "httpsx://id.example"))
         assertFalse(klartextAusstellerErlaubt(debug = true, issuer = "httpfoo://id.example"))
         assertFalse(klartextAusstellerErlaubt(debug = true, issuer = ""))
+    }
+
+    /**
+     * Und der Beweis am gebauten Ergebnis: Dieser Testlauf hat keine
+     * Aussteller-Übersteuerung, also gilt die Vorbelegung aus
+     * `build.gradle.kts` — die Produktion über https. Dann muss AppAuth
+     * unverändert streng eingestellt sein, obwohl es ein Debug-Build ist.
+     *
+     * Damit hängt nicht nur die Entscheidung an einem Test, sondern auch das,
+     * was tatsächlich gebaut wird.
+     */
+    @Test
+    fun `ohne Uebersteuerung bleibt AppAuth streng`() {
+        assertFalse(
+            "Der ausgelieferte Aussteller darf die https-Pflicht des ID-Tokens nicht lockern",
+            appAuthKonfiguration.skipIssuerHttpsCheck,
+        )
+        assertSame(
+            "Ohne lokalen Aussteller muss der Standard-Verbindungsaufbau greifen",
+            DefaultConnectionBuilder.INSTANCE,
+            appAuthKonfiguration.connectionBuilder,
+        )
     }
 }

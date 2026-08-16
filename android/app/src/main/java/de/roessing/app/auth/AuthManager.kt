@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import net.openid.appauth.AppAuthConfiguration
 import net.openid.appauth.AuthState
 import net.openid.appauth.AuthorizationException
 import net.openid.appauth.AuthorizationRequest
@@ -86,15 +85,10 @@ class AuthManager(private val context: Context) {
     /**
      * AppAuth spricht standardmäßig nur https. Für den E2E-Lauf steht der
      * Aussteller lokal (`http://10.0.2.2:8123`), damit sich kein Test an der
-     * Produktion anmeldet — [oidcVerbindungsaufbau] macht daraus die eng
-     * begrenzte Ausnahme. Im Release-Build ist es der strenge Standardaufbau.
+     * Produktion anmeldet — [appAuthKonfiguration] macht daraus die eng
+     * begrenzte Ausnahme. Im Release-Build ist es die strenge Vorbelegung.
      */
-    private val authService by lazy {
-        AuthorizationService(
-            context,
-            AppAuthConfiguration.Builder().setConnectionBuilder(oidcVerbindungsaufbau).build(),
-        )
-    }
+    private val authService by lazy { AuthorizationService(context, appAuthKonfiguration) }
     private val stateKey = stringPreferencesKey("authState")
     private val devKey = stringPreferencesKey("devToken")
 

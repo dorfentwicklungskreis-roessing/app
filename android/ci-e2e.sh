@@ -171,10 +171,14 @@ if [ "${API_LEVEL:-}" = "35" ] && [ -n "${E2E_OIDC_ISSUER:-}" ] && [ -n "${E2E_O
   echo "--- Claims des echten Tokens (aus dem Login oben)"
   adb logcat -d -s TOKENPROBE:I | sed -n 's/.*TOKENPROBE *: //p' || true
 
-  # Und wenn der Login selbst hakte: der letzte Bildschirm im Klartext.
+  # Und wenn der Login selbst hakte: der letzte Bildschirm im Klartext — plus
+  # das, was AppAuth dazu zu sagen hat. Die Anzeige in der App nennt nur ein
+  # Kürzel („0.9"); die eigentliche Erklärung steht ausschließlich hier.
   if [ "$LOGIN_ERGEBNIS" != "0" ]; then
     echo "--- Letzter Bildschirm der Anmeldung"
     adb logcat -d -s LOGINPROBE:I | sed -n 's/.*LOGINPROBE *: //p' || true
+    echo "--- Meldungen des AuthManager"
+    adb logcat -d -s AuthManager:V || true
     exit "$LOGIN_ERGEBNIS"
   fi
 elif [ "${API_LEVEL:-}" = "35" ]; then
