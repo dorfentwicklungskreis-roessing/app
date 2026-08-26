@@ -12,14 +12,20 @@ die Formularfelder von App Store Connect.
 **Ort in App Store Connect:** *My Apps → Rössing → App Privacy → Edit*
 (deutsch: *Meine Apps → Rössing → App-Datenschutz → Bearbeiten*).
 
-> **Der große Unterschied zur Android-Fassung:** Die iOS-App hat **kein Push**
-> und damit **keine Gerätekennung**, die an Google ginge. Es gibt in
-> `ios/project.yml` genau ein Paket — MapLibre für die Karte — und im ganzen
-> Verzeichnis `ios/` keinen Aufruf von `UNUserNotificationCenter`,
+> **Der große Unterschied zur Android-Fassung:** Die iOS-App hat seit dem
+> Push-Ausbau ebenfalls eine **Gerätekennung** — aber sie geht **nicht an
+> Google**. Android holt seine Kennung von Firebase Cloud Messaging; iOS
+> benutzt kein Firebase-SDK, sondern die Kennung, die Apple dem Gerät ohnehin
+> gibt (APNs). Der Dorfserver spricht damit direkt mit Apple
+> (`backend/internal/push/apns.go`), und an Google geht von iOS aus nichts.
+> In `ios/project.yml` steht weiterhin genau ein Paket — MapLibre für die
+> Karte —, und im ganzen Verzeichnis `ios/` gibt es keinen Aufruf von
 > `ASIdentifierManager`, `AppTrackingTransparency` oder irgendeiner
-> Analyse-Bibliothek (nachgeprüft mit `grep -rn` über `ios/`). Die Zeilen
-> „Geräte-ID" und „Weitergabe an Dritte" aus `data-safety.md` entfallen hier
-> vollständig.
+> Analyse-Bibliothek (nachgeprüft mit `grep -rn` über `ios/`).
+>
+> Für das Formular heißt das: *Identifiers → Device ID* ist **erhoben**
+> (siehe unten), *Tracking* bleibt überall **nein**, und bei „Weitergabe"
+> ist der Empfänger **Apple**, nicht Google.
 
 ---
 
@@ -95,6 +101,55 @@ nicht in `ios/Dorf/Info.plist`.
 - **Beleg:** `Modelle.swift` — `Ich.sub`, `Erledigung.userSub`,
   `Profil.userSub`; Spalte `completions.user_sub` in `backend/internal/db/db.go`.
 
+### Identifiers → Device ID
+
+- **Erhoben:** ja · **Mit Identität verknüpft:** ja · **Tracking:** nein
+- **Zwecke (Purposes):** *App Functionality* — sonst nichts.
+- **Was genau:** die **APNs-Gerätekennung**. Apple gibt sie dem Gerät, sobald
+  die App sich für Push registriert; die App wandelt die rohen Daten in eine
+  Hex-Zeichenkette (`ios/Dorf/Push/Geraetekennung.swift`) und meldet sie mit
+  `POST /api/v1/me/devices` als `{"token": "<hex>", "platform": "ios"}` an
+  den Dorfserver (`ios/Dorf/Push/DorfApi+Geraete.swift`). Sie steht für genau
+  diese Installation auf genau diesem Gerät — nicht für das Gerät als solches
+  und nicht geräteübergreifend: Wer die App löscht und neu installiert,
+  bekommt eine neue.
+- **Wann sie überhaupt entsteht:** **erst nach ausdrücklicher Zustimmung.**
+  Die App fragt nicht beim Start, sondern erst, wenn sich jemand als
+  Helfer:in für eine Aufgabe eingetragen hat — dort ist der Zweck
+  selbsterklärend (`Benachrichtigungen.erlaubnisErfragen()`). Wer ablehnt,
+  bei dem wird `registerForRemoteNotifications()` gar nicht erst aufgerufen;
+  es entsteht also keine Kennung, und im Dorfserver liegt nichts. Push ist
+  durchgehend nur die Abkürzung: Jede Anfrage steht ohnehin in der Abrufliste
+  (`GET /api/v1/me/notifications`) und erscheint beim nächsten Öffnen.
+- **Wo sie liegt und wie lange:** in der Tabelle `push_devices` des
+  Dorfservers (Kennung, Person, Plattform, Zeitstempel —
+  `backend/internal/db/db.go`), auf dem Gerät zusätzlich in den
+  Voreinstellungen, damit sie sich beim Abmelden wieder löschen lässt. Sie
+  bleibt, bis eines von dreien passiert: Die Person meldet sich in der App ab
+  (`Benachrichtigungen.abmelden()` schickt `DELETE /api/v1/me/devices`,
+  **vor** dem Verwerfen des Tokens — sonst wäre sie nicht mehr löschbar); die
+  Erlaubnis wird in den iOS-Einstellungen entzogen (der Abgleich beim
+  nächsten Start räumt sie weg); oder Apple meldet sie als ungültig
+  (`BadDeviceToken`, `Unregistered`, `DeviceTokenNotForTopic`), woraufhin der
+  Server sie von sich aus löscht (`backend/internal/push/apns.go`,
+  `apnsIstTot`).
+- **Wer sie zu sehen bekommt:** niemand außer dem Dorfserver und Apple. Die
+  Kennung wird **in keiner Antwort ausgeliefert** — im Modell trägt das Feld
+  ausdrücklich `json:"-"` (`backend/internal/model/geraet.go`), und der
+  Handler antwortet beim Anmelden bewusst ohne sie
+  (`backend/internal/api/geraete.go`). Sie gehört immer genau einer Person
+  (eindeutiger Index) und lässt sich nur von ihr selbst abmelden. Auch andere
+  Dorfbewohner und die Verwaltung sehen sie nicht.
+- **Weitergabe an Dritte:** ja — an **Apple**. Beim Versand gehen an APNs die
+  Gerätekennung, Titel und Text der Meldung (also Ortsname und Aufgabe) sowie
+  die Kennungen von Ort, Aufgabe und Vorgang. **Namen anderer Personen stehen
+  nie in einer Push-Nachricht.** Google ist auf diesem Weg nicht beteiligt —
+  das ist der Unterschied zur Android-Fassung, wo dieselben Daten an Firebase
+  gehen (`store/data-safety.md`).
+- **Ohne Schlüssel kein Versand:** Fehlt im Cluster `APNS_KEY_FILE`, wird für
+  iOS gar nicht gepusht, und der Betrieb läuft unverändert über die
+  Abrufliste (`deploy/overlays/production/deployment.yaml`).
+
 ### User Content → Other User Content
 
 - **Erhoben:** ja · **Mit Identität verknüpft:** ja · **Tracking:** nein
@@ -132,7 +187,7 @@ nicht in `ios/Dorf/Info.plist`.
 | Contacts | nein | Kein `Contacts`-Framework, kein `NSContactsUsageDescription` in `ios/Dorf/Info.plist`. |
 | User Content → Photos or Videos, Audio | nein | Keine Medienauswahl; `Info.plist` hat weder `NSPhotoLibraryUsageDescription` noch `NSCameraUsageDescription` noch `NSMicrophoneUsageDescription`. |
 | Browsing History, Search History | nein | Die App hat weder einen Browser noch eine Suche, die irgendwohin gemeldet würde. |
-| Identifiers → Device ID | **nein** | Kein Push, keine `identifierForVendor`-Verwendung, keine Werbekennung — `grep -rn "ASIdentifier\|UNUserNotification"` über `ios/` findet nichts. **Das ist der Unterschied zur Android-Fassung**, wo seit `0.1.7` eine FCM-Kennung entsteht. |
+| Identifiers → Advertising Identifier (IDFA) | nein | Keine Werbekennung, kein `ASIdentifierManager`, kein `identifierForVendor` — `grep -rn "ASIdentifier\|identifierForVendor"` über `ios/` findet nichts. Die APNs-Kennung ist eine **Device ID** und oben angegeben; sie taugt zu keiner Werbemessung und wird an niemanden außer Apple gegeben. |
 | Usage Data (Product Interaction, Advertising Data, Other) | nein | Kein Analyse-SDK, keine eigene Nutzungsmessung. Einziges Paket: MapLibre (`ios/project.yml`). |
 | Diagnostics (Crash Data, Performance Data, Other) | nein | Kein Crashlytics, kein Sentry, kein `MetricKit`. Absturzberichte gibt es nur, soweit ein Nutzer sie **Apple gegenüber** freigibt — das ist Apples Erhebung, nicht unsere, und wird im Formular nicht angegeben. |
 | Other Data | nein | — |
@@ -186,11 +241,18 @@ Android: ob der Reverse-Proxy davor IP-Adressen protokolliert.
 
 ## 4. Wo die Daten liegen und wie man sie loswird
 
-- **Auf dem Gerät:** nur der Tokensatz der Anmeldung, im Schlüsselbund mit
+- **Auf dem Gerät:** der Tokensatz der Anmeldung, im Schlüsselbund mit
   `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — er wandert also nicht
   in ein iCloud-Backup und nicht auf ein anderes Gerät
   (`ios/Dorf/Anmeldung/Schluesselbund.swift`). **Abmelden löscht ihn**
   (`Anmeldung.abmelden()` ruft `Schluesselbund.loeschen()`).
+  Dazu, sobald Mitteilungen erlaubt wurden, die zuletzt angemeldete
+  APNs-Kennung in den Voreinstellungen (`push.geraetekennung`,
+  `ios/Dorf/Push/Benachrichtigungen.swift`). Sie steht dort aus einem
+  einzigen Grund: Apple rückt die Kennung nur asynchron heraus, und ohne
+  gemerkte Kennung ließe sich beim Abmelden nicht mehr sagen, welche im
+  Dorfserver zu löschen ist. **Abmelden löscht auch sie** — erst beim Server,
+  dann lokal.
 - **Auf dem Server:** Erledigungen, Profil, Ideen — siehe oben.
 - **Löschung:** Eine einzelne Meldung nimmt die meldende Person selbst zurück
   (`DorfApi.erledigungZuruecknehmen`, `DELETE /api/v1/completions/{id}`).
@@ -225,11 +287,17 @@ Startseite **und** auf dem Anmeldebildschirm, wie es § 5 DDG verlangt.
       kleinere Eingriff und sollte in `RechtlichesLeiste` daneben.
 - [ ] Prüfen, sobald die Karte den Standort benutzt (siehe Sonderfall oben).
 - [ ] Loggt der Reverse-Proxy IP-Adressen? Wenn ja: in der Erklärung nennen.
-- [ ] **Sobald Push nachgerüstet wird**, kommt hier *Identifiers → Device ID*
-      hinzu (APNs-Token, mit Identität verknüpft, Zweck App Functionality) —
-      und die Antwort auf „Weitergabe" ändert sich, weil das Token bei Apple
-      liegt. Dann auch `store/data-safety.md` gegenlesen, damit beide Stores
-      dasselbe sagen.
+- [x] **Push ist nachgerüstet** — *Identifiers → Device ID* steht oben
+      (APNs-Kennung, mit Identität verknüpft, Zweck App Functionality), und
+      bei „Weitergabe" ist der Empfänger **Apple**. `store/data-safety.md`
+      (Play) beschreibt denselben Sachverhalt für Firebase; beide Stores
+      sagen damit dasselbe, nur mit verschiedenen Empfängern.
+- [ ] Die veröffentlichte Datenschutzerklärung unter
+      <https://xn--rssing-wxa.de/app/datenschutz/> nennt bislang nur den
+      Firebase-Weg. Sie muss den iOS-Weg dazunehmen: dass die Kennung erst
+      nach Einwilligung entsteht, dass sie an Apple geht (nicht an Google)
+      und wie man sie wieder los wird (Abmelden in der App oder Mitteilungen
+      in den iOS-Einstellungen abschalten).
 - [ ] Bei jeder neuen Version prüfen, ob ein neues Feld die Antworten oben
       ändert. Der schnellste Test: Gibt es einen neuen Anfragerumpf in
       `ios/Dorf/Daten/Modelle.swift`?

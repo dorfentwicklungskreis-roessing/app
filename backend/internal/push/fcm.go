@@ -137,10 +137,11 @@ func Neu(cfg Config) (*Zusteller, error) {
 	}, nil
 }
 
-// FromEnv baut den Zusteller aus FCM_CREDENTIALS_FILE. Fehlt die Angabe (oder
-// die Datei), wird schlicht nicht gepusht — der Betrieb muss ohne Google
-// vollständig funktionieren, und lokal gibt es den Schlüssel gar nicht.
-func FromEnv(geraete Geraetespeicher) (*Zusteller, error) {
+// FCMFromEnv baut den Zusteller aus FCM_CREDENTIALS_FILE. Fehlt die Angabe
+// (oder die Datei), wird über Google schlicht nicht gepusht — der Betrieb muss
+// ohne Google vollständig funktionieren, und lokal gibt es den Schlüssel gar
+// nicht.
+func FCMFromEnv(geraete Geraetespeicher) (*Zusteller, error) {
 	pfad := strings.TrimSpace(os.Getenv("FCM_CREDENTIALS_FILE"))
 	if pfad == "" {
 		return nil, nil
@@ -178,10 +179,20 @@ func privaterSchluessel(pemText string) (*rsa.PrivateKey, error) {
 //
 // Erfüllt die Schnittstelle vergabe.Zusteller. Ein Gerät, das Google als
 // ungültig meldet, wird dabei gleich vergessen.
+//
+// iOS-Geräte lässt dieser Weg aus: Sie sprechen direkt mit Apple (apns.go).
+// Ohne diese Weiche ginge eine APNs-Kennung an Google, käme als
+// INVALID_ARGUMENT zurück — und würde weggeworfen.
 func (z *Zusteller) Zustellen(n model.Notification) error {
-	geraete, err := z.geraete.DevicesForUser(n.UserSub)
+	alle, err := z.geraete.DevicesForUser(n.UserSub)
 	if err != nil {
 		return err
+	}
+	var geraete []model.Device
+	for _, g := range alle {
+		if !IstIOS(g.Platform) {
+			geraete = append(geraete, g)
+		}
 	}
 	if len(geraete) == 0 {
 		return nil
@@ -215,7 +226,36 @@ func (z *Zusteller) Zustellen(n model.Notification) error {
 // Fingertipp führen soll — Ort, Aufgabe, Vorgang und Art der Nachricht.
 // FCM lässt in `data` ausschließlich Zeichenketten zu.
 func Nutzlast(n model.Notification) map[string]any {
-	daten := map[string]string{
+	return map[string]any{
+		"notification": map[string]any{"title": n.Title, "body": n.Text},
+		"data":         daten(n),
+		"android": map[string]any{
+			// Anfragen sind zeitgebunden (eine Stunde Vortritt) — sie dürfen
+			// den Ruhezustand des Geräts unterbrechen. Die Ruhezeit des Dorfes
+			// wacht ohnehin schon darüber, dass nachts nichts rausgeht.
+			"priority": "high",
+			"notification": map[string]any{
+				"channel_id": kanal(n.Kind),
+				// Alles zu einem Vorgang ersetzt sich gegenseitig, statt sich
+				// zu stapeln: Wer die Anfrage übersehen hat, braucht nicht
+				// zusätzlich den Hinweis, dass sie erledigt ist. Auf iOS
+				// erledigt das apns-collapse-id.
+				"tag": vorgangsKennung(n.AssignmentID),
+			},
+		},
+	}
+}
+
+// daten ist der Teil, der der App sagt, wohin der Fingertipp führt: Ort,
+// Aufgabe, Vorgang und Art der Nachricht.
+//
+// **Beide Apps lesen denselben Vertrag** — FCM trägt ihn im `data`-Feld,
+// APNs neben dem `aps`-Objekt (siehe apnsNutzlast). Wer hier einen Schlüssel
+// ändert, ändert ihn für Android *und* iOS: android/…/push/PushZiel.kt und
+// ios/Dorf/Push/PushZiel.swift. FCM lässt in `data` ausschließlich
+// Zeichenketten zu, deshalb ist alles eine.
+func daten(n model.Notification) map[string]string {
+	d := map[string]string{
 		"notificationId": strconv.FormatInt(n.ID, 10),
 		"assignmentId":   strconv.FormatInt(n.AssignmentID, 10),
 		"taskId":         strconv.FormatInt(n.TaskID, 10),
@@ -228,25 +268,9 @@ func Nutzlast(n model.Notification) map[string]any {
 		"body":           n.Text,
 	}
 	if n.ExpiresAt != nil {
-		daten["expiresAt"] = n.ExpiresAt.UTC().Format(time.RFC3339)
+		d["expiresAt"] = n.ExpiresAt.UTC().Format(time.RFC3339)
 	}
-	return map[string]any{
-		"notification": map[string]any{"title": n.Title, "body": n.Text},
-		"data":         daten,
-		"android": map[string]any{
-			// Anfragen sind zeitgebunden (eine Stunde Vortritt) — sie dürfen
-			// den Ruhezustand des Geräts unterbrechen. Die Ruhezeit des Dorfes
-			// wacht ohnehin schon darüber, dass nachts nichts rausgeht.
-			"priority": "high",
-			"notification": map[string]any{
-				"channel_id": kanal(n.Kind),
-				// Alles zu einem Vorgang ersetzt sich gegenseitig, statt sich
-				// zu stapeln: Wer die Anfrage übersehen hat, braucht nicht
-				// zusätzlich den Hinweis, dass sie erledigt ist.
-				"tag": "vorgang-" + strconv.FormatInt(n.AssignmentID, 10),
-			},
-		},
-	}
+	return d
 }
 
 func kanal(k model.NotificationKind) string {
