@@ -14,9 +14,11 @@ Geprüft wird viererlei:
 2. Die **Produktions-Website** darf als Datenstring vorkommen (Termine tragen
    nun einmal solche Links), aber niemals als *konfigurierter Endpunkt* —
    also nicht als baseUrl, Issuer oder Ähnliches.
-3. Jeder Testlauf in `android/ci-e2e.sh` muss **alle** Adressen der App lokal
-   übersteuern. Fehlt eine, greift die Produktions-Vorbelegung aus
-   `build.gradle.kts` — genau so ist der Fehler ursprünglich entstanden.
+3. Jeder Testlauf muss **alle** Adressen der App lokal übersteuern — auf
+   Android in `android/ci-e2e.sh` (`-PapiBaseUrl` …), auf iOS in
+   `.github/workflows/ios.yml` (`xcodebuild … API_BASE_URL=…`). Fehlt eine,
+   greift die Produktions-Vorbelegung aus `build.gradle.kts` bzw. aus
+   `ios/project.yml` — genau so ist der Fehler ursprünglich entstanden.
 4. Der E2E-Job bekommt **keine Zugangsdaten-Secrets** mehr: Die Testkonten
    entstehen im lokalen Zitadel.
 
@@ -49,11 +51,13 @@ GEPRUEFTE_PFADE = [
     "android/ci-e2e.sh",
     "android/e2e",
     "backend/e2e",
+    "ios/DorfTests",
     ".github/workflows/android.yml",
     ".github/workflows/backend.yml",
+    ".github/workflows/ios.yml",
 ]
 
-ENDUNGEN = {".kt", ".java", ".go", ".mjs", ".js", ".ts", ".sh", ".yml", ".yaml", ".json", ".py"}
+ENDUNGEN = {".kt", ".java", ".swift", ".go", ".mjs", ".js", ".ts", ".sh", ".yml", ".yaml", ".json", ".py"}
 
 # 1) Dienste, die ein Test niemals anfassen darf.
 VERBOTENE_DIENSTE = [
@@ -76,6 +80,13 @@ FREIGABE = re.compile(r"ci-extern-ok:")
 
 # 3) Jeder Testlauf muss diese Adressen lokal setzen.
 PFLICHT_UEBERSTEUERUNGEN = ["-PapiBaseUrl", "-PwebsiteBaseUrl", "-PmapStyleUrl"]
+
+# Dasselbe für iOS: Die Build-Einstellungen aus `ios/project.yml` zeigen auf die
+# Produktion, jeder `xcodebuild`-Aufruf der CI muss sie übersteuern.
+PFLICHT_UEBERSTEUERUNGEN_IOS = ["API_BASE_URL", "WEBSITE_BASE_URL", "OIDC_ISSUER", "MAP_STYLE_URL"]
+
+# Als lokal gilt der Runner selbst bzw. der Host aus Sicht des Emulators.
+LOKALE_ADRESSE = re.compile(r"^(?:http://)?(?:127\.0\.0\.1|localhost|10\.0\.2\.2)(?::\d+)?(?:/|$)")
 
 
 def _dateien():
@@ -128,6 +139,39 @@ def pruefe_uebersteuerungen() -> list[str]:
     return funde
 
 
+def pruefe_ios_text(text: str) -> list[str]:
+    """`.github/workflows/ios.yml`: kein xcodebuild ohne lokale Adressen.
+
+    Getrennt vom Dateizugriff, damit der Selbsttest greift.
+    """
+    funde = []
+    # Fortsetzungszeilen zusammenziehen, die Aufrufe sind mehrzeilig.
+    for zeile in text.replace("\\\n", " ").splitlines():
+        if "xcodebuild" not in zeile or not re.search(r"\b(build|test)\b", zeile):
+            continue
+        for name in PFLICHT_UEBERSTEUERUNGEN_IOS:
+            treffer = re.search(rf"\b{name}=(\S+)", zeile)
+            if treffer is None:
+                funde.append(
+                    f".github/workflows/ios.yml: Ein xcodebuild-Aufruf setzt {name} nicht — "
+                    "dann greift die Produktions-Vorbelegung aus ios/project.yml.\n    "
+                    + zeile.strip()[:160]
+                )
+            elif not LOKALE_ADRESSE.match(treffer.group(1)):
+                funde.append(
+                    f".github/workflows/ios.yml: {name} zeigt nicht auf einen lokalen Dienst "
+                    f"({treffer.group(1)}).\n    " + zeile.strip()[:160]
+                )
+    return funde
+
+
+def pruefe_ios_uebersteuerungen() -> list[str]:
+    workflow = WURZEL / ".github/workflows/ios.yml"
+    if not workflow.is_file():
+        return []
+    return pruefe_ios_text(workflow.read_text(encoding="utf-8"))
+
+
 def pruefe_push() -> list[str]:
     """`PushEchtTest` spricht über Google mit echtem FCM — nie in der CI.
 
@@ -167,6 +211,9 @@ def selbsttest() -> int:
         ("backend/e2e/gut.go", '"IDEEN_ZIELE=https://xn--rssing-wxa.de"', False),
         # Ausdrückliche Einzelfreigabe.
         ("android/app/src/test/Frei.kt", 'val issuer = "https://id.xn--rssing-wxa.de" // ci-extern-ok: Beispiel', False),
+        # iOS: Swift-Testquellen werden genauso geprüft.
+        ("ios/DorfTests/BoeseTests.swift", 'let aussteller = URL(string: "https://id.xn--rssing-wxa.de")!', True),
+        ("ios/DorfTests/GutTests.swift", 'let link = "https://xn--rssing-wxa.de/termine/grillen"', False),
     ]
     fehler = 0
     for name, zeile, erwartet_treffer in faelle:
@@ -185,9 +232,34 @@ def selbsttest() -> int:
             print("SELBSTTEST FEHLGESCHLAGEN: fehlende Übersteuerung wurde nicht erkannt")
             fehler += 1
 
+    # Und für iOS: ein xcodebuild-Aufruf, dem eine Adresse fehlt oder der eine
+    # entfernte trägt, muss auffallen — ein vollständig lokaler nicht.
+    vollstaendig = (
+        "xcodebuild test -project Dorf.xcodeproj -scheme Dorf "
+        "API_BASE_URL=http://127.0.0.1:8099 WEBSITE_BASE_URL=http://127.0.0.1:8097 "
+        "OIDC_ISSUER=http://127.0.0.1:8123 MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json"
+    )
+    ios_faelle = [
+        (vollstaendig, False),
+        # Mehrzeilig mit Fortsetzungszeichen — so steht es im Workflow.
+        (vollstaendig.replace(" API_BASE_URL", " \\\n  API_BASE_URL"), False),
+        (vollstaendig.replace(" MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json", ""), True),
+        (vollstaendig.replace("http://127.0.0.1:8123", "https://id.xn--rssing-wxa.de"), True),
+        # Kein Testlauf, kein Anspruch.
+        ("xcodebuild -showBuildSettings -project Dorf.xcodeproj", False),
+    ]
+    for aufruf, erwartet_treffer in ios_faelle:
+        getroffen = bool(pruefe_ios_text(aufruf))
+        if getroffen != erwartet_treffer:
+            print(f'SELBSTTEST FEHLGESCHLAGEN (iOS): „{aufruf[:80]}…“ → Treffer={getroffen}, erwartet={erwartet_treffer}')
+            fehler += 1
+
     if fehler:
         return 1
-    print(f"Selbsttest bestanden ({len(faelle)} Fälle + Übersteuerungs-Prüfung).")
+    print(
+        f"Selbsttest bestanden ({len(faelle)} Fälle + Übersteuerungs-Prüfung "
+        f"+ {len(ios_faelle)} iOS-Fälle)."
+    )
     return 0
 
 
@@ -202,6 +274,7 @@ def main() -> int:
         relativ = datei.relative_to(WURZEL).as_posix()
         funde += pruefe_text(relativ, datei.read_text(encoding="utf-8", errors="replace"))
     funde += pruefe_uebersteuerungen()
+    funde += pruefe_ios_uebersteuerungen()
     funde += pruefe_push()
     funde += pruefe_secrets()
 
