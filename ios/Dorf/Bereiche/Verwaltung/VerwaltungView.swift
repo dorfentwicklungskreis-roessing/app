@@ -37,12 +37,10 @@ struct VerwaltungView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             guard umgebung.binAdmin else { return }
-            let liste = orte ?? OrteModell(api: umgebung.api)
+            let liste = orte ?? OrteModell(api: umgebung.api, vergabe: umgebung.vergabe)
             orte = liste
             let vorhanden = modell ?? VerwaltungModell(quelle: .vom(
-                DorfApi.verwaltung(tokenGeber: { [anmeldung = umgebung.anmeldung] in
-                    await anmeldung.frischesToken()
-                }),
+                umgebung.verwaltung,
                 neuLaden: { await liste.laden() }
             ))
             modell = vorhanden

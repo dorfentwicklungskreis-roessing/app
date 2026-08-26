@@ -47,12 +47,18 @@ kommt, sieht einen Satz statt einer Werkzeugkiste.
 Datei kommt an sie nicht heran, und `DorfApi.swift` war beim Bau dieses
 Bereichs für andere Schritte gesperrt. `DorfApi+Verwaltung.swift` baut den
 Schreibzugang deshalb aus denselben Teilen noch einmal
-(`DorfApi.Verwaltung`) — gleiche Fristen, gleiche `DorfFehler`.
+(`DorfApi.Verwaltung`) — gleiche Fristen, gleiche `DorfFehler`. Verdrahtet
+ist er wie der Vergabe-Zugang: `umgebung.verwaltung`, eine berechnete
+Eigenschaft in derselben Datei, damit `Umgebung.swift` unangetastet bleibt.
+
+Der Bereich „Anfragen" steht vor demselben Problem und hat es gleich gelöst
+(`VergabeApi` in `DorfApi+Vergabe.swift`). Damit gibt es inzwischen **drei**
+Transportschichten mit demselben Inhalt.
 
 **Aufzuräumen, sobald `DorfApi.swift` wieder frei ist:** dort `hole`,
 `schicke`, `schickeOhneAntwort` und `fehler(status:daten:pfad:)` auf
-`internal` heben; dann schrumpft `DorfApi.Verwaltung` auf die nackten acht
-Aufrufe zusammen, und es gibt wieder genau eine Transportschicht.
+`internal` heben; dann schrumpfen `DorfApi.Verwaltung` und `VergabeApi` auf
+die nackten Aufrufe zusammen, und es gibt wieder genau eine Transportschicht.
 
 ## Bewusst noch nicht gebaut
 

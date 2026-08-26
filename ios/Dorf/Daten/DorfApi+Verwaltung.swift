@@ -327,3 +327,16 @@ nonisolated extension DorfApi {
         Verwaltung(basis: basis, sitzung: sitzung, tokenGeber: tokenGeber)
     }
 }
+
+// MARK: - Verdrahtung
+
+extension AppUmgebung {
+    /// Der Schreibzugang der Verwaltung — mit demselben Token wie `api`.
+    ///
+    /// Als berechnete Eigenschaft in dieser Datei, damit `Umgebung.swift`
+    /// unangetastet bleibt. Der Zugang hält keinen Zustand: Er ist eine
+    /// Handvoll Felder um `URLSession.dorfSitzung`, die ohnehin geteilt wird.
+    var verwaltung: DorfApi.Verwaltung {
+        DorfApi.verwaltung(tokenGeber: { [anmeldung] in await anmeldung.frischesToken() })
+    }
+}
