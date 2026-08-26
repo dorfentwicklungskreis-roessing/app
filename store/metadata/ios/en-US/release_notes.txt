@@ -1,0 +1,10 @@
+The first release of the Rössing village app for iPhone.
+
+• Sign in with the Rössing-ID in the system browser; the session survives a restart
+• Lend a hand: village map with traffic-light status, watering and weeding schedules, report and withdraw completed tasks
+• Leaderboard per week, month, watering season, year and all time
+• What's on in Rössing: the dates from the village
+• My profile with per-field visibility, plus the list of villagers
+• Suggest an idea
+
+Push notifications and helper requests are not part of this release; they will follow. If something is missing or in the way, tell us through "Suggest an idea".

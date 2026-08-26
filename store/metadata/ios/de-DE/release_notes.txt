@@ -1,0 +1,10 @@
+Die erste Fassung der Dorf-App fürs iPhone.
+
+• Anmeldung mit der Rössing-ID im System-Browser; die Sitzung überlebt den Neustart
+• Mithelfen: Dorfkarte mit Ampel-Status, Gieß- und Jätpläne, Erledigungen melden und zurücknehmen
+• Rangliste für Woche, Monat, Gießsaison, Jahr und insgesamt
+• Was ist los in Rössing: die Termine aus dem Dorf
+• Mein Profil mit Sichtbarkeit je Feld und die Liste der Dorfbewohner
+• Idee vorschlagen
+
+Benachrichtigungen aufs Handy und die Helfer-Anfragen gibt es in dieser Fassung noch nicht — sie kommen später. Was fehlt oder stört, sagst du am besten über „Idee vorschlagen".
