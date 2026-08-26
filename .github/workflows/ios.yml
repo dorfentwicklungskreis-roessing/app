@@ -4,7 +4,7 @@ name: iOS
 # nicht im Repo (siehe ios/project.yml), es wird hier mit XcodeGen erzeugt.
 #
 # Signiert wird nicht: In der CI gibt es (noch) kein Apple-Zertifikat, deshalb
-# überall CODE_SIGNING_ALLOWED=NO. Gebaut und getestet wird für den Simulator.
+# überall CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=-. Gebaut und getestet wird für den Simulator.
 
 on:
   pull_request:
@@ -112,7 +112,7 @@ jobs:
             -destination "$ZIEL" \
             -clonedSourcePackagesDirPath .spm \
             -resultBundlePath ergebnisse/Bau.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- \
             API_BASE_URL=http://127.0.0.1:8099 \
             WEBSITE_BASE_URL=http://127.0.0.1:8097 \
             OIDC_ISSUER=http://127.0.0.1:8123 \
@@ -125,7 +125,7 @@ jobs:
             -destination "$ZIEL" \
             -clonedSourcePackagesDirPath .spm \
             -resultBundlePath ergebnisse/Test.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- \
             API_BASE_URL=http://127.0.0.1:8099 \
             WEBSITE_BASE_URL=http://127.0.0.1:8097 \
             OIDC_ISSUER=http://127.0.0.1:8123 \

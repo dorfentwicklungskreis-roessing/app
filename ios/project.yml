@@ -60,7 +60,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.roessing.app
-        PRODUCT_NAME: Rössing
+        # Das Produkt heißt technisch „Dorf" — der Name auf dem Startbildschirm
+        # kommt aus CFBundleDisplayName in der Info.plist („Rössing"). Ein
+        # PRODUCT_NAME mit Umlaut hieße auch: Modul „Rössing", und dann
+        # scheitert `@testable import Dorf` in jedem Test.
         INFOPLIST_FILE: Dorf/Info.plist
         CURRENT_PROJECT_VERSION: "1"
         MARKETING_VERSION: "0.1.0"
@@ -69,8 +72,15 @@ targets:
         # Gerät und TestFlight trägt DEVELOPMENT_TEAM die Team-ID nach.
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: ""
-        CODE_SIGNING_REQUIRED: NO
-        CODE_SIGNING_ALLOWED: NO
+        # Ad-hoc-Signatur („-") statt gar keiner. Ganz ohne Signatur startet die
+        # App im Simulator nicht: dyld weist das eingebettete
+        # MapLibre.framework ab, und der Testlauf stirbt mit SIGKILL, bevor er
+        # sich überhaupt verbindet. Ein Zertifikat braucht es dafür nicht.
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "YES"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG

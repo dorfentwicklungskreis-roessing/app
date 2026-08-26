@@ -20,6 +20,11 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Die App nutzt ausschließlich HTTPS über die Systembibliotheken. Damit
+	     gilt die Ausnahme, und App Store Connect fragt bei jedem Build nicht
+	     erneut nach der Export-Compliance. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>

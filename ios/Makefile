@@ -22,13 +22,13 @@ projekt:
 bauen: projekt
 	xcodebuild build -project Dorf.xcodeproj -scheme $(SCHEME) \
 		-destination 'platform=iOS Simulator,name=$(SIMULATOR)' \
-		CODE_SIGNING_ALLOWED=NO | xcbeautify || true
+		CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- | xcbeautify || true
 
 ## Unit-Tests laufen lassen
 testen: projekt
 	xcodebuild test -project Dorf.xcodeproj -scheme $(SCHEME) \
 		-destination 'platform=iOS Simulator,name=$(SIMULATOR)' \
-		CODE_SIGNING_ALLOWED=NO $(LOKALE_ADRESSEN)
+		CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- $(LOKALE_ADRESSEN)
 
 ## Die Wache „Tests nur lokal" — dieselbe Prüfung wie in der CI
 pruefen:
