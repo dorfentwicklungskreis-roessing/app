@@ -12,6 +12,7 @@ Anfang.
 | Verzeichnis | Inhalt |
 |---|---|
 | `android/` | Native Android-App (Kotlin, Jetpack Compose, Material 3, MapLibre) |
+| `ios/` | Native iOS-App (Swift 6, SwiftUI, MapLibre). Xcode-Projekt aus `project.yml` |
 | `backend/` | Go-Backend: REST-API, MCP-Server, Web-Admin. SQLite (WAL) |
 | `deploy/`  | Kustomize-Overlay für den K3S-Cluster (Flux deployt) |
 | `.github/workflows/` | CI: Tests, E2E auf Emulatoren, Multi-Arch-Images, Releases |
@@ -280,6 +281,36 @@ cd android
 Der „Entwickler-Login" erscheint nur in Debug-Builds mit `-PdevAuth=true`
 und funktioniert nur gegen ein Backend mit `AUTH_MODE=insecure-dev`.
 
+### iOS
+
+```sh
+cd ios
+make projekt        # erzeugt Dorf.xcodeproj aus project.yml (XcodeGen)
+make bauen          # Simulator-Build
+make testen         # Unit-Tests (mit lokalen Adressen, nie gegen die Produktion)
+make pruefen        # die Wache „Tests nur lokal" über den iOS-Teil
+```
+
+`Dorf.xcodeproj` wird **erzeugt und nicht committet** (`.gitignore`): Eine
+`.pbxproj` ist nicht lesbar zu prüfen und erzeugt bei jedem zweiten Merge einen
+Konflikt. Wer eine Datei hinzufügt, ruft danach `make projekt` auf. Gebraucht
+werden XcodeGen (`brew install xcodegen`) und Xcode 26 (Swift 6 mit
+MainActor-Vorbelegung).
+
+Alle Adressen und Kennungen stehen als Build-Einstellungen in `ios/project.yml`
+und sind über `xcodebuild API_BASE_URL=… ` übersteuerbar — dasselbe Verfahren
+wie `-PapiBaseUrl` auf Android, damit kein Test gegen die Produktion läuft.
+
+Die iOS-App hat einen **eigenen nativen PKCE-Client** in der Rössing-ID:
+`387943892076527811` („Dorf-App iOS", Rücksprung
+`de.roessing.app:/oauth2redirect`). Diese Client-ID muss in `AUTH_AUDIENCE` des
+Backends stehen (`deploy/overlays/production/deployment.yaml`) — sonst weist das
+Backend jedes Token der iOS-App ab.
+
+Gebaut und getestet wird in der CI von `.github/workflows/ios.yml` auf einem
+macOS-Runner, ohne Signierung (`CODE_SIGNING_ALLOWED=NO`): ein
+Apple-Zertifikat gibt es dort noch nicht.
+
 ### CSS der Verwaltung
 
 Das ausgelieferte CSS wird gebaut und **committet** (`go:embed`), damit zur
@@ -348,6 +379,22 @@ Projekt, Rollen, die native PKCE-App und das Testkonto legt
 `android/e2e/zitadel-bootstrap.mjs` bei jedem Lauf neu an — reproduzierbar,
 ohne Handarbeit und ohne GitHub-Secrets. Jeder Lauf bekommt sein eigenes Konto,
 gleichzeitige Läufe stören sich also nicht mehr.
+
+Für iOS gilt dieselbe Regel (`.github/workflows/ios.yml`): Jeder
+`xcodebuild`-Aufruf übersteuert **alle** Adressen der App auf den Runner selbst.
+Dort horcht in diesem Job niemand — ein Zugriff nach draußen fällt damit auf,
+statt still die Produktion zu treffen:
+
+| Einstellung | Adresse im Test |
+|---|---|
+| `API_BASE_URL` | `http://127.0.0.1:8099` |
+| `WEBSITE_BASE_URL` | `http://127.0.0.1:8097` |
+| `OIDC_ISSUER` | `http://127.0.0.1:8123` |
+| `MAP_STYLE_URL` | `http://127.0.0.1:8097/map-style.json` |
+
+Fehlt eine davon, greift die Produktions-Vorbelegung aus `ios/project.yml` —
+genau so ist der Fehler auf Android ursprünglich entstanden. Die Prüfung unten
+achtet deshalb auf jede einzelne.
 
 Damit das so bleibt, prüft `.github/workflows/lokale-tests.yml` bei **jeder**
 Änderung, ob in Testquellen oder Test-CI wieder eine entfernte Adresse steht:
