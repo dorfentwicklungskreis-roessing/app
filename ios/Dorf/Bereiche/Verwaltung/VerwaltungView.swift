@@ -17,13 +17,11 @@ struct VerwaltungView: View {
     var body: some View {
         Group {
             if !umgebung.binAdmin {
-                ContentUnavailableView(
+                Hinweistafel(
                     "Nur für die Verwaltung",
-                    systemImage: "lock",
-                    description: Text(
-                        "Orte und Aufgaben pflegt die Verwaltung des Dorfes. "
-                            + "Melden und Mithelfen kannst du in „Mithelfen“."
-                    )
+                    symbol: "lock",
+                    beschreibung: "Orte und Aufgaben pflegt die Verwaltung des Dorfes. "
+                        + "Melden und Mithelfen kannst du in „Mithelfen“."
                 )
                 .accessibilityIdentifier("verwaltung-gesperrt")
             } else if let orte, let modell {

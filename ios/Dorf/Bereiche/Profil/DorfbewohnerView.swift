@@ -116,15 +116,15 @@ struct DorfbewohnerView: View {
         if modell.laedt && modell.bewohner.isEmpty {
             ProgressView("Wird geladen …")
         } else if modell.gefiltert.isEmpty && !modell.suche.isEmpty {
-            ContentUnavailableView.search(text: modell.suche)
+            Hinweistafel.suche(text: modell.suche)
         } else if modell.gefiltert.isEmpty && modell.fehler == nil {
-            ContentUnavailableView(
+            Hinweistafel(
                 "Noch niemand dabei",
-                systemImage: "person.2",
-                description: Text("""
+                symbol: "person.2",
+                beschreibung: """
                 Bisher hat niemand Angaben freigegeben. Wer in „Mein Profil“ \
                 Anzeigenamen oder Nickname freigibt, steht hier.
-                """)
+                """
             )
             .accessibilityIdentifier("dorfbewohner-leer")
         }

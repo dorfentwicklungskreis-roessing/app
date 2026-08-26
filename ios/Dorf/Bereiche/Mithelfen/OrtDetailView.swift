@@ -19,10 +19,10 @@ struct OrtDetailView: View {
             if let ort {
                 inhalt(ort)
             } else {
-                ContentUnavailableView(
+                Hinweistafel(
                     "Der Ort ist nicht mehr da",
-                    systemImage: "mappin.slash",
-                    description: Text("Vielleicht wurde er gerade abgeschaltet oder erledigt.")
+                    symbol: "mappin.slash",
+                    beschreibung: "Vielleicht wurde er gerade abgeschaltet oder erledigt."
                 )
             }
         }
