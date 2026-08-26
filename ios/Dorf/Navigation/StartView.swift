@@ -21,10 +21,19 @@ struct StartView: View {
                     .accessibilityIdentifier("start-gruss")
                 }
 
+                if let hitze = Startseitentexte.hitzehinweis(giessfaktor: umgebung.orte.giessfaktor) {
+                    Section {
+                        Label(hitze, systemImage: "thermometer.sun.fill")
+                            .font(.subheadline.weight(.medium))
+                            .accessibilityIdentifier("start-hitzehinweis")
+                    }
+                }
+
                 Section("Bereiche") {
                     Bereichskachel(
                         ziel: .mithelfen, symbol: "leaf.fill", titel: "Mithelfen",
-                        untertitel: "Was gerade im Dorf ansteht."
+                        untertitel: "Was gerade im Dorf ansteht.",
+                        hinweis: Startseitentexte.mithelfenHinweis(orte: umgebung.orte.orte)
                     )
                     Bereichskachel(
                         ziel: .veranstaltungen, symbol: "calendar", titel: "Was ist los in Rössing",
@@ -37,6 +46,10 @@ struct StartView: View {
                 }
 
                 Section("Du und das Dorf") {
+                    Bereichskachel(
+                        ziel: .anfragen, symbol: "bell.badge", titel: "Anfragen und Hinweise",
+                        untertitel: "Wo du gefragt wurdest — und was du zugesagt hast."
+                    )
                     Bereichskachel(
                         ziel: .profil, symbol: "person.crop.circle", titel: "Mein Profil",
                         untertitel: "Deine Angaben — und was andere davon sehen."
@@ -59,20 +72,27 @@ struct StartView: View {
                 }
 
                 Section {
-                    Button("Abmelden", role: .destructive) {
-                        umgebung.anmeldung.abmelden()
-                    }
-                    .accessibilityIdentifier("start-abmelden")
-                }
-
-                Section {
                     RechtlichesLeiste()
                         .frame(maxWidth: .infinity)
                         .listRowBackground(Color.clear)
                 }
             }
             .navigationTitle("Rössing")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    // Abmelden und Konto löschen wohnen dahinter — beides
+                    // gehört nicht zwischen die Bereiche, sondern hierhin.
+                    NavigationLink(value: Ziel.einstellungen) {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Einstellungen")
+                    .accessibilityIdentifier("start-einstellungen")
+                }
+            }
             .dorfZiele()
+            // Die Orte gehören der Umgebung, nicht dieser Seite: „Mithelfen"
+            // benutzt dasselbe Modell und lädt deshalb nicht ein zweites Mal.
+            .task { await umgebung.orte.laden() }
         }
     }
 }

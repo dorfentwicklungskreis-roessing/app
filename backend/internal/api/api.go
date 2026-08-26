@@ -60,6 +60,7 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/me", s.handleMe)
 	api.HandleFunc("PUT /api/v1/me/profile", s.handlePutProfile)
+	api.HandleFunc("DELETE /api/v1/me", s.handleDeleteKonto)
 	api.HandleFunc("GET /api/v1/members", s.handleMembers)
 	api.HandleFunc("GET /api/v1/places", s.handleListPlaces)
 	// Orte und Aufgaben pflegt der admin ihres Trägers (und der Betreiber) —
