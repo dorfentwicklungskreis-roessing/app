@@ -6,7 +6,7 @@ import Foundation
 /// Das ist Absicht und entspricht dem Android-Client (`ignoreUnknownKeys`,
 /// `coerceInputValues`): Das Backend darf Felder ergänzen, ohne dass ältere
 /// App-Versionen aufhören zu funktionieren.
-extension KeyedDecodingContainer {
+nonisolated extension KeyedDecodingContainer {
     func wert<T: Decodable>(_ schluessel: Key, _ vorgabe: T) -> T {
         (try? decodeIfPresent(T.self, forKey: schluessel)) .flatMap { $0 } ?? vorgabe
     }
@@ -19,7 +19,7 @@ extension KeyedDecodingContainer {
 // MARK: - Ampel
 
 /// Ampel-Status — die Werte kommen unverändert vom Backend.
-enum Ampel: String, Codable, Sendable {
+nonisolated enum Ampel: String, Codable, Sendable {
     case green, yellow, red
 
     init(roh: String) { self = Ampel(rawValue: roh) ?? .green }
@@ -27,7 +27,7 @@ enum Ampel: String, Codable, Sendable {
 
 // MARK: - Erledigungen
 
-struct Erledigung: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct Erledigung: Codable, Identifiable, Hashable, Sendable {
     var id: Int64 = 0
     var taskId: Int64 = 0
     var userSub: String = ""
@@ -60,7 +60,7 @@ struct Erledigung: Codable, Identifiable, Hashable, Sendable {
 
 // MARK: - Aufgabe
 
-struct Aufgabe: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct Aufgabe: Codable, Identifiable, Hashable, Sendable {
     var id: Int64
     var placeId: Int64 = 0
     var kind: String = "giessen"
@@ -158,7 +158,7 @@ struct Aufgabe: Codable, Identifiable, Hashable, Sendable {
 
 /// Ein laufender Vergabe-Vorgang zu genau einer Aufgabe. Die Regeln stehen im
 /// Backend (`internal/vergabe`); hier interessiert nur, was anzuzeigen ist.
-struct Vorgang: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct Vorgang: Codable, Identifiable, Hashable, Sendable {
     var id: Int64 = 0
     var taskId: Int64 = 0
     /// offen · uebernommen · rundruf · beendet
@@ -191,7 +191,7 @@ struct Vorgang: Codable, Identifiable, Hashable, Sendable {
 
 // MARK: - Orte
 
-struct Ort: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct Ort: Codable, Identifiable, Hashable, Sendable {
     var id: Int64
     var name: String
     var description: String = ""
@@ -230,7 +230,7 @@ struct Ort: Codable, Identifiable, Hashable, Sendable {
     var ampel: Ampel { Ampel(roh: status) }
 }
 
-struct OrteAntwort: Codable, Sendable {
+nonisolated struct OrteAntwort: Codable, Sendable {
     var places: [Ort] = []
     var wateringFactor: Double = 1
 
@@ -247,7 +247,7 @@ struct OrteAntwort: Codable, Sendable {
     }
 }
 
-struct ErledigungenAntwort: Codable, Sendable {
+nonisolated struct ErledigungenAntwort: Codable, Sendable {
     var completions: [Erledigung] = []
     enum CodingKeys: String, CodingKey { case completions }
     init(from decoder: Decoder) throws {
@@ -258,7 +258,7 @@ struct ErledigungenAntwort: Codable, Sendable {
 
 // MARK: - Ich und Profil
 
-struct Ich: Codable, Sendable {
+nonisolated struct Ich: Codable, Sendable {
     var sub: String = ""
     var name: String = ""
     var email: String = ""
@@ -291,7 +291,7 @@ struct Ich: Codable, Sendable {
 /// Die Vorbelegung entspricht der des Backends: Kontaktdaten bleiben bei der
 /// Verwaltung, bis jemand sie bewusst freigibt. Ein Wert, den diese
 /// App-Version nicht kennt, gilt vorsichtshalber als nicht öffentlich.
-struct Sichtbarkeit: Codable, Hashable, Sendable {
+nonisolated struct Sichtbarkeit: Codable, Hashable, Sendable {
     static let dorf = "dorf"
     static let verwaltung = "verwaltung"
 
@@ -328,7 +328,7 @@ struct Sichtbarkeit: Codable, Hashable, Sendable {
     static func wert(_ oeffentlich: Bool) -> String { oeffentlich ? dorf : verwaltung }
 }
 
-struct Profil: Codable, Hashable, Sendable {
+nonisolated struct Profil: Codable, Hashable, Sendable {
     var userSub: String = ""
     var displayName: String = ""
     var nickname: String = ""
@@ -364,7 +364,7 @@ struct Profil: Codable, Hashable, Sendable {
 }
 
 /// Eingabe von `PUT /api/v1/me/profile`.
-struct ProfilEingabe: Codable, Sendable {
+nonisolated struct ProfilEingabe: Codable, Sendable {
     var displayName: String = ""
     var nickname: String = ""
     var phone: String = ""
@@ -375,7 +375,7 @@ struct ProfilEingabe: Codable, Sendable {
 
 /// Eine Person in der Dorfbewohner-Liste — mit genau den Feldern, die sie
 /// freigegeben hat. Nicht freigegebene Felder kommen gar nicht erst mit.
-struct Dorfbewohner: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct Dorfbewohner: Codable, Identifiable, Hashable, Sendable {
     var userSub: String = ""
     /// Name in Rangliste und Erledigungen (Nickname, sonst Anzeigename).
     var name: String = ""
@@ -417,7 +417,7 @@ struct Dorfbewohner: Codable, Identifiable, Hashable, Sendable {
     func nurFuerVerwaltung(_ feld: String) -> Bool { restricted.contains(feld) }
 }
 
-struct DorfbewohnerAntwort: Codable, Sendable {
+nonisolated struct DorfbewohnerAntwort: Codable, Sendable {
     var members: [Dorfbewohner] = []
     /// true, wenn die Liste alles zeigt, weil der Abruf von Verwaltenden kam.
     var adminView: Bool = false
@@ -433,7 +433,7 @@ struct DorfbewohnerAntwort: Codable, Sendable {
 
 // MARK: - Rangliste
 
-struct Auszeichnung: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct Auszeichnung: Codable, Identifiable, Hashable, Sendable {
     var key: String = ""
     var label: String = ""
     var description: String = ""
@@ -455,7 +455,7 @@ struct Auszeichnung: Codable, Identifiable, Hashable, Sendable {
 }
 
 /// Eine Zeile der Rangliste. `rank == 0` heißt: im Zeitraum noch nichts gemeldet.
-struct Ranglistenzeile: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct Ranglistenzeile: Codable, Identifiable, Hashable, Sendable {
     var rank: Int = 0
     var userSub: String = ""
     var userName: String = ""
@@ -492,7 +492,7 @@ struct Ranglistenzeile: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-struct Gesamtsummen: Codable, Hashable, Sendable {
+nonisolated struct Gesamtsummen: Codable, Hashable, Sendable {
     var completions: Int = 0
     var byKind: [String: Int] = [:]
     var liters: Double = 0
@@ -514,7 +514,7 @@ struct Gesamtsummen: Codable, Hashable, Sendable {
     }
 }
 
-struct Rangliste: Codable, Sendable {
+nonisolated struct Rangliste: Codable, Sendable {
     var period: String = "saison"
     var from: String = ""
     var to: String = ""
@@ -544,7 +544,7 @@ struct Rangliste: Codable, Sendable {
 }
 
 /// Zeitraum der Rangliste. Die Werte gehen als `?period=` an das Backend.
-enum Zeitraum: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum Zeitraum: String, CaseIterable, Identifiable, Sendable {
     case woche, monat, saison, jahr, gesamt
 
     var id: String { rawValue }
@@ -562,19 +562,19 @@ enum Zeitraum: String, CaseIterable, Identifiable, Sendable {
 
 // MARK: - Eingaben
 
-struct ErledigungEingabe: Codable, Sendable {
+nonisolated struct ErledigungEingabe: Codable, Sendable {
     var liters: Double?
     var note: String = ""
 }
 
 /// Eingabe von `POST /api/v1/ideen`.
-struct IdeeEingabe: Codable, Sendable {
+nonisolated struct IdeeEingabe: Codable, Sendable {
     var wunsch: String
     var name: String = ""
     var email: String = ""
 }
 
-struct Idee: Codable, Sendable {
+nonisolated struct Idee: Codable, Sendable {
     var id: Int64 = 0
     var wunsch: String = ""
     var name: String = ""
@@ -600,7 +600,7 @@ struct Idee: Codable, Sendable {
 }
 
 /// Fehlerantwort des Backends (z.B. bei HTTP 409 mit Sperrfrist).
-struct ApiFehlerAntwort: Codable, Sendable {
+nonisolated struct ApiFehlerAntwort: Codable, Sendable {
     var error: String = ""
     var retryAfter: String?
 
@@ -617,7 +617,7 @@ struct ApiFehlerAntwort: Codable, Sendable {
 
 /// RFC3339 lesen. Das Backend schickt mal mit, mal ohne Sekundenbruchteile —
 /// beides muss gehen, sonst fehlt in der Historie plötzlich ein Datum.
-enum RFC3339 {
+nonisolated enum RFC3339 {
     nonisolated(unsafe) private static let mitBruchteilen: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

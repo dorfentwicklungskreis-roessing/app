@@ -5,3 +5,5 @@ Dorf.xcodeproj/
 DerivedData/
 build/
 .swiftpm/
+.spm/
+ergebnisse/

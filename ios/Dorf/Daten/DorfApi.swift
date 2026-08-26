@@ -5,7 +5,7 @@ import Foundation
 /// Der Klartext kommt, wo es einen gibt, aus dem Backend — dort sitzt die
 /// Prüfung, und dort steht die Begründung, die für die Person gedacht ist.
 /// Die App erfindet keine eigene.
-enum DorfFehler: Error, Sendable {
+nonisolated enum DorfFehler: Error, Sendable {
     /// Spielschutz: dieselbe Aufgabe ist noch gesperrt (HTTP 409).
     case gesperrt(wiederAb: Date?)
     /// Das Backend hat die Eingabe abgewiesen und nennt den Grund (HTTP 400).
@@ -203,7 +203,7 @@ nonisolated final class DorfApi: Sendable {
     }
 }
 
-extension URLSession {
+nonisolated extension URLSession {
     /// Fristen wie auf Android (10 s Verbindung, 20 s Antwort): lang genug für
     /// eine schlechte Mobilverbindung, kurz genug, dass die Oberfläche nicht
     /// minutenlang wartend dasteht.

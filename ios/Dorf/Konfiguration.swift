@@ -2,12 +2,18 @@ import Foundation
 
 /// Adressen und Kennungen der App.
 ///
+/// `nonisolated`, weil der API-Zugang außerhalb des Hauptthreads gebaut wird
+/// und diese Werte dort als Vorgabewerte auftauchen: Ein `MainActor`-Wert als
+/// Vorgabeargument in einem `nonisolated`-Initialisierer ist unter Swift 6
+/// ein Fehler. Die Werte sind unveränderlich und aus der `Info.plist`
+/// gelesen — an ihnen ist nichts zu schützen.
+///
 /// Sie stehen in den Build-Einstellungen (`ios/project.yml`) und landen über
 /// `Info.plist` hier — dasselbe Verfahren wie `BuildConfig` auf Android. Der
 /// Grund ist derselbe: CI und E2E müssen jede Adresse lokal übersteuern
 /// können, ohne Quelltext anzufassen. Kein Test darf gegen die Produktion
 /// laufen (siehe `.github/scripts/pruefe_lokale_tests.py`).
-enum Konfiguration {
+nonisolated enum Konfiguration {
     static let apiBasis = url("DorfApiBaseUrl", vorgabe: "https://app.xn--rssing-wxa.de")
     static let webseiteBasis = url("DorfWebsiteBaseUrl", vorgabe: "https://xn--rssing-wxa.de")
     static let oidcAussteller = url("DorfOidcIssuer", vorgabe: "https://id.xn--rssing-wxa.de")
