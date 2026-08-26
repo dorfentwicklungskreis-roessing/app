@@ -35,14 +35,16 @@ final class AppUmgebung {
         })
         self.anmeldung = anmeldung
         self.api = api
-        self.orte = OrteModell(api: api)
+        self.orte = OrteModell(api: api, vergabe: VergabeApi(tokenGeber: { [anmeldung] in
+            await anmeldung.frischesToken()
+        }))
     }
 
     /// Für Vorschauen und Tests: eine Umgebung, die nichts abruft.
     init(anmeldung: Anmeldung, api: DorfApi, ich: Ich?, orte: OrteModell? = nil) {
         self.anmeldung = anmeldung
         self.api = api
-        self.orte = orte ?? OrteModell(api: api)
+        self.orte = orte ?? OrteModell(api: api, vergabe: VergabeApi(tokenGeber: { nil }))
         self.ich = ich
     }
 

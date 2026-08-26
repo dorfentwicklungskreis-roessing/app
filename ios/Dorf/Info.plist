@@ -29,9 +29,14 @@
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<!-- Alle vier Ausrichtungen, nicht drei: Die App läuft auch auf dem iPad
+	     (TARGETED_DEVICE_FAMILY 1,2), und für das Multitasking dort verlangt
+	     Apple die vollständige Liste. Apples Preflight weist das Bündel sonst
+	     mit Fehler 90474 ab — der Bau selbst warnt nur. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
