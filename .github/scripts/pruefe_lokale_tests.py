@@ -75,6 +75,10 @@ VERBOTENE_DIENSTE = [
     (r"app\.xn--rssing-wxa\.de", "Produktions-Backend der Dorf-App"),
     (r"tiles\.openfreemap\.org", "fremder Kachelserver"),
     (r"fcm\.googleapis\.com", "Firebase Cloud Messaging"),
+    # Beide Apple-Adressen einzeln: „api.sandbox.push.apple.com" enthält
+    # „api.push.apple.com" gerade nicht.
+    (r"api\.push\.apple\.com", "Apple Push Notification service (Produktion)"),
+    (r"api\.sandbox\.push\.apple\.com", "Apple Push Notification service (Sandbox)"),
     (r"firebase\.tools", "Firebase-CLI-Installer"),
     (r"firebaseinstallations\.googleapis\.com", "Firebase Installations"),
 ]
@@ -159,10 +163,7 @@ def pruefe_ios_testquelle(relativ: str, text: str) -> list[str]:
             continue
         for muster, was in IOS_VERBOTENE_ZUGRIFFE:
             if muster.search(zeile):
-                funde.append(
-                    f"{relativ}:{nummer}: Der Test {was} — Tests laufen "
-                    f"ausschließlich lokal.\n    {zeile.strip()}"
-                )
+                funde.append(f"{relativ}:{nummer}: Der Test {was}.\n    {zeile.strip()}")
 
     for treffer in DORFAPI_AUFRUF.finditer(text):
         klammer = treffer.end() - 1
@@ -304,6 +305,9 @@ def selbsttest() -> int:
     faelle = [
         ("android/app/src/androidTest/Boese.kt", 'val issuer = "https://id.xn--rssing-wxa.de"', True),
         ("backend/e2e/boese.mjs", "const s = 'https://tiles.openfreemap.org/styles/liberty'", True),
+        ("backend/e2e/boese.go", 'ziel := "https://api.push.apple.com/3/device/" + token', True),
+        ("backend/e2e/boese.go", 'ziel := "https://api.sandbox.push.apple.com/3/device/" + token', True),
+        ("backend/e2e/gut.go", 'ziel := srv.URL + "/3/device/" + token', False),
         ("android/app/src/test/Boese.kt", 'val websiteBaseUrl = "https://xn--rssing-wxa.de"', True),
         # Datenstrings bleiben erlaubt — Termine tragen nun einmal solche Links.
         ("android/app/src/test/Gut.kt", 'url = "https://xn--rssing-wxa.de/events/grillen"', False),
@@ -421,6 +425,9 @@ def main() -> int:
         print(
             "\nAbhilfe: Adresse auf einen Dienst umstellen, den die CI selbst startet "
             "(docker compose in backend/e2e, statische Ablage in android/e2e/fixtures). "
+            "Bei den iOS-Treffern ohne Adresse: dem DorfApi-Aufruf eine eigene "
+            "'basis:' mitgeben, die Sitzung selbst bauen und über 'protocolClasses' "
+            "abfangen, statt Konfiguration.* zu lesen. "
             "Ist der Treffer wirklich nur ein Datenstring, hilft ein Kommentar "
             "'ci-extern-ok: <Begruendung>' in derselben Zeile."
         )
