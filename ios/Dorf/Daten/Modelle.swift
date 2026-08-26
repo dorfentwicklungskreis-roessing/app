@@ -154,110 +154,6 @@ nonisolated struct Aufgabe: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Eingabe von `POST /api/v1/places/{id}/tasks` und `PUT /api/v1/tasks/{id}`.
-///
-/// Eine Aufgabe ist **entweder** regelmäßig (Intervall und Rot-Schwelle)
-/// **oder** einmalig (`oneOff` mit `dueDate`). Beides zusammen weist das
-/// Backend ab („dueDate gibt es nur bei einmaligen Aufgaben"), und zwar zu
-/// Recht: Sonst wäre nie klar, woraus sich die Ampel ergibt.
-///
-/// Deshalb wird der Fall gar nicht erst gebaut. Die beiden Bauwege
-/// `regelmaessig(…)` und `einmalig(…)` schließen sich aus, und beim Kodieren
-/// geht nur mit, was zur gewählten Art gehört: einmalig **ohne** Intervall,
-/// regelmäßig **ohne** `dueDate`.
-nonisolated struct AufgabeEingabe: Encodable, Hashable, Sendable {
-    /// `giessen` · `jaeten` · `sonstiges`
-    var kind: String
-    var title: String = ""
-    /// Nur beim Gießen; bei jeder anderen Art geht das Feld nicht mit.
-    var liters: Double?
-    var intervalDays: Double = 0
-    var redAfterDays: Double = 0
-    var oneOff: Bool = false
-    /// Datum („2026-08-20") oder RFC3339 — nur bei einmaligen Aufgaben.
-    var dueDate: String = ""
-    var removeWhenDone: Bool = false
-    var active: Bool = true
-
-    static let giessen = "giessen"
-    static let jaeten = "jaeten"
-    static let sonstiges = "sonstiges"
-
-    static let arten = [giessen, jaeten, sonstiges]
-
-    static func bezeichnung(art: String) -> String {
-        switch art {
-        case giessen: return "Gießen"
-        case jaeten: return "Jäten"
-        default: return "Sonstiges"
-        }
-    }
-
-    /// Liter gibt es nur beim Gießen — bei „Jäten, 10 Liter" wüsste niemand,
-    /// was das heißen soll.
-    static func literErlaubt(art: String) -> Bool { art == giessen }
-
-    /// Eine regelmäßige Aufgabe: Intervall (→ gelb) und Rot-Schwelle.
-    static func regelmaessig(
-        kind: String,
-        title: String = "",
-        liters: Double? = nil,
-        intervalDays: Double,
-        redAfterDays: Double,
-        removeWhenDone: Bool = false,
-        active: Bool = true
-    ) -> AufgabeEingabe {
-        AufgabeEingabe(
-            kind: kind, title: title, liters: liters,
-            intervalDays: intervalDays, redAfterDays: redAfterDays,
-            oneOff: false, dueDate: "",
-            removeWhenDone: removeWhenDone, active: active
-        )
-    }
-
-    /// Eine einmalige Aufgabe: ein Termin statt eines Intervalls.
-    static func einmalig(
-        kind: String,
-        title: String = "",
-        liters: Double? = nil,
-        dueDate: String,
-        removeWhenDone: Bool = false,
-        active: Bool = true
-    ) -> AufgabeEingabe {
-        AufgabeEingabe(
-            kind: kind, title: title, liters: liters,
-            intervalDays: 0, redAfterDays: 0,
-            oneOff: true, dueDate: dueDate,
-            removeWhenDone: removeWhenDone, active: active
-        )
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case kind, title, liters, intervalDays, redAfterDays, oneOff, dueDate
-        case removeWhenDone, active
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(kind, forKey: .kind)
-        try c.encode(title, forKey: .title)
-        // Kein `liters` bei Jäten — und keine 0, die das Backend als
-        // „liters muss eine Zahl > 0 sein" abwiese.
-        if AufgabeEingabe.literErlaubt(art: kind), let menge = liters, menge > 0 {
-            try c.encode(menge, forKey: .liters)
-        }
-        try c.encode(oneOff, forKey: .oneOff)
-        if oneOff {
-            try c.encode(dueDate, forKey: .dueDate)
-        } else {
-            try c.encode(intervalDays, forKey: .intervalDays)
-            try c.encode(redAfterDays, forKey: .redAfterDays)
-        }
-        try c.encode(removeWhenDone, forKey: .removeWhenDone)
-        try c.encode(active, forKey: .active)
-    }
-}
-
 // MARK: - Vergabe
 
 /// Ein laufender Vergabe-Vorgang zu genau einer Aufgabe. Die Regeln stehen im
@@ -467,32 +363,6 @@ nonisolated struct ErledigungenAntwort: Codable, Sendable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         completions = c.wert(.completions, [])
-    }
-}
-
-/// Eingabe von `POST /api/v1/places` und `PUT /api/v1/places/{id}`.
-nonisolated struct OrtEingabe: Codable, Hashable, Sendable {
-    var name: String
-    var description: String = ""
-    /// `blumenkasten` · `beet` · `sonstiges`
-    var kind: String = OrtEingabe.blumenkasten
-    var lat: Double
-    var lon: Double
-    var active: Bool = true
-
-    static let blumenkasten = "blumenkasten"
-    static let beet = "beet"
-    static let sonstiges = "sonstiges"
-
-    /// Die Arten in der Reihenfolge, in der die Oberfläche sie anbietet.
-    static let arten = [blumenkasten, beet, sonstiges]
-
-    static func bezeichnung(art: String) -> String {
-        switch art {
-        case blumenkasten: return "Blumenkasten"
-        case beet: return "Beet"
-        default: return "Sonstiges"
-        }
     }
 }
 
@@ -851,33 +721,6 @@ nonisolated struct ApiFehlerAntwort: Codable, Sendable {
         error = c.wert(.error, "")
         retryAfter = c.wertOptional(.retryAfter)
     }
-}
-
-// MARK: - Einstellungen des Dorfes
-
-/// Antwort von `GET/PUT /api/v1/settings`.
-///
-/// Das Backend schickt dort auch die Vergabe-Regeln mit; die gehören einem
-/// anderen Bereich und werden hier bewusst nicht gelesen — und beim Schreiben
-/// nicht mitgeschickt, damit ein Zug am Hitzefaktor sie nicht überschreibt.
-nonisolated struct Einstellungen: Decodable, Hashable, Sendable {
-    /// Hitzefaktor: skaliert **nur** die Gieß-Schwellen. 1 = normal,
-    /// 0,5 = Hitzewelle (doppelt so schnell fällig).
-    var wateringFactor: Double = 1
-
-    enum CodingKeys: String, CodingKey { case wateringFactor }
-
-    init(wateringFactor: Double = 1) { self.wateringFactor = wateringFactor }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        wateringFactor = c.wert(.wateringFactor, 1)
-    }
-}
-
-/// Eingabe von `PUT /api/v1/settings` — nur der Hitzefaktor.
-nonisolated struct HitzefaktorEingabe: Encodable, Hashable, Sendable {
-    var wateringFactor: Double
 }
 
 // MARK: - Konto
