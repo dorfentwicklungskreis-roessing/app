@@ -58,6 +58,8 @@ fun StartScreen(
     faelligeOrte: Int,
     ladend: Boolean,
     modifier: Modifier = Modifier,
+    /** Only accounts holding the role "admin" see the hint on administering. */
+    isAdmin: Boolean = false,
     notifications: List<de.roessing.app.data.NotificationDto> = emptyList(),
     pendingAssignments: Set<Long> = emptySet(),
     meineVorgaenge: Set<Long> = emptySet(),
@@ -143,6 +145,13 @@ fun StartScreen(
         }
 
         IdeenKachel(onClick = { onBereich(Bereich.IDEEN) })
+
+        // Administering left the app; it runs on the MCP server and in the
+        // web administration. Whoever may administer should learn here where
+        // it happens — an empty spot would only raise questions.
+        if (isAdmin) {
+            AdminHint()
+        }
 
         // Impressum und Datenschutz stehen am Fuß der Startseite — dort, wo
         // man sie sucht, und dauerhaft erreichbar.

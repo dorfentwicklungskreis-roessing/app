@@ -433,6 +433,7 @@ fun HomeScreen(
                     name = vorname(profil, state),
                     faelligeOrte = state.faelligeOrte,
                     ladend = state.loading && state.places.isEmpty(),
+                    isAdmin = state.me?.isAdmin == true,
                     modifier = Modifier.padding(padding),
                     notifications = state.notifications,
                     pendingAssignments = state.pendingAssignments,

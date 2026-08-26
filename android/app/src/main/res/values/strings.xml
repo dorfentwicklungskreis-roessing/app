@@ -174,6 +174,15 @@
     <string name="task_once">Einmalig</string>
     <string name="task_once_done">Erledigt — diese Aufgabe war einmalig.</string>
     <string name="task_once_due">Einmalig — fällig am %1$s</string>
+    <!-- Verwalten: läuft über den MCP-Server und die Web-Verwaltung, nicht mehr in der App (nur mit der Rolle admin sichtbar) -->
+    <string name="admin_hint_title">Verwalten</string>
+    <string name="admin_hint_intro">Orte und Aufgaben pflegst du nicht mehr hier in der App, sondern an einer Stelle für alle: mit Claude oder im Browser.</string>
+    <string name="admin_hint_claude_title">Mit Claude</string>
+    <string name="admin_hint_claude_setup">In claude.ai unter Einstellungen → Connectors → Eigener Connector diese Adresse eintragen. Angemeldet wird mit deiner Rössing-ID; die Rolle „admin“ ist Voraussetzung.</string>
+    <string name="admin_hint_claude_can">Danach redest du einfach mit Claude: Orte und Aufgaben anlegen, ändern, pausieren und löschen, Erledigungen nachtragen und zurücknehmen, Rangliste abfragen, Hitzefaktor setzen, Ideen sichten.</string>
+    <string name="admin_hint_claude_benefit">Der Vorteil: Du kannst vor dem Blumenkasten stehen und Claude die Koordinaten deines Geräts übernehmen lassen.</string>
+    <string name="admin_hint_web_title">Im Browser</string>
+    <string name="admin_hint_web_body">Dieselben Dinge zum Klicken — mit einer Karte, auf der du den Punkt setzt.</string>
     <!-- Veranstaltungen: „Was ist los in Rössing" — Termine von der Website -->
     <string name="area_events_title">Was ist los?</string>
     <string name="area_events_subtitle">Termine im Dorf.</string>
