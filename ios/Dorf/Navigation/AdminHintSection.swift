@@ -31,6 +31,9 @@ struct AdminHintSection: View {
                     address: Self.mcpAddress.absoluteString
                 )
             }
+            // Without `.plain` the link tints its whole label, and the
+            // explanation would read as if every word were tappable.
+            .buttonStyle(.plain)
             .accessibilityIdentifier("admin-hint-mcp")
 
             Link(destination: Self.adminAddress) {
@@ -41,6 +44,7 @@ struct AdminHintSection: View {
                     address: Self.adminAddress.absoluteString
                 )
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("admin-hint-web")
         } header: {
             Text("Verwalten")
@@ -59,8 +63,8 @@ struct AdminHintSection: View {
     static var mcpAddress: URL { address("/mcp") }
     static var adminAddress: URL { address("/admin/") }
 
-    private static func address(_ pfad: String) -> URL {
-        URL(string: pfad, relativeTo: Konfiguration.apiBasis)?.absoluteURL
+    private static func address(_ path: String) -> URL {
+        URL(string: path, relativeTo: Konfiguration.apiBasis)?.absoluteURL
             ?? Konfiguration.apiBasis
     }
 }
@@ -90,6 +94,13 @@ private struct AdminHintRow: View {
                     .foregroundStyle(.tint)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 8)
+            // The arrow says what the chevron would not: this leaves the app
+            // and opens a browser.
+            Image(systemName: "arrow.up.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
         .padding(.vertical, 4)
     }
