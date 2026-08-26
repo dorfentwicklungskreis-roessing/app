@@ -1,0 +1,3 @@
+Geändert: Orte und Aufgaben werden nicht mehr in der App gepflegt, sondern mit Claude über den Dorfserver oder in der Web-Verwaltung. Wer verwalten darf, findet beide Wege jetzt auf der Startseite.
+
+Der Grund: Claude kennt auf dem Telefon den Standort. Man kann vor dem Blumenkasten stehen und die Koordinaten übernehmen lassen – dafür braucht es die App nicht mehr.
