@@ -28,7 +28,15 @@ struct EinstellungenView: View {
 
             Section {
                 Button("Abmelden", role: .destructive) {
-                    umgebung.anmeldung.abmelden()
+                    // Erst die Gerätekennung abmelden, dann die Sitzung:
+                    // Danach gibt es kein gültiges Token mehr, und die
+                    // Kennung bliebe für immer im Dorfserver stehen — der
+                    // schickte dann Anfragen an ein Gerät, an dem niemand
+                    // mehr angemeldet ist.
+                    Task {
+                        await Benachrichtigungen.gemeinsam.abmelden()
+                        umgebung.anmeldung.abmelden()
+                    }
                 }
                 .accessibilityIdentifier("einstellungen-abmelden")
             } footer: {
