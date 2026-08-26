@@ -337,6 +337,16 @@ jobs:
       # Erst prüfen, dann hochladen: --validate-app findet dieselben Mängel wie
       # der Upload (fehlendes Icon, ungültige Info.plist, zu niedrige
       # Buildnummer), verbraucht die Nummer aber nicht.
+      #
+      # Die Schalter sind gegen das altool aus Xcode 26.5 gegengeprüft:
+      # --apiKey/--apiIssuer werden weiterhin angenommen (die neuere
+      # Schreibweise --api-key/--api-issuer ebenso), und die .p8-Datei sucht
+      # altool von sich aus unter ~/.appstoreconnect/private_keys — genau
+      # dorthin legt sie der Schritt oben.
+      #
+      # In den Berichtsdateien steht vor dem JSON noch altools eigene
+      # „Running altool at path …"-Zeile. Sie werden nicht ausgewertet,
+      # sondern gelesen — das stört nicht.
       - name: Nach TestFlight hochladen
         if: env.SIGNIEREN == 'ja' && env.APP_DA == 'ja' && (github.event_name != 'workflow_dispatch' || inputs.hochladen)
         env:
