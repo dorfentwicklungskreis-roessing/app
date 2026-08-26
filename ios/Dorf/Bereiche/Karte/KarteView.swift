@@ -28,14 +28,20 @@ struct KarteView: View {
     @State private var wartetAufFreigabe = false
 
     var body: some View {
-        MapLibreKarte(
-            orte: orte,
-            eigenenStandortZeigen: standortZeigen,
-            hinfahren: hinfahren,
-            stilVersuch: stilVersuch,
-            auswahl: auswahl,
-            stilzustand: { meldung in stilFehler = meldung }
-        )
+        // Der GeometryReader ist kein Zierrat: Er meldet die Größe der Karte
+        // an `MapLibreKarte` weiter, und erst damit kann der Startausschnitt
+        // gerechnet werden — auch nach dem Drehen des Geräts.
+        GeometryReader { platz in
+            MapLibreKarte(
+                orte: orte,
+                groesse: platz.size,
+                eigenenStandortZeigen: standortZeigen,
+                hinfahren: hinfahren,
+                stilVersuch: stilVersuch,
+                auswahl: auswahl,
+                stilzustand: { meldung in stilFehler = meldung }
+            )
+        }
         .overlay(alignment: .top) { hinweise }
         .overlay(alignment: .bottomTrailing) { standortknopf }
         .onChange(of: standort.freigabe) { _, neue in freigabeGeaendert(neue) }

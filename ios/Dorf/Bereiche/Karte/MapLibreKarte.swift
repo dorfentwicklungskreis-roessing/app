@@ -17,6 +17,10 @@ struct MapLibreKarte: UIViewRepresentable {
     static let ebenenkennung = "orte-kreise"
 
     let orte: [Ort]
+    /// Die Größe der Karte in Punkten. Sie kommt aus SwiftUI, weil
+    /// `updateUIView` das erste Mal läuft, bevor die Ansicht ausgelegt ist —
+    /// ohne sie bliebe der Startausschnitt beim Standardzoom stehen.
+    var groesse: CGSize
     /// Eigenen Standortpunkt zeigen. Erst wahr, wenn die Freigabe da ist.
     var eigenenStandortZeigen: Bool
     /// Zählt jeden Druck auf „Mein Standort". Steigt er, fährt die Karte
@@ -70,6 +74,7 @@ struct MapLibreKarte: UIViewRepresentable {
         koordinator.auswahl = auswahl
         koordinator.stilzustand = stilzustand
         koordinator.orte = orte
+        koordinator.groesse = groesse
         koordinator.merkmaleSetzen(karte)
         koordinator.standortSetzen(karte, zeigen: eigenenStandortZeigen)
         koordinator.hinfahrenWennGewuenscht(karte, zaehler: hinfahren)
@@ -92,6 +97,7 @@ struct MapLibreKarte: UIViewRepresentable {
         var auswahl: (Ort) -> Void
         var stilzustand: (String?) -> Void
         var orte: [Ort] = []
+        var groesse: CGSize = .zero
         var tippErkenner: UITapGestureRecognizer?
 
         /// Der Stil steht und Quelle samt Ebene sind angelegt.
@@ -121,6 +127,7 @@ struct MapLibreKarte: UIViewRepresentable {
             quelleUndEbeneAnlegen(in: stil)
             stilSteht = true
             stilzustand(nil)
+            startausschnittWennNoetig(mapView)
             vorleseElementeSetzen(mapView)
         }
 
@@ -204,8 +211,8 @@ struct MapLibreKarte: UIViewRepresentable {
 
         func startausschnittWennNoetig(_ karte: MLNMapView) {
             guard !startGesetzt, !vonHandBewegt else { return }
-            let breite = Double(karte.bounds.width)
-            let hoehe = Double(karte.bounds.height)
+            let breite = Double(groesse.width > 0 ? groesse.width : karte.bounds.width)
+            let hoehe = Double(groesse.height > 0 ? groesse.height : karte.bounds.height)
             guard breite > 0, hoehe > 0 else { return }
             let start = Kartendaten.start(fuer: orte, breiteInPunkten: breite, hoeheInPunkten: hoehe)
             karte.setCenter(koordinate(start.mitte), zoomLevel: start.zoom, animated: false)
