@@ -120,31 +120,36 @@ Was dabei offen geblieben ist:
 
 ## Gehört anderen Dateien im Repo
 
-Diese Punkte liegen außerhalb von `ios/` und wurden hier nur aufgeschrieben:
+Diese Punkte liegen außerhalb von `ios/` und wurden hier nur aufgeschrieben.
 
-- **`backend/README.md`**, Abschnitt zum Profil: Die Endpunktliste kennt
-  `GET /api/v1/me` und `PUT /api/v1/me/profile`, aber noch nicht
-  **`DELETE /api/v1/me`**. Eine Zeile.
-- **`backend/SICHERHEIT.md`** braucht einen Abschnitt „Kontolöschung": was
-  gelöscht wird (Profil, Gerätekennungen, Helfer-Eintragungen,
-  Benachrichtigungen, Befähigungsanträge), was anonymisiert bleibt
-  (Erledigungen, beendete Zusagen, eingereichte Ideen) und dass das Konto in
-  der **Rössing-ID** ausdrücklich **nicht** angetastet wird — es gehört
-  Zitadel und dient auch anderen Anwendungen. Die Begründung steht im
-  Kopfkommentar von `backend/internal/db/konto.go`.
-- **`backend/SICHERHEIT.md`**, Punkt 3 („Push ist da — und damit ist Google
-  beteiligt"), beschreibt nur den Firebase-Weg. Für iOS ist Google **nicht**
-  beteiligt, dafür Apple.
-- **`README.md`** im Wurzelverzeichnis, Abschnitt „Push-Benachrichtigungen",
-  nennt bislang nur Firebase — dort gehört der iOS-Weg dazu.
-- **`store/datenschutz.md`** und die Datenschutzerklärung auf der Website:
-  Unter „Löschung" steht bislang „formlos per E-Mail". Inzwischen gibt es den
-  Weg **in der App** (Einstellungen → Konto löschen), und die Erklärung
-  sollte auch sagen, dass Erledigungen anonymisiert bestehen bleiben und
-  warum.
-- **`store/ios-datenschutz.md`**: Die App erhebt inzwischen eine
-  Gerätekennung (APNs). Sie geht nur an den Dorfserver, und das Löschen
-  räumt sie mit weg.
+**Erledigt** (im selben Zweig nachgezogen):
+
+- **`backend/README.md`** führt `DELETE /api/v1/me` inzwischen als eigenen
+  Abschnitt.
+- **`backend/SICHERHEIT.md`** hat den Abschnitt „Kontolöschung": was gelöscht
+  wird (Profil, Gerätekennungen, Helfer-Eintragungen, Benachrichtigungen,
+  Befähigungsanträge), was anonymisiert bleibt (Erledigungen, beendete
+  Zusagen, eingereichte Ideen) und dass das Konto in der **Rössing-ID**
+  ausdrücklich **nicht** angetastet wird. Dazu den Abschnitt „Gerätekennung
+  für iOS: APNs statt Firebase".
+- **`README.md`** im Wurzelverzeichnis nennt unter „Push-Benachrichtigungen"
+  jetzt beide Wege — Firebase für Android, APNs für iOS.
+- **`store/datenschutz.md`** nennt den Weg in der App (Einstellungen → Konto
+  löschen) und erklärt die Anonymisierung.
+- **`store/ios-datenschutz.md`** führt die APNs-Gerätekennung mit Apple als
+  Empfänger.
+
+**Noch offen:**
+
+- **`backend/SICHERHEIT.md`**, Punkt 3 der Liste („Push ist da — und damit
+  ist Google beteiligt") beschreibt weiterhin nur den Firebase-Weg. Der
+  iOS-Weg steht inzwischen weiter unten in einem eigenen Abschnitt, aber
+  Punkt 3 verweist nicht darauf — wer nur die Liste liest, hält Google für
+  den einzigen Beteiligten.
+- **Der offene Punkt in Punkt 3 selbst** (`ui/HomeScreen.kt` meldet die
+  Kennung an, **bevor** die Erlaubnis geklärt ist) betrifft **Android**. Auf
+  iOS ist es umgekehrt gebaut: gefragt wird erst, wenn sich jemand als
+  Helfer:in einträgt, und angemeldet wird erst danach.
 
 ## Was der Mensch bei Apple und im Cluster noch tun muss
 
@@ -154,8 +159,16 @@ auskommentierten Block `APNS_KEY_FILE`. Kurz: Schlüssel als SealedSecret
 ablegen, unter `/secrets/apns` einhängen, die `APNS_*`-Zeilen
 einkommentieren.
 
-Dazu kommt die Apple-Signierung: `DEVELOPMENT_TEAM` in `project.yml` ist
-leer, gebaut wird bislang nur für den Simulator.
+Die Apple-Signierung steht dagegen: `DEVELOPMENT_TEAM` in `project.yml`
+trägt die Team-ID, Zertifikat und Provisioning-Profil legt `xcodebuild`
+über `-allowProvisioningUpdates` selbst an (`make archiv`,
+`.github/workflows/ios-release.yml`). Für den Simulator bleibt es bei der
+Ad-hoc-Signatur; die beiden Wege stören sich nicht.
+
+Solange `APNS_KEY_FILE` im Cluster fehlt, wird für iOS schlicht nicht
+gepusht. Das ist kein Fehlerzustand: Die App holt ihre Benachrichtigungen
+über `GET /api/v1/me/notifications` ohnehin selbst ab, und Android bleibt
+unberührt.
 
 ## Für die iOS-E2E-Läufe merken
 
