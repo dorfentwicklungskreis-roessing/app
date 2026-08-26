@@ -129,14 +129,20 @@ keine der beiden Apps noch einmal.
 - **Wer darf was**: Orte und Aufgaben anlegen, ändern, pausieren und löschen
   darf ausschließlich die Verwaltung (Projektrolle `admin`). Durchgesetzt
   wird das serverseitig aus dem Token — in REST (`adminOnly`), in der
-  Web-Verwaltung (`requireAdmin`) und am MCP-Endpoint gleichermaßen; die App
-  blendet den Bereich zusätzlich nur für Verwaltende ein. Alle anderen
-  Angemeldeten melden Erledigungen, tragen sich als Helfer:innen ein, sagen
-  zu und stehen in der Rangliste — daran ändert sich nichts.
-  **In der App** gibt es dafür den Bereich **„Verwaltung"**: Orte und
-  Aufgaben pflegen, während man davor steht. Der Standort kommt aus dem
-  eigenen Gerät („Meinen Standort übernehmen") oder aus einem Tipp auf die
-  Karte.
+  Web-Verwaltung (`requireAdmin`) und am MCP-Endpoint gleichermaßen. Alle
+  anderen Angemeldeten melden Erledigungen, tragen sich als Helfer:innen ein,
+  sagen zu und stehen in der Rangliste — daran ändert sich nichts.
+  **Verwaltet wird über den MCP-Server** (Connector auf
+  `https://app.xn--rssing-wxa.de/mcp`, Anmeldung mit der Rössing-ID, Rolle
+  `admin`) **oder über die Web-Verwaltung** (`/admin/`, mit Karte zum Setzen
+  des Punktes). Die Apps für Android und iOS legen selbst nichts mehr an;
+  sie zeigen Verwaltenden nur noch, wo es stattfindet.
+  Der Grund für den früheren App-Bereich war, nur das Telefon könne am
+  Blumenkasten stehen und den Standort übernehmen. Das trägt nicht mehr:
+  Claude bekommt im Client die Koordinaten des Geräts, und `ort_anlegen`
+  nimmt `lat`/`lon` entgegen — man steht mit Claude vor dem Kasten und sagt
+  „leg hier einen Kasten an". Damit gibt es keinen Anlass, dieselben
+  Formulare ein drittes Mal zu bauen und in drei Fassungen zu pflegen.
 - **Pausieren und Löschen mit Ansage**: Wer eine Aufgabe gerade zugesagt hat,
   bekommt den Hinweis „nicht mehr nötig", sobald sie pausiert oder gelöscht
   wird — für einzelne Aufgaben wie für ganze Orte, in REST, Web-Verwaltung
@@ -334,7 +340,7 @@ nicht: dyld weist das eingebettete `MapLibre.framework` ab. Ein echtes
 Zertifikat braucht dieser Lauf nicht — signiert wird erst beim Ausliefern
 (`.github/workflows/ios-release.yml`, siehe „Releases (iOS)").
 
-Der letzte grüne Lauf meldet **181 Tests in 11 Suiten**. Was die App kann,
+Der letzte grüne Lauf meldet **154 Tests in 10 Suiten**. Was die App kann,
 wie sie aufgebaut ist und was bewusst fehlt: `ios/README.md` und
 `ios/OFFEN.md`.
 

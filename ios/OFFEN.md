@@ -15,28 +15,27 @@ gleichzeitig an der App gebaut haben; sie sind eingearbeitet und gelöscht.
 
 ## Bewusst noch nicht gebaut
 
-### Verwaltung
+### Verwaltung — bewusst gar nicht mehr
 
-- **Träger-Auswahl.** `PlaceInput.traegerId` geht nicht mit. Das Backend
-  nimmt dann den einzigen Träger, den der Aufrufer verwaltet — im Alltag der
-  Normalfall. Wer **mehrere** Träger verwaltet, kann in der App nicht
-  auswählen, für wen er anlegt (die Web-Verwaltung kann es). Ein Ort lässt
-  sich aus der App auch nicht umhängen.
-- **Sichtbarkeit `nur_mitglieder`.** `TaskInput.sichtbarkeit` wird nicht
-  mitgeschickt; leer heißt im Backend „unverändert lassen". Eine interne
-  Aufgabe bleibt also intern, wenn man ihr Intervall ändert — aber intern
-  **machen** kann man sie aus der App nicht.
-- **Befähigungen** (`TaskInput.befaehigungId`) ebenso: nicht geschickt, also
-  unverändert. Die verlangte Einweisung wird in der App weder gezeigt noch
-  gesetzt.
-- **Vergabe-Einstellungen.** `PUT /api/v1/settings` schickt **nur**
-  `wateringFactor`. Die Vergabe-Regeln stehen in derselben Antwort, gehören
-  aber dem Bereich „Anfragen" — ein Zug am Hitzefaktor darf sie nicht
-  überschreiben.
-- **Erledigungen nachtragen und zurücknehmen** (der `forced`-Nachtrag der
-  Web-Verwaltung) gibt es in der App nicht.
-- **Ideen verwalten** (`GET/PATCH/DELETE /api/v1/ideen`) ist ebenfalls
-  `adminOnly`, gehört aber zum Bereich „Ideen".
+Die App hatte einen Bereich „Verwaltung"; er ist entfernt. Administration
+läuft über den MCP-Endpunkt des Backends (Connector in claude.ai) und über
+die Web-Verwaltung. Beide reden mit denselben Endpunkten, die es weiterhin
+gibt — es geht allein um die App.
+
+Der Grund für den Bereich war, nur das Telefon könne am Blumenkasten stehen
+und den Standort übernehmen. Claude bekommt im Client die Koordinaten des
+Geräts, und `ort_anlegen` nimmt `lat`/`lon` entgegen: Man steht mit Claude
+vor dem Kasten und sagt „leg hier einen Kasten an". Damit fällt das einzige
+Argument weg, das die dritte Fassung derselben Formulare gerechtfertigt hat.
+
+Mit dem Bereich sind auch die Lücken erledigt, die hier standen: fehlende
+Träger-Auswahl, Sichtbarkeit `nur_mitglieder`, Befähigungen, nachgetragene
+Erledigungen, Ideen verwalten. Alles das können MCP und Web-Verwaltung —
+teils mehr, als die App je konnte.
+
+Was für Verwaltende bleibt, ist der Abschnitt „Verwalten" auf der Startseite
+(`Dorf/Navigation/AdminHintSection.swift`): Er nennt beide Wege samt
+Adressen, damit niemand vor einer leeren Stelle steht.
 
 ### Push
 
@@ -72,21 +71,7 @@ gleichzeitig an der App gebaut haben; sie sind eingearbeitet und gelöscht.
   Signatur von `KarteView` müsste um `termine:` wachsen.
 - **Karte kann nicht auf einen Ort zeigen.** Sie meldet einen Tipp zurück,
   nimmt aber keine Anweisung entgegen — beim Umschalten von der Liste zur
-  Karte lässt sich der gewählte Ort deshalb nicht anfahren. Dasselbe fehlt im
-  Auswahlmodus der Verwaltung: Die Auswahlkarte startet auf dem Ausschnitt
-  aller Orte, nicht auf dem eigenen Standort. Wer „Meinen Standort
-  übernehmen" drückt, sieht den gesetzten Punkt erst nach dem Hinschieben.
-- **Kartentipp und VoiceOver.** Auf eine bestimmte Stelle der Karte zu
-  tippen, geht mit VoiceOver nicht. Der barrierefreie Weg zur Koordinate ist
-  „Meinen Standort übernehmen" — das Formular sagt das auch, und die Karte
-  trägt im Auswahlmodus einen entsprechenden Hinweis. Wer einen Ort anlegt,
-  an dem er nicht steht, braucht bis auf Weiteres die Web-Verwaltung.
-- **Der Hitzefaktor steht in Zehntelschritten.** Ein vom Backend geliefertes
-  0,75 bleibt erhalten, lässt sich mit dem Stepper aber nur in Zehnteln
-  verändern.
-- **Keine Suche und keine Sortierung** in der Ortsliste der Verwaltung; sie
-  steht nach Dringlichkeit wie in „Mithelfen". Ab einigen Dutzend Orten wird
-  das unhandlich.
+  Karte lässt sich der gewählte Ort deshalb nicht anfahren.
 - **Kein Zwischenspeicher je Zeitraum** in der Rangliste: Jedes Umschalten
   fragt neu. Bei fünf Zeiträumen und kleinen Antworten verschmerzbar.
 
@@ -96,7 +81,7 @@ Die App läuft ab **iOS 16** (vorher iOS 17), damit iPhone 8, 8 Plus und X
 (2017) mitkommen. Tiefer geht es bewusst nicht: Ein iPhone 6s tut sich mit
 der Vektorkarte schwer. Was dafür anders ist als in einer iOS-17-App:
 
-- **Kein Observation-Framework.** Die dreizehn Modelle sind
+- **Kein Observation-Framework.** Die zwölf Modelle sind
   `ObservableObject` mit `@Published`; die Ansichten halten sie als
   `@StateObject`, `@ObservedObject` oder `@EnvironmentObject`. Das beobachtet
   **gröber** als `@Observable`: Jede Meldung zeichnet die ganze Ansicht neu,
@@ -140,9 +125,8 @@ mehr bauen.
 Was dabei offen geblieben ist:
 
 - **Der Ersatzsatz bei 409 ist jetzt überall derselbe** („Das hat gerade
-  jemand anderes übernommen."). Die Verwaltung hatte einen eigenen („…
-  geändert."). Zu sehen ist der Unterschied nur, wenn das Backend einen 409
-  **ohne** Begründung im Rumpf schickt — dann sagt ohnehin niemand etwas
+  jemand anderes übernommen."). Zu sehen ist er nur, wenn das Backend einen
+  409 **ohne** Begründung im Rumpf schickt — dann sagt ohnehin niemand etwas
   Genaues. Wenn ein Endpunkt einen eigenen Wortlaut braucht, gehört er ins
   Backend, nicht in die App.
 - **Der Konto-Endpunkt deutet seine Antwort selbst.** `DELETE /api/v1/me`
