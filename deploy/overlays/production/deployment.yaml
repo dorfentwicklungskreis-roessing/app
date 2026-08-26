@@ -48,10 +48,14 @@ spec:
             # für ein anderes Projekt derselben Rössing-ID ausgestellt wurde,
             # käme damit als gültig durch.
             #
-            # Eingetragen sind die Client-IDs der drei Anwendungen, die dieses
+            # Eingetragen sind die Client-IDs der Anwendungen, die dieses
             # Backend nutzen; Zitadel trägt die Client-ID der anfragenden
             # Anwendung in den aud-Claim ein. Ein Treffer genügt.
             #   385941807986376899  Android-App (AppAuth, PKCE)
+            #   387943892076527811  iOS-App „Dorf-App iOS" (nativ, PKCE,
+            #                       Rücksprung de.roessing.app:/oauth2redirect).
+            #                       Ohne diesen Eintrag weist das Backend jedes
+            #                       Token der iOS-App ab.
             #   385942875872952515  Web-Admin (= ADMIN_CLIENT_ID)
             #   385946294599876803  MCP (= MCP_CLIENT_ID, feste ID der DCR)
             #   385941791695700163  Projekt „Dorf-App" — zusätzlicher Fangnetz-
@@ -67,7 +71,7 @@ spec:
             # ("Token ist nicht für diese Anwendung ausgestellt (aud=…)"),
             # daran lässt sich der fehlende Wert direkt ablesen.
             - name: AUTH_AUDIENCE
-              value: "385941807986376899,385942875872952515,385946294599876803,385941791695700163"
+              value: "385941807986376899,387943892076527811,385942875872952515,385946294599876803,385941791695700163"
             - name: ADMIN_CLIENT_ID
               value: "385942875872952515"
             # Seed legt nur bei leerer DB die Beispiel-Kästen an.
