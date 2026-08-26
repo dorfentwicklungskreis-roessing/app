@@ -1,0 +1,19 @@
+Testfassung der Dorf-App Rössing.
+
+Diese App ist für die Einwohnerinnen und Einwohner von Rössing (Gemeinde Nordstemmen) gedacht. Sie zeigt, was im Dorf gerade ansteht: Blumenkästen und Beete auf einer Karte, wer zuletzt gegossen oder gejätet hat, die Termine aus dem Dorf und eine Rangliste als Ansporn.
+
+ANMELDUNG NÖTIG
+Ohne Rössing-ID kommt man nicht über den Anmeldebildschirm hinaus. Das Konto vergibt der Dorfentwicklungskreis; wer noch keins hat, meldet sich bitte dort.
+
+WORAUF WIR BESONDERS SCHAUEN
+- Anmelden und Abmelden: Springt der Browser sauber in die App zurück?
+- Karte: Laden die Kacheln, stimmt der Ausschnitt, sitzen die Nadeln richtig?
+- Erledigung melden und wieder zurücknehmen.
+- Profil: Sind die Sichtbarkeits-Schalter verständlich?
+- Darstellung auf verschiedenen Gerätegrößen, hell und dunkel.
+
+RÜCKMELDUNGEN
+Am liebsten über den Knopf in TestFlight (Bildschirmfoto anhängen) oder per E-Mail an post@levinkeller.de. Bitte dazuschreiben, welches Gerät und welche iOS-Fassung.
+
+WAS NOCH FEHLT
+Push-Benachrichtigungen sind noch nicht eingebaut. Weitere Bereiche neben „Mithelfen" kommen später.

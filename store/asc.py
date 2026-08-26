@@ -22,7 +22,21 @@ Aufruf:
     python3 store/asc.py GET /v1/bundleIds
     python3 store/asc.py GET '/v1/apps?limit=10'
     python3 store/asc.py POST /v1/bundleIds --daten '{"data": {...}}'
-    python3 store/asc.py team-id          # liest die Team-ID aus einem Zertifikat
+
+Dazu die Handgriffe, die man sonst in App Store Connect klicken müsste:
+
+    python3 store/asc.py team-id             # Team-ID aus einem Zertifikat lesen
+    python3 store/asc.py bundle-id-anlegen   # de.roessing.app registrieren
+    python3 store/asc.py app-zeigen          # App-Datensatz suchen, id ausgeben
+    python3 store/asc.py testflight-gruppe   # externe Gruppe „Dorf" + öffentlicher Link
+    python3 store/asc.py beta-info           # Feedback-Adresse und Beta-Beschreibung
+
+Was hier bewusst NICHT geht: den App-Datensatz selbst anlegen. Dafür gibt es
+keine API — das macht ein Mensch einmalig in App Store Connect
+(`store/ios-veroeffentlichung.md`, Schritt 3).
+
+Ohne Schlüssel bricht kein Unterbefehl mit einem Stacktrace ab, sondern sagt,
+was fehlt und wie man es hinlegt.
 """
 
 from __future__ import annotations
@@ -42,6 +56,15 @@ BASIS = "https://api.appstoreconnect.apple.com"
 ZIELGRUPPE = "appstoreconnect-v1"
 # Apple weist Tokens ab, die länger als 20 Minuten gelten.
 GUELTIGKEIT = 20 * 60
+
+# Dieselben Werte wie in ios/project.yml bzw. store/metadata/ios/ — hier stehen
+# sie noch einmal, weil dieses Skript ohne Xcode und ohne XcodeGen laufen soll.
+BUNDLE_ID = "de.roessing.app"
+BUNDLE_NAME = "Roessing Dorf-App"   # nur intern; Apple verbietet hier Umlaute
+TESTFLIGHT_GRUPPE = "Dorf"
+FEEDBACK_ADRESSE = "post@levinkeller.de"
+METADATEN = Path(__file__).resolve().parent / "metadata" / "ios"
+SPRACHEN = ["de-DE", "en-US"]
 
 
 def _b64(roh: bytes) -> str:
@@ -82,15 +105,53 @@ def schluesselpfad(key_id: str) -> Path:
     return Path.home() / ".appstoreconnect" / "private_keys" / f"AuthKey_{key_id}.p8"
 
 
+HINWEIS_OHNE_SCHLUESSEL = """Kein Zugang zur App-Store-Connect-API — es fehlt: {fehlt}.
+
+Gebraucht werden drei Dinge:
+
+  APP_STORE_CONNECT_KEY_ID      die zehnstellige Key ID, z.B. 2X9R4HXF34
+  APP_STORE_CONNECT_ISSUER_ID   eine UUID, für das ganze Team dieselbe
+  ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8   (chmod 600)
+
+Im Repo dorfentwicklungskreis-roessing/app liegen dieselben drei Werte als
+GitHub-Secrets (APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_KEY_ID,
+APP_STORE_CONNECT_PRIVATE_KEY); von dort kommt kein Klartext zurück. Auf dem
+eigenen Rechner (die .p8 liegt im Passwortspeicher, nicht im Repo):
+
+  export APP_STORE_CONNECT_KEY_ID=...
+  export APP_STORE_CONNECT_ISSUER_ID=...
+  mkdir -p ~/.appstoreconnect/private_keys
+  cp AuthKey_$APP_STORE_CONNECT_KEY_ID.p8 ~/.appstoreconnect/private_keys/
+  chmod 600 ~/.appstoreconnect/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8
+
+Es wurde nichts geändert."""
+
+
+def zugang(key_id: str | None = None, issuer_id: str | None = None) -> tuple[str, str]:
+    """Kennungen und Schlüsseldatei einsammeln — oder verständlich abbrechen.
+
+    Bewusst *vor* jedem Unterbefehl aufgerufen: Wer den Schlüssel nicht hat
+    (auf dieser Maschine der Normalfall), soll eine Anleitung lesen und keinen
+    Stacktrace.
+    """
+    key_id = key_id or os.environ.get("APP_STORE_CONNECT_KEY_ID", "")
+    issuer_id = issuer_id or os.environ.get("APP_STORE_CONNECT_ISSUER_ID", "")
+
+    fehlt = []
+    if not key_id:
+        fehlt.append("APP_STORE_CONNECT_KEY_ID")
+    if not issuer_id:
+        fehlt.append("APP_STORE_CONNECT_ISSUER_ID")
+    if key_id and not schluesselpfad(key_id).exists():
+        fehlt.append(f"die Schlüsseldatei {schluesselpfad(key_id)}")
+
+    if fehlt:
+        raise SystemExit(HINWEIS_OHNE_SCHLUESSEL.format(fehlt=", ".join(fehlt)))
+    return key_id, issuer_id
+
+
 def token(key_id: str, issuer_id: str) -> str:
     pfad = schluesselpfad(key_id)
-    if not pfad.exists():
-        raise SystemExit(
-            f"Privater Schlüssel nicht gefunden: {pfad}\n"
-            "Die .p8-Datei aus App Store Connect dorthin legen "
-            "(chmod 600) — sie gehört nicht ins Repo."
-        )
-
     jetzt = int(time.time())
     kopf = {"alg": "ES256", "kid": key_id, "typ": "JWT"}
     rumpf = {
@@ -112,14 +173,15 @@ def token(key_id: str, issuer_id: str) -> str:
 
 
 def anfrage(methode: str, pfad: str, daten: dict | None = None,
-            key_id: str | None = None, issuer_id: str | None = None) -> dict:
-    key_id = key_id or os.environ.get("APP_STORE_CONNECT_KEY_ID", "")
-    issuer_id = issuer_id or os.environ.get("APP_STORE_CONNECT_ISSUER_ID", "")
-    if not key_id or not issuer_id:
-        raise SystemExit(
-            "APP_STORE_CONNECT_KEY_ID und APP_STORE_CONNECT_ISSUER_ID setzen "
-            "(oder --key-id/--issuer-id angeben)."
-        )
+            key_id: str | None = None, issuer_id: str | None = None,
+            dulden: tuple[int, ...] = ()) -> dict:
+    """Eine API-Anfrage. `dulden` nennt HTTP-Codes, die kein Abbruch sind.
+
+    Für die gibt es die Antwort mit zusätzlichem Schlüssel `__status` zurück —
+    so kann ein Unterbefehl z.B. auf „gibt es schon" (409) freundlich
+    antworten, statt den Lauf rot zu machen.
+    """
+    key_id, issuer_id = zugang(key_id, issuer_id)
 
     rumpf = json.dumps(daten).encode() if daten is not None else None
     req = urllib.request.Request(BASIS + pfad, data=rumpf, method=methode)
@@ -133,6 +195,13 @@ def anfrage(methode: str, pfad: str, daten: dict | None = None,
             return json.loads(roh) if roh else {}
     except urllib.error.HTTPError as fehler:
         roh = fehler.read().decode(errors="replace")
+        if fehler.code in dulden:
+            try:
+                gelesen = json.loads(roh)
+            except json.JSONDecodeError:
+                gelesen = {"rohtext": roh}
+            gelesen["__status"] = fehler.code
+            return gelesen
         try:
             # Apple erklärt Ablehnungen ausführlich — den Text nicht verschlucken.
             gelesen = json.loads(roh)
@@ -168,18 +237,225 @@ def team_id() -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Unterbefehle: die Handgriffe, die sonst in App Store Connect geklickt werden
+# ---------------------------------------------------------------------------
+
+
+def _lies(sprache: str, *dateien: str) -> str:
+    """Erste vorhandene, nicht leere Metadatendatei einer Sprache.
+
+    Reihenfolge ist Absicht: `beta_description.txt` ist die kurze Fassung für
+    TestFlight; fehlt sie, tut es die Store-Beschreibung.
+    """
+    for name in dateien:
+        pfad = METADATEN / sprache / name
+        if pfad.is_file():
+            text = pfad.read_text(encoding="utf-8").strip()
+            if text:
+                return text
+    raise SystemExit(
+        f"Keine der Dateien {', '.join(dateien)} unter "
+        f"{(METADATEN / sprache).relative_to(Path(__file__).resolve().parent.parent)} "
+        "gefunden oder alle leer."
+    )
+
+
+def bundle_id_anlegen() -> None:
+    """`de.roessing.app` als App ID registrieren (POST /v1/bundleIds).
+
+    Eine Bundle-ID lässt sich weder umbenennen noch löschen — deshalb wird
+    vorher gesucht statt blind angelegt.
+    """
+    zugang()
+    vorhanden = anfrage("GET", f"/v1/bundleIds?filter[identifier]={BUNDLE_ID}&limit=200")
+    for eintrag in vorhanden.get("data", []):
+        if eintrag.get("attributes", {}).get("identifier") == BUNDLE_ID:
+            print(f"{BUNDLE_ID} gibt es schon (id {eintrag['id']}) — nichts zu tun.")
+            return
+
+    antwort = anfrage("POST", "/v1/bundleIds", {
+        "data": {
+            "type": "bundleIds",
+            "attributes": {
+                "identifier": BUNDLE_ID,
+                "name": BUNDLE_NAME,
+                "platform": "IOS",
+            },
+        },
+    }, dulden=(409,))
+
+    if antwort.get("__status") == 409:
+        # Kommt vor, wenn die ID einem anderen Team gehört oder gerade eben
+        # von Hand angelegt wurde. Apples Text ist aussagekräftig — durchreichen.
+        for fehler in antwort.get("errors", [{}]):
+            print(f"{BUNDLE_ID} konnte nicht angelegt werden: "
+                  f"{fehler.get('detail') or fehler.get('title') or antwort}")
+        return
+
+    print(f"{BUNDLE_ID} angelegt (id {antwort['data']['id']}).")
+    print("Capabilities bleiben bewusst leer — siehe store/ios-veroeffentlichung.md, Schritt 2.")
+
+
+def app_datensatz() -> dict:
+    """Den App-Datensatz zur Bundle-ID holen. Fehlt er, wird das erklärt."""
+    zugang()
+    antwort = anfrage("GET", f"/v1/apps?filter[bundleId]={BUNDLE_ID}&limit=10")
+    daten = antwort.get("data", [])
+    if not daten:
+        raise SystemExit(
+            f"Zu {BUNDLE_ID} gibt es noch keinen App-Datensatz.\n"
+            "Den legt ein Mensch einmalig an — dafür hat Apple keine API:\n"
+            "  appstoreconnect.apple.com → Apps → ＋ → New App\n"
+            "Die Felder stehen in store/ios-veroeffentlichung.md, Schritt 3.\n"
+            "Es wurde nichts geändert."
+        )
+    return daten[0]
+
+
+def app_zeigen() -> None:
+    app = app_datensatz()
+    a = app.get("attributes", {})
+    print(f"App-Id:     {app['id']}")
+    print(f"Name:       {a.get('name')}")
+    print(f"Bundle-ID:  {a.get('bundleId')}")
+    print(f"SKU:        {a.get('sku')}")
+    print(f"Sprache:    {a.get('primaryLocale')}")
+
+
+def testflight_gruppe() -> None:
+    """Externe Tester-Gruppe „Dorf" anlegen und den öffentlichen Link freischalten.
+
+    Extern heißt: ohne Team-Mitgliedschaft, bis 10.000 Plätze, dafür einmal
+    Beta App Review. Der öffentliche Link ist der Grund für „extern" — damit
+    reicht ein Link ins Dorf statt einer Einladung je Adresse.
+    """
+    app = app_datensatz()
+    gruppen = anfrage("GET", f"/v1/apps/{app['id']}/betaGroups?limit=200")
+
+    gefunden = None
+    for eintrag in gruppen.get("data", []):
+        if eintrag.get("attributes", {}).get("name") == TESTFLIGHT_GRUPPE:
+            gefunden = eintrag
+            break
+
+    if gefunden is None:
+        antwort = anfrage("POST", "/v1/betaGroups", {
+            "data": {
+                "type": "betaGroups",
+                "attributes": {
+                    "name": TESTFLIGHT_GRUPPE,
+                    "isInternalGroup": False,
+                    "publicLinkEnabled": True,
+                    # Kein Deckel: Rössing hat rund 1.500 Einwohner, die
+                    # 10.000 Plätze von TestFlight reichen also mit Abstand.
+                    "publicLinkLimitEnabled": False,
+                    "feedbackEnabled": True,
+                },
+                "relationships": {
+                    "app": {"data": {"type": "apps", "id": app["id"]}},
+                },
+            },
+        })
+        gefunden = antwort["data"]
+        print(f"Gruppe „{TESTFLIGHT_GRUPPE}“ angelegt (id {gefunden['id']}).")
+    elif not gefunden.get("attributes", {}).get("publicLinkEnabled"):
+        antwort = anfrage("PATCH", f"/v1/betaGroups/{gefunden['id']}", {
+            "data": {
+                "id": gefunden["id"],
+                "type": "betaGroups",
+                "attributes": {"publicLinkEnabled": True, "publicLinkLimitEnabled": False},
+            },
+        })
+        gefunden = antwort["data"]
+        print(f"Gruppe „{TESTFLIGHT_GRUPPE}“ gab es schon — öffentlicher Link eingeschaltet.")
+    else:
+        print(f"Gruppe „{TESTFLIGHT_GRUPPE}“ gibt es schon, öffentlicher Link ist an.")
+
+    link = gefunden.get("attributes", {}).get("publicLink")
+    if not link:
+        # Apple erzeugt den Link asynchron; direkt nach dem Anlegen ist er oft
+        # noch leer. Einmal nachfragen genügt in aller Regel.
+        link = anfrage("GET", f"/v1/betaGroups/{gefunden['id']}") \
+            .get("data", {}).get("attributes", {}).get("publicLink")
+
+    if link:
+        print(f"Öffentlicher Link: {link}")
+    else:
+        print("Öffentlicher Link noch nicht erzeugt — in ein paar Minuten erneut aufrufen.")
+    print("Der Link trägt erst, wenn ein Build die Beta App Review bestanden hat.")
+
+
+def beta_info() -> None:
+    """Beta-Angaben je Sprache setzen (betaAppLocalizations).
+
+    Das ist der Inhalt von *TestFlight → Test Information*: Beschreibung,
+    Feedback-Adresse, Marketing- und Datenschutz-Adresse. Ohne sie nimmt Apple
+    keinen externen Test an.
+    """
+    app = app_datensatz()
+    vorhanden = anfrage("GET", f"/v1/apps/{app['id']}/betaAppLocalizations?limit=50")
+    nach_sprache = {e["attributes"]["locale"]: e["id"] for e in vorhanden.get("data", [])}
+
+    for sprache in SPRACHEN:
+        eigenschaften = {
+            "description": _lies(sprache, "beta_description.txt", "description.txt"),
+            "feedbackEmail": FEEDBACK_ADRESSE,
+            "marketingUrl": _lies(sprache, "marketing_url.txt"),
+            "privacyPolicyUrl": _lies(sprache, "privacy_url.txt"),
+        }
+        if sprache in nach_sprache:
+            kennung = nach_sprache[sprache]
+            anfrage("PATCH", f"/v1/betaAppLocalizations/{kennung}", {
+                "data": {"id": kennung, "type": "betaAppLocalizations",
+                         "attributes": eigenschaften},
+            })
+            print(f"{sprache}: Beta-Angaben aktualisiert.")
+        else:
+            anfrage("POST", "/v1/betaAppLocalizations", {
+                "data": {
+                    "type": "betaAppLocalizations",
+                    "attributes": dict(eigenschaften, locale=sprache),
+                    "relationships": {"app": {"data": {"type": "apps", "id": app["id"]}}},
+                },
+            })
+            print(f"{sprache}: Beta-Angaben angelegt.")
+
+    print(f"Feedback-Adresse: {FEEDBACK_ADRESSE}")
+    print("Was hier NICHT gesetzt wird: das Prüfkonto für die Beta App Review "
+          "(apple.review + Passwort). Das Passwort gehört nicht ins Repo und "
+          "wird von Hand eingetragen — siehe store/ios-veroeffentlichung.md.")
+
+
+BEFEHLE = {
+    "team-id": lambda: print(team_id()),
+    "bundle-id-anlegen": bundle_id_anlegen,
+    "app-zeigen": app_zeigen,
+    "testflight-gruppe": testflight_gruppe,
+    "beta-info": beta_info,
+}
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("methode", help="GET/POST/PATCH/DELETE — oder 'team-id'")
+    p.add_argument("methode",
+                   help="GET/POST/PATCH/DELETE — oder einer der Unterbefehle: "
+                        + ", ".join(BEFEHLE))
     p.add_argument("pfad", nargs="?", default="", help="z.B. /v1/bundleIds")
     p.add_argument("--daten", help="JSON-Rumpf für POST/PATCH")
     p.add_argument("--key-id", dest="key_id")
     p.add_argument("--issuer-id", dest="issuer_id")
     a = p.parse_args()
 
-    if a.methode == "team-id":
-        print(team_id())
+    # Kennungen von der Kommandozeile gelten auch für die Unterbefehle.
+    if a.key_id:
+        os.environ["APP_STORE_CONNECT_KEY_ID"] = a.key_id
+    if a.issuer_id:
+        os.environ["APP_STORE_CONNECT_ISSUER_ID"] = a.issuer_id
+
+    if a.methode in BEFEHLE:
+        BEFEHLE[a.methode]()
         return
     if not a.pfad:
         p.error("Pfad fehlt")
