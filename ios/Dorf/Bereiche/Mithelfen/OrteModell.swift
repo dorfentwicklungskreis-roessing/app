@@ -12,13 +12,19 @@ struct OrteQuelle {
     var erledigungen: @MainActor (Int64) async throws -> [Erledigung]
     var melden: @MainActor (Int64, Double?, String) async throws -> Erledigung
     var zuruecknehmen: @MainActor (Int64) async throws -> Void
+    /// „Ich helfe hier mit" — Ort und (freiwillig) Aufgabenart.
+    var anmelden: @MainActor (Int64, String?) async throws -> Void = { _, _ in }
+    /// „Ich mag nicht mehr."
+    var abmelden: @MainActor (Int64, String?) async throws -> Void = { _, _ in }
 
-    static func vom(_ api: DorfApi) -> OrteQuelle {
+    static func vom(_ api: DorfApi, vergabe: VergabeApi) -> OrteQuelle {
         OrteQuelle(
             orte: { try await api.orte() },
             erledigungen: { try await api.erledigungen(aufgabe: $0) },
             melden: { try await api.melden(aufgabe: $0, liter: $1, notiz: $2) },
-            zuruecknehmen: { try await api.erledigungZuruecknehmen(id: $0) }
+            zuruecknehmen: { try await api.erledigungZuruecknehmen(id: $0) },
+            anmelden: { try await vergabe.anmelden(ort: $0, art: $1) },
+            abmelden: { try await vergabe.abmelden(ort: $0, art: $1) }
         )
     }
 }
@@ -49,6 +55,8 @@ final class OrteModell {
     private(set) var fehler: String?
     /// Aufgaben, für die gerade geschrieben wird (Knopf sperren).
     private(set) var laufendeAufgaben: Set<Int64> = []
+    /// Orte, an denen gerade an- oder abgemeldet wird.
+    private(set) var laufendeOrte: Set<Int64> = []
     /// Historie je Aufgabe. Wird nachgeladen und blockiert das Öffnen nicht.
     private(set) var historie: [Int64: [Erledigung]] = [:]
 
@@ -56,7 +64,9 @@ final class OrteModell {
 
     init(quelle: OrteQuelle) { self.quelle = quelle }
 
-    convenience init(api: DorfApi) { self.init(quelle: .vom(api)) }
+    convenience init(api: DorfApi, vergabe: VergabeApi) {
+        self.init(quelle: .vom(api, vergabe: vergabe))
+    }
 
     // MARK: Ansichten auf den Stand
 
@@ -74,6 +84,8 @@ final class OrteModell {
     func ort(id: Int64) -> Ort? { orte.first { $0.id == id } }
 
     func laeuftGerade(_ aufgabe: Int64) -> Bool { laufendeAufgaben.contains(aufgabe) }
+
+    func laeuftGerade(ort: Int64) -> Bool { laufendeOrte.contains(ort) }
 
     // MARK: Laden
 
@@ -136,6 +148,43 @@ final class OrteModell {
             try await quelle.zuruecknehmen(erledigung.id)
             zeige(bestaetigung: "Meldung zurückgenommen.")
             await historieLaden(aufgabe: erledigung.taskId)
+            await laden()
+        } catch let abgewiesen as DorfFehler {
+            fehler = abgewiesen.klartext
+            await laden()
+        } catch {
+            fehler = OrteModell.netzhinweis
+        }
+    }
+
+    // MARK: Mithelfen
+
+    /// Meldet mich für diesen Ort zum Mithelfen an. `art` = nil heißt: alles,
+    /// was hier anfällt.
+    ///
+    /// Danach wird neu geladen, weil `signedUp` und `signupCount` an den
+    /// Aufgaben hängen — wer wie oft gefragt wird, entscheidet ohnehin das
+    /// Backend.
+    func anmelden(ort: Int64, art: String? = nil) async {
+        await schreibe(ort: ort, dank: "Du hilfst hier jetzt mit. Danke!") {
+            try await self.quelle.anmelden(ort, art)
+        }
+    }
+
+    func abmelden(ort: Int64, art: String? = nil) async {
+        await schreibe(ort: ort, dank: "Abgemeldet. Du wirst hier nicht mehr gefragt.") {
+            try await self.quelle.abmelden(ort, art)
+        }
+    }
+
+    private func schreibe(ort: Int64, dank: String,
+                          _ arbeit: @MainActor () async throws -> Void) async {
+        guard !laufendeOrte.contains(ort) else { return }
+        laufendeOrte.insert(ort)
+        defer { laufendeOrte.remove(ort) }
+        do {
+            try await arbeit()
+            zeige(bestaetigung: dank)
             await laden()
         } catch let abgewiesen as DorfFehler {
             fehler = abgewiesen.klartext
