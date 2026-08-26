@@ -6,7 +6,7 @@ import SwiftUI
 /// dorthin, wo der Termin zu Hause ist: bei einer externen Primärquelle zum
 /// Veranstalter, sonst auf die Seite des Dorfes. Doppelt erzählt wird nichts.
 struct VeranstaltungenView: View {
-    @State private var modell = VeranstaltungenModell()
+    @StateObject private var modell = VeranstaltungenModell()
 
     var body: some View {
         List {

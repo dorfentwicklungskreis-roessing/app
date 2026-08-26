@@ -7,7 +7,7 @@ import SwiftUI
 /// Die Regeln dazu (Reihenfolge, Fristen, Ruhezeiten) stehen im Backend.
 /// Hier steht nur, wie das aussieht und welche Knöpfe es gibt.
 struct VergabeView: View {
-    @Environment(AppUmgebung.self) private var umgebung
+    @EnvironmentObject private var umgebung: AppUmgebung
     @State private var modell: VergabeModell?
 
     var body: some View {
@@ -31,7 +31,7 @@ struct VergabeView: View {
 
 /// Die Liste, sobald das Modell steht.
 struct VergabeInhalt: View {
-    let modell: VergabeModell
+    @ObservedObject var modell: VergabeModell
 
     /// Der Vorgang, zu dem gerade nach der Rückgabe gefragt wird. Eine Zusage
     /// gibt niemand aus Versehen zurück.
@@ -137,7 +137,7 @@ struct VergabeInhalt: View {
 
 /// Eine Anfrage („du bist dran") oder ein Hinweis.
 struct BenachrichtigungZeile: View {
-    let modell: VergabeModell
+    @ObservedObject var modell: VergabeModell
     let eintrag: Benachrichtigung
 
     var body: some View {
@@ -200,7 +200,7 @@ struct BenachrichtigungZeile: View {
 
 /// Eine Zusage, die ich gegeben habe — samt Frist und dem Weg zurück.
 struct ZusageZeile: View {
-    let modell: VergabeModell
+    @ObservedObject var modell: VergabeModell
     let stand: Zusagestand
     var zurueckgeben: () -> Void
 

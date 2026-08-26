@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import Observation
 import UIKit
 import UserNotifications
 
@@ -35,8 +35,7 @@ nonisolated enum Benachrichtigungserlaubnis {
 /// **rohe APNs-Kennung** beim Dorfserver an, der Server spricht direkt mit
 /// Apple (`backend/internal/push/apns.go`). Kein Google im Spiel, keine
 /// schwere Fremdbibliothek — nur `UserNotifications` aus dem System.
-@Observable
-final class Benachrichtigungen {
+final class Benachrichtigungen: ObservableObject {
     /// Die Instanz, die der Systemdelegat bedient. Eine App hat genau ein
     /// Mitteilungszentrum, und `@UIApplicationDelegateAdaptor` baut sich
     /// seinen Delegaten selbst — deshalb ein fester Ort statt Durchreichen.
@@ -44,14 +43,14 @@ final class Benachrichtigungen {
 
     /// Was das System zuletzt gesagt hat. Für die Oberfläche („Mitteilungen
     /// sind aus — in den Einstellungen einschaltbar").
-    private(set) var stand: UNAuthorizationStatus = .notDetermined
+    @Published private(set) var stand: UNAuthorizationStatus = .notDetermined
 
     /// Ein Tipp auf eine Meldung. Wer die Navigation kennt, hängt sich hier
     /// ein; dieser Bereich weiß nichts über Bildschirme.
     var beiTipp: ((PushZiel) -> Void)?
 
-    @ObservationIgnored private var api: DorfApi?
-    @ObservationIgnored private let ablage: UserDefaults
+    private var api: DorfApi?
+    private let ablage: UserDefaults
 
     /// Für Tests und Vorschauen: eigene Ablage statt der der App.
     init(ablage: UserDefaults = .standard) {

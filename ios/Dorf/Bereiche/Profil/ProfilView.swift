@@ -1,4 +1,3 @@
-import Observation
 import SwiftUI
 
 /// Der Zustand der Profilseite.
@@ -7,20 +6,19 @@ import SwiftUI
 /// was passiert bei einer Ablehnung — ohne Oberfläche prüfbar sind. Die
 /// Speicherfunktion wird von außen hereingereicht: Die Seite kennt das
 /// Backend nur als „das hier tut es".
-@Observable
-final class Profilmodell {
+final class Profilmodell: ObservableObject {
     /// Der bearbeitete Stand — daran hängen die Eingabefelder.
-    var stand = Profilstand()
+    @Published var stand = Profilstand()
     /// Der zuletzt vom Backend bestätigte Stand.
-    private(set) var gespeichert = Profilstand()
-    private(set) var speichert = false
+    @Published private(set) var gespeichert = Profilstand()
+    @Published private(set) var speichert = false
     /// Begründung einer Ablehnung — im Wortlaut des Backends.
-    private(set) var fehler: String?
-    private(set) var hinweis: String?
+    @Published private(set) var fehler: String?
+    @Published private(set) var hinweis: String?
 
     /// Ob schon einmal etwas hereingereicht wurde. Solange nicht, darf die
     /// Vorbelegung nachgeholt werden, sobald `GET /api/v1/me` da ist.
-    private(set) var vorbelegt = false
+    @Published private(set) var vorbelegt = false
 
     /// Der Speichern-Knopf ist nur offen, wenn es etwas zu speichern gibt.
     var hatAenderungen: Bool { stand.geaendert(gegenueber: gespeichert) }
@@ -74,12 +72,10 @@ final class Profilmodell {
 /// `backend/SICHERHEIT.md` festgehalten). Jeder Schalter sagt in Worten, wer
 /// das Feld sieht — ein nackter Schalter wäre hier zu wenig.
 struct ProfilView: View {
-    @Environment(AppUmgebung.self) private var umgebung
-    @State private var modell = Profilmodell()
+    @EnvironmentObject private var umgebung: AppUmgebung
+    @StateObject private var modell = Profilmodell()
 
     var body: some View {
-        @Bindable var modell = modell
-
         Form {
             sichtbarkeitshinweis
 
@@ -283,7 +279,7 @@ private struct Profilfeld: View {
     NavigationStack {
         ProfilView()
     }
-    .environment(AppUmgebung(
+    .environmentObject(AppUmgebung(
         anmeldung: Anmeldung(),
         api: DorfApi(tokenGeber: { nil }),
         ich: Ich(sub: "abc", name: "Anna Beispiel", email: "anna@example.org")

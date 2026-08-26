@@ -1,4 +1,4 @@
-import Observation
+import Combine
 import SwiftUI
 
 /// Alles, was die Bereiche der App brauchen, an einer Stelle — die
@@ -8,10 +8,9 @@ import SwiftUI
 ///
 /// Zugriff aus einer View:
 /// ```swift
-/// @Environment(AppUmgebung.self) private var umgebung
+/// @EnvironmentObject private var umgebung: AppUmgebung
 /// ```
-@Observable
-final class AppUmgebung {
+final class AppUmgebung: ObservableObject {
     let anmeldung: Anmeldung
     let api: DorfApi
 
@@ -26,8 +25,19 @@ final class AppUmgebung {
     /// Wer gerade angemeldet ist. Wird nach der Anmeldung einmal geladen und
     /// danach von den Bereichen mitbenutzt — `isAdmin` entscheidet, ob der
     /// Bereich „Verwaltung" überhaupt auftaucht.
-    private(set) var ich: Ich?
-    private(set) var ichFehler: String?
+    @Published private(set) var ich: Ich?
+    @Published private(set) var ichFehler: String?
+
+    /// Die Änderungen der beiden eigenen Modelle weiterreichen.
+    ///
+    /// `ObservableObject` beobachtet — anders als das Observation-Framework —
+    /// **nicht** durch verschachtelte Objekte hindurch: Eine Ansicht, die
+    /// `umgebung.orte.giessfaktor` liest, erführe von einer neuen Ortsliste
+    /// sonst nichts. Deshalb sagt die Umgebung selbst Bescheid, sobald eines
+    /// ihrer Modelle sich meldet. Gröber als vorher (die ganze Ansicht wird
+    /// neu gezeichnet statt nur das gelesene Feld), aber inhaltlich gleich —
+    /// und niemand muss daran denken.
+    private var weiterleitungen: [AnyCancellable] = []
 
     init(anmeldung: Anmeldung = Anmeldung()) {
         let api = DorfApi(tokenGeber: { [anmeldung] in
@@ -40,6 +50,7 @@ final class AppUmgebung {
         // Gerätekennung an und beim Abmelden wieder ab. Gefragt wird damit
         // noch niemand — das passiert erst beim Eintragen als Helfer:in.
         Benachrichtigungen.gemeinsam.verdrahten(api: api)
+        kinderWeiterreichen()
     }
 
     /// Für Vorschauen und Tests: eine Umgebung, die nichts abruft.
@@ -48,6 +59,14 @@ final class AppUmgebung {
         self.api = api
         self.orte = orte ?? OrteModell(api: api)
         self.ich = ich
+        kinderWeiterreichen()
+    }
+
+    private func kinderWeiterreichen() {
+        weiterleitungen = [
+            anmeldung.objectWillChange.sink { [weak self] in self?.objectWillChange.send() },
+            orte.objectWillChange.sink { [weak self] in self?.objectWillChange.send() },
+        ]
     }
 
     var binAdmin: Bool { ich?.isAdmin ?? false }

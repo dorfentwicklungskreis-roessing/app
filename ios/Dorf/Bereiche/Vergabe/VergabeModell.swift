@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import Observation
 
 /// Woher der Bereich „Anfragen" seine Daten holt.
 ///
@@ -48,29 +48,28 @@ struct Zusagestand: Identifiable, Hashable {
 /// Wie in „Mithelfen" gilt: **Der letzte Stand bleibt stehen.** Fällt das
 /// Netz aus, wird die Liste nicht geleert, sondern bekommt einen Hinweis
 /// darüber — „gerade ist nichts offen" wäre im Funkloch eine Falschaussage.
-@Observable
-final class VergabeModell {
+final class VergabeModell: ObservableObject {
     private let quelle: VergabeQuelle
     /// Die eigene Kennung — nur, um eine Zusage als die eigene zu erkennen.
     let meinSub: String?
 
-    private(set) var eintraege: [Benachrichtigung] = []
-    private(set) var zusagen: [Zusagestand] = []
-    private(set) var laeuft = false
+    @Published private(set) var eintraege: [Benachrichtigung] = []
+    @Published private(set) var zusagen: [Zusagestand] = []
+    @Published private(set) var laeuft = false
     /// Ob überhaupt schon einmal ein Abruf durch war — davor zeigt die Liste
     /// einen Ladekreis statt „nichts offen".
-    private(set) var jeGeladen = false
+    @Published private(set) var jeGeladen = false
     /// Der letzte Abruf ist gescheitert, oder jemand war schneller — im
     /// Wortlaut des Backends.
-    private(set) var hinweis: String?
+    @Published private(set) var hinweis: String?
     /// Ein wirklich abgelehnter Schreibvorgang; als Meldung mit Ok-Knopf.
-    private(set) var fehler: String?
+    @Published private(set) var fehler: String?
     /// Kurze Rückmeldung nach einer Zusage.
-    private(set) var bestaetigung: String?
-    private(set) var laufendeVorgaenge: Set<Int64> = []
-    private(set) var laufendeHinweise: Set<Int64> = []
+    @Published private(set) var bestaetigung: String?
+    @Published private(set) var laufendeVorgaenge: Set<Int64> = []
+    @Published private(set) var laufendeHinweise: Set<Int64> = []
 
-    @ObservationIgnored private var verblassen: Task<Void, Never>?
+    private var verblassen: Task<Void, Never>?
 
     init(quelle: VergabeQuelle, meinSub: String? = nil) {
         self.quelle = quelle

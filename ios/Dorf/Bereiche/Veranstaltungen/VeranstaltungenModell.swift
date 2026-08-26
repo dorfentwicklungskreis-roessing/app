@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import Observation
 
 /// Zustand der Ansicht „Was ist los in Rössing".
 ///
@@ -10,11 +10,10 @@ import Observation
 /// Es wird nichts geschrieben und nichts gemeldet — die App zeigt hier nur
 /// an. Kein Push für Termine: Eine Erinnerung wäre ein eigenes Thema mit
 /// eigener Einwilligung.
-@Observable
-final class VeranstaltungenModell {
-    private(set) var termine: [Termin] = []
-    private(set) var laedt = false
-    private(set) var fehlertext: String?
+final class VeranstaltungenModell: ObservableObject {
+    @Published private(set) var termine: [Termin] = []
+    @Published private(set) var laedt = false
+    @Published private(set) var fehlertext: String?
 
     private var geholt = false
     private let holen: () async throws -> [VeranstaltungDto]

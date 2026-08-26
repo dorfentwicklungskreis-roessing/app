@@ -32,7 +32,7 @@ struct KarteView: View {
         self.flaecheGetippt = flaecheGetippt
     }
 
-    @State private var standort = Standortgeber()
+    @StateObject private var standort = Standortgeber()
     /// Eigener Punkt auf der Karte — erst nach erteilter Freigabe.
     @State private var standortZeigen = false
     /// Jeder Druck auf „Mein Standort" erhöht den Zähler; die Karte fährt
@@ -63,7 +63,7 @@ struct KarteView: View {
         }
         .overlay(alignment: .top) { hinweise }
         .overlay(alignment: .bottomTrailing) { standortknopf }
-        .onChange(of: standort.freigabe) { _, neue in freigabeGeaendert(neue) }
+        .onChange(of: standort.freigabe) { neue in freigabeGeaendert(neue) }
     }
 
     // MARK: - Knopf „Mein Standort"
@@ -74,7 +74,7 @@ struct KarteView: View {
                 .font(.title3)
                 .padding(14)
                 .background(.regularMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(.separator))
+                .overlay(Circle().strokeBorder(Color.trennlinie))
         }
         .buttonStyle(.plain)
         .padding(16)
@@ -163,7 +163,7 @@ struct KarteView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.trennlinie))
     }
 }
 

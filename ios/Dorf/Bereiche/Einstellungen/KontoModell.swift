@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import Observation
 
 /// Woher „Einstellungen" das Löschen bekommt und wie danach abgemeldet wird.
 ///
@@ -33,24 +33,23 @@ struct Kontoquelle {
 /// Die zweite wichtige Eigenschaft: **Scheitert das Löschen, wird nicht
 /// abgemeldet.** Sonst stünde jemand vor dem Anmeldebildschirm und wüsste
 /// nicht, ob sein Konto nun weg ist oder nicht.
-@Observable
-final class KontoModell {
+final class KontoModell: ObservableObject {
     /// Der Name, der abgeschrieben werden muss — der eigene, wie ihn die
     /// App auch sonst anzeigt.
     let erwarteterName: String
 
-    @ObservationIgnored private let quelle: Kontoquelle
+    private let quelle: Kontoquelle
 
     /// Steht die Rückfrage offen? Erst danach gibt es überhaupt ein Feld zum
     /// Tippen — das ist die erste der beiden Stufen.
-    private(set) var rueckfrageOffen = false
-    var getippterName = ""
-    private(set) var laeuft = false
+    @Published private(set) var rueckfrageOffen = false
+    @Published var getippterName = ""
+    @Published private(set) var laeuft = false
     /// Ein gescheiterter Versuch — im Wortlaut des Backends.
-    private(set) var fehler: String?
+    @Published private(set) var fehler: String?
     /// Steht nach dem Löschen: was mit den Erledigungen passiert ist und dass
     /// die Rössing-ID bleibt. Beides sagt das Backend, nicht die App.
-    private(set) var abschied: Kontoloeschung?
+    @Published private(set) var abschied: Kontoloeschung?
 
     init(erwarteterName: String, quelle: Kontoquelle) {
         self.erwarteterName = erwarteterName

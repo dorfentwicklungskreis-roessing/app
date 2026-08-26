@@ -8,7 +8,7 @@ import SwiftUI
 /// jede Änderung ohne die Rolle `admin` mit 403 abweist. Kommt trotzdem
 /// jemand hierher, steht hier der Satz des Backends — nicht ein erfundener.
 struct VerwaltungView: View {
-    @Environment(AppUmgebung.self) private var umgebung
+    @EnvironmentObject private var umgebung: AppUmgebung
     /// Die Ortsliste kommt aus demselben Modell wie „Mithelfen" — ein
     /// zweiter Abruf wäre eine zweite Wahrheit.
     @State private var orte: OrteModell?
@@ -51,8 +51,8 @@ struct VerwaltungView: View {
 // MARK: - Inhalt
 
 struct VerwaltungInhalt: View {
-    let orte: OrteModell
-    let modell: VerwaltungModell
+    @ObservedObject var orte: OrteModell
+    @ObservedObject var modell: VerwaltungModell
 
     @State private var rueckfrage: Rueckfrage?
 
@@ -224,7 +224,7 @@ enum Rueckfrage: Identifiable, Hashable {
 
 struct OrtAbschnitt: View {
     let ort: Ort
-    let modell: VerwaltungModell
+    @ObservedObject var modell: VerwaltungModell
     var frage: (Rueckfrage) -> Void
 
     var body: some View {
@@ -285,7 +285,7 @@ struct OrtAbschnitt: View {
 struct AufgabeZeile: View {
     let ort: Ort
     let aufgabe: Aufgabe
-    let modell: VerwaltungModell
+    @ObservedObject var modell: VerwaltungModell
     var frage: (Rueckfrage) -> Void
 
     var body: some View {

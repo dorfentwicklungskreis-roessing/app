@@ -1,5 +1,5 @@
+import Combine
 import CoreLocation
-import Observation
 
 /// Die Ortungsfreigabe für die Karte — und sonst nichts.
 ///
@@ -7,8 +7,7 @@ import Observation
 /// beim ersten Öffnen einen Systemdialog wirft, bekommt ein „Nicht erlauben"
 /// und danach nie wieder eine Chance. Der Standort bleibt auf dem Gerät: Die
 /// App zeigt ihn nur an und schickt ihn nirgendwohin.
-@Observable
-final class Standortgeber: NSObject, CLLocationManagerDelegate {
+final class Standortgeber: NSObject, ObservableObject, CLLocationManagerDelegate {
     enum Freigabe: Sendable {
         /// Noch nie gefragt — der Knopf darf den Systemdialog auslösen.
         case ungefragt
@@ -18,12 +17,12 @@ final class Standortgeber: NSObject, CLLocationManagerDelegate {
         case verweigert
     }
 
-    private(set) var freigabe: Freigabe = .ungefragt
+    @Published private(set) var freigabe: Freigabe = .ungefragt
 
     /// Der zuletzt gemeldete eigene Standort — nur gefüllt, solange jemand
     /// ihn ausdrücklich angefordert hat (`beobachten()`). Die Karte selbst
     /// braucht ihn nicht: Den eigenen Punkt zeichnet MapLibre.
-    private(set) var letzterPunkt: Kartenpunkt?
+    @Published private(set) var letzterPunkt: Kartenpunkt?
 
     private let verwalter = CLLocationManager()
 

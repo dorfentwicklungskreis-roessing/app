@@ -7,8 +7,8 @@ import SwiftUI
 /// Lust machen, nicht Druck. Die ersten drei bekommen eine Medaille, mehr
 /// Podest braucht es nicht.
 struct RanglisteView: View {
-    @Environment(AppUmgebung.self) private var umgebung
-    @State private var modell = RanglisteModell()
+    @EnvironmentObject private var umgebung: AppUmgebung
+    @StateObject private var modell = RanglisteModell()
     @State private var zeitraum: Zeitraum = .saison
     @State private var erklaerteAuszeichnung: Auszeichnung?
 
