@@ -41,7 +41,8 @@ type apnsBrief struct {
 	Nutzlast      map[string]any
 }
 
-// appleAttrappe spielt api.push.apple.com — lokal, versteht sich.
+// appleAttrappe spielt den APNs-Endpunkt — lokal, versteht sich. Die
+// echten Adressen von Apple stehen in apns.go und in keinem Test.
 type appleAttrappe struct {
 	*httptest.Server
 	t        *testing.T
