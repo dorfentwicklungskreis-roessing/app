@@ -1,0 +1,37 @@
+The village app for Rössing (municipality of Nordstemmen, Germany). The interface is in German only.
+
+IMPORTANT BEFORE YOU DOWNLOAD
+The app requires a Rössing-ID, the village account operated by the village itself at id.rössing.de. Without such an account you cannot get past the sign-in screen. If you live in Rössing and would like an account, talk to the Dorfentwicklungskreis.
+
+LEND A HAND — THE FIRST SECTION
+All flower boxes, beds and other places the village looks after, shown on a map, each with a traffic-light status: green means cared for, yellow means due, red means overdue. Every place has tasks with an interval, for instance "water every three days, 10 litres". The due date follows from that. In a heatwave a factor can be set centrally that makes watering tasks fall due sooner — and only those.
+
+REPORTING WHAT YOU DID
+Watered or weeded? Report it in two taps, with one confirmation step so a stray tap does not record anything. Your report appears with your name in the history of that place and can be withdrawn again. A task that was just done stays locked for a while, so the same box cannot be "watered" three times in a row.
+
+LEADERBOARD
+Who watered or weeded how often — per week, month, watering season, year or all time, plus the totals for the whole village. Meant as encouragement, not as a contest.
+
+WHAT'S ON IN RÖSSING
+The dates and events of the village in one place.
+
+MY PROFILE AND VILLAGERS
+Display name, nickname and — entirely optional — phone number, e-mail address and a short note. For every field you decide yourself whether only the administrators see it or all signed-in villagers. Contact details default to "administrators only"; nothing is published on its own.
+
+SUGGEST AN IDEA
+What should the app be able to do next? One sentence is enough. Your suggestion goes to the Dorfentwicklungskreis only and is never published.
+
+LOCATION
+If you allow location access, the map shows your own position so you can see which flower box is nearby. The position stays on the device: it is neither stored nor sent to the server. Without the permission the app works just the same, only without that dot.
+
+WHAT THE APP DOES NOT DO
+No ads, no tracking, no analytics frameworks, no advertising identifier. Nothing is sold and nothing is passed on for advertising. No in-app purchases. No background location.
+
+DATA
+Signing in provides the app with your user id, name and e-mail address from the Rössing-ID; the app never sees your password, which you only ever type into the browser and towards the Rössing-ID. The village server stores the task reports (user id, display name, timestamp, litres where applicable) and whatever you enter in your profile. Reports are visible to signed-in villagers — that shared overview is the whole point of the app. All traffic is encrypted over HTTPS. Map tiles come from OpenFreeMap (OpenStreetMap data), so that service sees the device's IP address, as any website would.
+
+WHO RUNS IT
+The servers and the accounts are run by the Dorfentwicklungskreis Rössing itself. There is no company behind it and nothing is being sold.
+
+WHAT COMES NEXT
+"Lend a hand" is the beginning, not the goal. More sections will follow; nothing is promised that does not exist yet.

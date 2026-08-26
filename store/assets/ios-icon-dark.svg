@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Quelle für ios/Dorf/Assets.xcassets/AppIcon.appiconset/icon-1024-dark.png
+  (dunkle Darstellung ab iOS 18).
+
+  Ohne Hintergrund: Für die dunkle Variante stellt das System selbst einen
+  dunklen Grund, ein eigener grüner Kasten läge doppelt darüber. Hier ist ein
+  Alphakanal deshalb richtig — anders als beim hellen Symbol.
+
+  Neu rendern: bash store/assets/render-ios.sh
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <circle cx="512" cy="324.27" r="85.34" fill="#FFF3C4"/>
+  <circle cx="512" cy="665.60" r="85.34" fill="#FFF3C4"/>
+  <circle cx="341.34" cy="494.93" r="85.34" fill="#FFF3C4"/>
+  <circle cx="682.67" cy="494.93" r="85.34" fill="#FFF3C4"/>
+  <circle cx="512" cy="512" r="102.40" fill="#F9A825"/>
+</svg>

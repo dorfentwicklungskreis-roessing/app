@@ -7,13 +7,23 @@ import (
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/push"
 )
 
 // Geräteverwaltung für den Push-Versand.
 //
-// Die App meldet ihre Firebase-Kennung bei jedem Start an (POST) und beim
-// Abmelden wieder ab (DELETE). Mehrere Geräte je Person sind der Normalfall
-// — Handy und Tablet, oder ein neues Gerät neben dem alten.
+// Die App meldet ihre Kennung an (POST) und beim Abmelden wieder ab (DELETE).
+// Mehrere Geräte je Person sind der Normalfall — Handy und Tablet, oder ein
+// neues Gerät neben dem alten.
+//
+// **Das Feld `platform` ist die Weiche**, an der sich der Versandweg
+// entscheidet: „ios" spricht direkt mit Apple (APNs), alles andere geht über
+// Firebase Cloud Messaging. Die beiden Kennungen sehen völlig verschieden
+// aus — Apple gibt rohe Binärdaten aus, die die App als Hex-Zeichenkette
+// schickt, Firebase eine lange Zeichenkette mit Doppelpunkt. Eine Kennung
+// beim falschen Dienst wird dort als ungültig gemeldet und gleich wieder
+// weggeworfen; deshalb wird `platform` hier vereinheitlicht (klein
+// geschrieben, ohne Leerzeichen), bevor sie in die Datenbank geht.
 //
 // Die Kennung ist ein Schlüssel zum Gerät: Wer sie hat, kann diesem Gerät
 // Meldungen schicken. Sie kommt deshalb in keiner Antwort vor und lässt sich
@@ -27,13 +37,18 @@ func (s *Server) registerGeraete(api *http.ServeMux) {
 // DeviceInput ist die Eingabe beim An- und Abmelden eines Geräts.
 type DeviceInput struct {
 	Token string `json:"token"`
-	// Platform ist heute immer "android" (leer = android).
+	// Platform ist "ios" oder "android" (leer = android — die Android-App
+	// schickt das Feld seit jeher nicht mit, und ihre Kennung ist eine
+	// Firebase-Kennung).
 	Platform string `json:"platform"`
 }
 
 func (in *DeviceInput) Validate() string {
 	in.Token = strings.TrimSpace(in.Token)
-	in.Platform = strings.TrimSpace(in.Platform)
+	// Kleinschreibung erzwingen: Eine App, die "iOS" schickt, meint dasselbe
+	// wie "ios" — und würde sonst über Firebase bedient, wo ihre Kennung
+	// nichts verloren hat (siehe push.IstIOS).
+	in.Platform = strings.ToLower(strings.TrimSpace(in.Platform))
 	switch {
 	case in.Token == "":
 		return "token fehlt"
@@ -43,7 +58,7 @@ func (in *DeviceInput) Validate() string {
 		return "platform ist zu lang"
 	}
 	if in.Platform == "" {
-		in.Platform = "android"
+		in.Platform = push.PlattformAndroid
 	}
 	return ""
 }

@@ -139,10 +139,40 @@ in den Android-Einstellungen bzw. durch Leeren des Feldes.
 - Die von Play verlangte öffentliche Seite zur Löschung von Konto und Daten
   steht unter <https://xn--rssing-wxa.de/app/daten-loeschen/>.
 
+### Löschen aus der App heraus
+
+In der **iOS-App** geht das ohne Umweg über eine Anfrage: Zahnrad oben rechts
+auf der Startseite → *Einstellungen* → **Konto löschen**. Vor dem Knopf steht,
+was passiert; danach fragt die App noch einmal nach und verlangt, den eigenen
+Namen abzutippen, damit es nicht aus Versehen geschieht. Ist es getan, meldet
+sich die App ab und zeigt an, was gelöscht wurde. Technisch dahinter:
+`DELETE /api/v1/me`.
+
+Gelöscht werden dabei Profil, Helfer-Eintragungen, Anfragen und Hinweise, die
+Befähigungsanträge und die Gerätekennung dieses Geräts (der Push hört sofort
+auf). Laufende Zusagen werden freigegeben, damit keine Pflegeaufgabe auf
+jemanden wartet, den es nicht mehr gibt. **Die Meldungen bleiben anonym
+stehen** („Ehemaliges Mitglied"), ebenso beendete Zusagen: An ihnen hängen die
+Gesamtsummen des Dorfes und die Historie der Orte — sie zu löschen würde die
+Arbeit aller anderen verfälschen. Eingereichte Ideen bleiben ebenfalls, aber
+ohne Name und E-Mail.
+
+**Die Rössing-ID bleibt bestehen.** Sie gehört nicht der Dorf-App, sondern ist
+die gemeinsame Anmeldung fürs Dorf; die App löscht sie nicht mit. Wer auch sie
+loswerden möchte, wendet sich an die Rössing-ID — die App sagt das vor und
+nach dem Löschen ausdrücklich.
+
+In der **Android-App** gibt es diesen Knopf noch nicht; dort bleibt es
+einstweilen beim Weg über die oben genannte Seite bzw. über eine Anfrage an
+den Dorfentwicklungskreis. Sobald er da ist, gehört dieser Absatz geändert.
+
 ## Rechte der Betroffenen
 
 Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch, Datenübertragbarkeit
 sowie Beschwerde bei der Landesbeauftragten für den Datenschutz Niedersachsen.
+
+Das Recht auf Löschung (Art. 17 DSGVO) lässt sich in der iOS-App selbst
+ausüben — siehe „Löschen aus der App heraus".
 
 ## Verschlüsselung
 

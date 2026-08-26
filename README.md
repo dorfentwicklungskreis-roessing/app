@@ -7,11 +7,16 @@ Gieß- und Jätpläne, Erledigungen melden, Rangliste. Dazu **Mein Profil** und
 **Dorfbewohner**. Weitere Bereiche kommen; das Gießen ist ausdrücklich nur der
 Anfang.
 
+Die App gibt es **nativ für Android und für iOS** — dieselbe Rössing-ID,
+dasselbe Backend, dieselben Regeln. Was das Backend entscheidet, entscheidet
+keine der beiden Apps noch einmal.
+
 ## Aufbau (Monorepo)
 
 | Verzeichnis | Inhalt |
 |---|---|
 | `android/` | Native Android-App (Kotlin, Jetpack Compose, Material 3, MapLibre) |
+| `ios/` | Native iOS-App (Swift 6, SwiftUI, MapLibre, ab iOS 17, iPhone und iPad). Xcode-Projekt wird aus `project.yml` erzeugt, nicht committet. Eigener Zugang: `ios/README.md` |
 | `backend/` | Go-Backend: REST-API, MCP-Server, Web-Admin. SQLite (WAL) |
 | `deploy/`  | Kustomize-Overlay für den K3S-Cluster (Flux deployt) |
 | `.github/workflows/` | CI: Tests, E2E auf Emulatoren, Multi-Arch-Images, Releases |
@@ -19,7 +24,12 @@ Anfang.
 ## Architektur
 
 - **Identität**: Zitadel auf `id.xn--rssing-wxa.de` („Rössing-ID").
-  - App-Login: OIDC Authorization Code + PKCE im System-Browser (AppAuth), mit Consent-Screen.
+  - App-Login: OIDC Authorization Code + PKCE im System-Browser, mit
+    Consent-Screen — auf Android über AppAuth, auf iOS über
+    `ASWebAuthenticationSession` (Standardbibliothek). Jede App hat einen
+    **eigenen** nativen Client — alle Client-IDs stehen in `CLAUDE.md`
+    („Identität") und in `AUTH_AUDIENCE`
+    (`deploy/overlays/production/deployment.yaml`).
   - **Rollen müssen angefordert werden.** App und Web-Verwaltung fragen beim
     Login zusätzlich den Scope `urn:zitadel:iam:org:projects:roles` an
     („projects", Plural); Zitadel legt die Rollen daraufhin unter dem Claim
@@ -180,6 +190,17 @@ Anfang.
   erst, wenn jemand sich als Helfer:in eingetragen hat, und ein Tipp auf die
   Meldung führt direkt zur Aufgabe. Datenschutz-Folgen: siehe
   `backend/SICHERHEIT.md`.
+  **Für iOS ist Google nicht beteiligt.** Die iOS-App meldet ihre **rohe
+  APNs-Kennung** an denselben Endpunkt, und der Server spricht direkt mit
+  Apple (`internal/push/apns.go`, Anbietertoken ES256 aus einem
+  `.p8`-Schlüssel — dasselbe Verfahren wie das Google-Token in `fcm.go`, nur
+  ohne Google). Die Weiche ist das Feld `platform` je Gerät
+  (`internal/push/weiche.go`). Ohne `APNS_KEY_FILE` wird für iOS schlicht
+  nicht gepusht, genau wie ohne `FCM_CREDENTIALS_FILE` für Android; Apple
+  sieht dann nichts. Die Umgebung (`APNS_UMGEBUNG`) **muss** zu
+  `aps-environment` im Build passen, sonst antwortet Apple mit
+  `BadDeviceToken`. Der Tipp auf die Meldung führt bislang nur auf iOS
+  **nicht** zur Aufgabe (`ios/OFFEN.md`).
 - **Ideen-Sammlung** („Sag uns, was die App können soll"): Wünsche aus dem
   Dorf mit Name, E-Mail (beides freiwillig) und dem Wunsch selbst.
   `POST /api/v1/ideen` ist als einziger Endpunkt **ohne Anmeldung**
@@ -280,6 +301,43 @@ cd android
 Der „Entwickler-Login" erscheint nur in Debug-Builds mit `-PdevAuth=true`
 und funktioniert nur gegen ein Backend mit `AUTH_MODE=insecure-dev`.
 
+### iOS
+
+```sh
+cd ios
+make projekt        # erzeugt Dorf.xcodeproj aus project.yml (XcodeGen)
+make bauen          # Simulator-Build
+make testen         # Unit-Tests (mit lokalen Adressen, nie gegen die Produktion)
+make pruefen        # die Wache „Tests nur lokal" über den iOS-Teil
+```
+
+`Dorf.xcodeproj` wird **erzeugt und nicht committet** (`.gitignore`): Eine
+`.pbxproj` ist nicht lesbar zu prüfen und erzeugt bei jedem zweiten Merge einen
+Konflikt. Wer eine Datei hinzufügt, ruft danach `make projekt` auf. Gebraucht
+werden XcodeGen (`brew install xcodegen`) und Xcode 26 (Swift 6 mit
+MainActor-Vorbelegung).
+
+Alle Adressen und Kennungen stehen als Build-Einstellungen in `ios/project.yml`
+und sind über `xcodebuild API_BASE_URL=… ` übersteuerbar — dasselbe Verfahren
+wie `-PapiBaseUrl` auf Android, damit kein Test gegen die Produktion läuft.
+
+Die iOS-App hat einen **eigenen nativen PKCE-Client** in der Rössing-ID:
+`387943892076527811` („Dorf-App iOS", Rücksprung
+`de.roessing.app:/oauth2redirect`). Diese Client-ID muss in `AUTH_AUDIENCE` des
+Backends stehen (`deploy/overlays/production/deployment.yaml`) — sonst weist das
+Backend jedes Token der iOS-App ab.
+
+Gebaut und getestet wird in der CI von `.github/workflows/ios.yml` auf einem
+macOS-Runner — für den Simulator und mit **Ad-hoc-Signatur**
+(`CODE_SIGN_IDENTITY=-`). Ganz ohne Signatur startet die App im Simulator
+nicht: dyld weist das eingebettete `MapLibre.framework` ab. Ein echtes
+Zertifikat braucht dieser Lauf nicht — signiert wird erst beim Ausliefern
+(`.github/workflows/ios-release.yml`, siehe „Releases (iOS)").
+
+Der letzte grüne Lauf meldet **181 Tests in 11 Suiten**. Was die App kann,
+wie sie aufgebaut ist und was bewusst fehlt: `ios/README.md` und
+`ios/OFFEN.md`.
+
 ### CSS der Verwaltung
 
 Das ausgelieferte CSS wird gebaut und **committet** (`go:embed`), damit zur
@@ -349,6 +407,22 @@ Projekt, Rollen, die native PKCE-App und das Testkonto legt
 ohne Handarbeit und ohne GitHub-Secrets. Jeder Lauf bekommt sein eigenes Konto,
 gleichzeitige Läufe stören sich also nicht mehr.
 
+Für iOS gilt dieselbe Regel (`.github/workflows/ios.yml`): Jeder
+`xcodebuild`-Aufruf übersteuert **alle** Adressen der App auf den Runner selbst.
+Dort horcht in diesem Job niemand — ein Zugriff nach draußen fällt damit auf,
+statt still die Produktion zu treffen:
+
+| Einstellung | Adresse im Test |
+|---|---|
+| `API_BASE_URL` | `http://127.0.0.1:8099` |
+| `WEBSITE_BASE_URL` | `http://127.0.0.1:8097` |
+| `OIDC_ISSUER` | `http://127.0.0.1:8123` |
+| `MAP_STYLE_URL` | `http://127.0.0.1:8097/map-style.json` |
+
+Fehlt eine davon, greift die Produktions-Vorbelegung aus `ios/project.yml` —
+genau so ist der Fehler auf Android ursprünglich entstanden. Die Prüfung unten
+achtet deshalb auf jede einzelne.
+
 Damit das so bleibt, prüft `.github/workflows/lokale-tests.yml` bei **jeder**
 Änderung, ob in Testquellen oder Test-CI wieder eine entfernte Adresse steht:
 
@@ -358,7 +432,10 @@ python3 .github/scripts/pruefe_lokale_tests.py --selbsttest  # prüft die Prüfu
 ```
 
 Die Auslieferungs-Workflows sind davon ausgenommen — Play-Upload, Firebase App
-Distribution und der GHCR-Push müssen selbstverständlich nach außen.
+Distribution, der TestFlight-Upload (`.github/workflows/ios-release.yml`) und
+der GHCR-Push müssen selbstverständlich nach außen. Der iOS-Auslieferungslauf
+biegt die Adressen deshalb bewusst **nicht** um: Eine ausgelieferte App zeigt
+auf die Produktion.
 
 ### Konfiguration des Backends (Env)
 
@@ -513,6 +590,113 @@ hinterlegtem `PLAY_SERVICE_ACCOUNT_JSON`) in den Play-Track „internal".
 Play-Store-Upload und Firebase-Verteilung aktivieren sich, sobald die Secrets
 existieren (siehe `.github/workflows/release.yml`, Kopfkommentar).
 
+## Releases (iOS)
+
+**Getaggt und veröffentlicht wird von Hand** — dieselbe Haltung wie auf
+Android und aus demselben Grund. Das Tag-Muster ist aber ein anderes:
+`ios-v*` statt `v*`. Die beiden überschneiden sich nicht, ein iOS-Tag löst
+also keinen Play-Upload aus und ein Android-Tag keinen TestFlight-Lauf.
+
+### Der Weg
+
+1. **Stand prüfen** — der iOS-Workflow muss für den Commit grün sein, der
+   ausgeliefert wird:
+   ```sh
+   gh run list --workflow=ios.yml --limit 3
+   ```
+2. **Metadaten prüfen** (der Auslieferungs-Workflow tut es auch, aber lieber
+   vorher):
+   ```sh
+   python3 store/check_ios_metadata.py
+   ```
+3. **Taggen und den Auslieferungs-Workflow starten**:
+   ```sh
+   git tag ios-v0.1.0 && git push origin ios-v0.1.0
+   # Der Tag-Push startet den Workflow normalerweise selbst. Passiert nach
+   # ~1 Minute nichts:
+   gh workflow run ios-release.yml --ref ios-v0.1.0
+   gh run watch "$(gh run list --workflow=ios-release.yml --limit 1 \
+     --json databaseId --jq '.[0].databaseId')"
+   ```
+
+`.github/workflows/ios-release.yml` archiviert signiert (`xcodebuild archive`
+mit automatischer Signierung und `-allowProvisioningUpdates`), exportiert nach
+`app-store-connect` und lädt mit `xcrun altool --upload-app` nach TestFlight.
+Kein fastlane, keine Marketplace-Action — beide Werkzeuge nehmen den
+App-Store-Connect-Schlüssel direkt. Der Upload-Bericht hängt als Artefakt am
+Lauf; Apples Fehlermeldungen (`ITMS-…`) stehen ausschließlich darin.
+
+Von Hand geht dasselbe auch lokal:
+
+```sh
+cd ios
+make store-pruefen   # Metadaten, Icon, Asset-Kataloge
+make archiv          # signiertes Archiv (braucht Team-ID und API-Schlüssel)
+make ipa             # Export als app-store-connect
+make hochladen       # erst --validate-app, dann --upload-app
+```
+
+### Drei Unterschiede zu Android
+
+* **Die Buildnummer wird nicht von Hand gezählt.** Apple nimmt jede
+  `CFBundleVersion` zu einer Marketing-Version genau einmal an; der Workflow
+  setzt sie auf die **Zahl der Commits** (`git rev-list --count HEAD`) —
+  monoton, reproduzierbar, ohne Handgriff. Anders als der `versionCode` auf
+  Android hängt an ihr kein Änderungshinweis, und sie steht in
+  `ios/project.yml`, einer Datei, die für ein Release niemand anfassen soll.
+  Muss derselbe Stand ein zweites Mal hoch, gibt es die Workflow-Eingabe
+  `bauzahl`.
+* **Die Marketing-Version kommt aus dem Tag.** Aus `ios-v0.1.0` wird
+  `MARKETING_VERSION=0.1.0`. Ohne Tag gilt die Vorbelegung aus
+  `ios/project.yml`.
+* **Fehlt etwas, wird übersprungen statt rot.** Ohne die Secrets
+  (`APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_KEY_ID`,
+  `APP_STORE_CONNECT_PRIVATE_KEY`, dazu `APPLE_TEAM_ID`) oder ohne
+  App-Datensatz in App Store Connect archiviert der Lauf unsigniert und lädt
+  nichts hoch — genau wie `release.yml` es ohne `PLAY_SERVICE_ACCOUNT_JSON`
+  hält.
+
+### Zwei Dinge, die man leicht übersieht
+
+* **TestFlight-Builds laufen nach 90 Tagen ab.** Danach brauchen die Tester
+  einen neuen.
+* **Push kommt in TestFlight nicht an, wenn das APNs-Umfeld nicht passt.**
+  Ein Gerätetoken gehört entweder zum Sandbox- oder zum Produktions-APNs.
+  Ein Build direkt aus Xcode bekommt eine Sandbox-Kennung, ein Archiv für
+  TestFlight und App Store eine für die Produktion. Die App entscheidet das
+  über `APS_UMGEBUNG` (`ios/project.yml`, Debug/Release), das Backend über
+  `APNS_UMGEBUNG` (`deploy/overlays/production/deployment.yaml`) — beide
+  müssen zusammenpassen, sonst antwortet Apple mit `BadDeviceToken` und der
+  Server wirft das Gerät weg. Ausführlich in
+  `store/ios-veroeffentlichung.md`, Schritt 5.
+
+## Veröffentlichung im App Store
+
+Alles, was ohne App-Store-Connect-Zugang vorbereitbar ist, liegt in `store/`:
+
+| Datei | Inhalt |
+|---|---|
+| `store/metadata/ios/{de-DE,en-US}/` | Store-Texte (Name, Untertitel, Beschreibung, Schlüsselwörter, Neuerungen) und die TestFlight-Beschreibung `beta_description.txt` |
+| `store/ios-veroeffentlichung.md` | Schritt für Schritt: Team-ID, Bundle-ID, App-Datensatz, API-Schlüssel, TestFlight, Beta-Prüfung, Prüfkonto |
+| `store/ios-datenschutz.md` | Antworten für „App Privacy", je Datenart am Code belegt |
+| `store/asc.py` | Zugang zur App-Store-Connect-API ohne Fremdbibliotheken (ES256-JWT über `openssl`) |
+| `store/assets/render-ios.sh` | erzeugt die drei App-Icons (hell, dunkel, eingefärbt) |
+
+```sh
+python3 store/check_ios_metadata.py    # Zeichengrenzen, URLs, Icon, Asset-Kataloge
+python3 store/asc.py app-zeigen        # App-ID, Zustand, Builds, TestFlight-Gruppen
+python3 store/asc.py testflight-gruppe # externe Gruppe „Dorf" + öffentlicher Link
+python3 store/asc.py beta-info --probe # zeigen, was gesetzt würde, ohne es zu tun
+```
+
+`check_ios_metadata.py` läuft **nicht** in `.github/workflows/store.yml` (das
+prüft die Play-Eintragung), sondern im Auslieferungs-Workflow vor dem Bauen
+und lokal über `make store-pruefen` in `ios/`.
+
+Jeder schreibende Unterbefehl von `asc.py` kennt `--probe`: Er gibt dann nur
+aus, was er schicken würde. Die Objekte in App Store Connect gehören einem
+echten Verein — ein Blick vorher ist billiger als ein Rückbau nachher.
+
 ## Veröffentlichung im Play Store
 
 Alles, was ohne Play-Console-Konto vorbereitbar ist, liegt in **`store/`**:
@@ -525,6 +709,7 @@ Alles, was ohne Play-Console-Konto vorbereitbar ist, liegt in **`store/`**:
 | `store/veroeffentlichung.md` | Schritt-für-Schritt in der Play Console: Kontotyp, Play App Signing, Service-Account, Secret |
 | `store/data-safety.md` | Antworten für das Formular „Datensicherheit", belegt am Code |
 | `store/content-rating.md` | Antworten für den IARC-Fragebogen zur Altersfreigabe |
+| `store/app-inhalte-klickanleitung.md` | „App-Inhalte" in der Play Console — fertige Antworten zum Durchklicken |
 | `store/datenschutz.md` | Kurzfassung; die verbindliche Erklärung kommt öffentlich auf roessing.de |
 
 ```sh

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Ohne diesen Eintrag gibt Apple der App gar keine Gerätekennung heraus,
+	     und `registerForRemoteNotifications()` scheitert stillschweigend.
+
+	     Der Wert entscheidet, in welcher Welt die Kennung gilt:
+	       development  Builds, die direkt aus Xcode auf ein Gerät gehen
+	                    — die Kennung gilt nur auf api.sandbox.push.apple.com
+	       production   Archive für TestFlight und App Store
+	                    — die Kennung gilt nur auf api.push.apple.com
+	     Eine Kennung an der falschen Adresse ergibt „BadDeviceToken", und das
+	     Backend wirft das Gerät weg. Die Gegenseite dieser Entscheidung ist
+	     APNS_UMGEBUNG im Backend (deploy/overlays/production/deployment.yaml).
+
+	     Der Wert kommt aus der Build-Einstellung APS_UMGEBUNG (ios/project.yml,
+	     Debug/Release) — hier steht bewusst keine feste Zeichenkette, damit
+	     ein Release-Archiv nicht versehentlich mit „development" hinausgeht. -->
+	<key>aps-environment</key>
+	<string>$(APS_UMGEBUNG)</string>
+</dict>
+</plist>

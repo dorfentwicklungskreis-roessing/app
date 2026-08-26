@@ -1,0 +1,37 @@
+Die Dorf-App für Rössing (Gemeinde Nordstemmen). Für die Menschen im Dorf, die hier etwas tun — angefangen beim Mithelfen: was gerade ansteht.
+
+WICHTIG VOR DEM LADEN
+Die App braucht eine Rössing-ID. Das ist das Nutzerkonto des Dorfes, betrieben auf id.rössing.de. Ohne dieses Konto kommt man nicht über den Anmeldebildschirm hinaus. Wer mitmachen und eine Rössing-ID bekommen möchte, spricht den Dorfentwicklungskreis an.
+
+MITHELFEN — DER ERSTE BEREICH
+Blumenkästen, Beete und die übrigen Pflege-Orte des Dorfes auf einer Karte, jeder mit einem Ampel-Status: grün heißt versorgt, gelb heißt fällig, rot heißt überfällig. Zu jedem Ort gehören Aufgaben mit einem Intervall — zum Beispiel „alle drei Tage gießen, 10 Liter". Daraus errechnet sich, wann etwas dran ist. Bei Hitze lässt sich zentral ein Faktor setzen, der nur die Gieß-Aufgaben schneller fällig werden lässt.
+
+ERLEDIGT MELDEN
+Wer gegossen oder gejätet hat, meldet das mit zwei Tippern; vorher fragt die App noch einmal nach, damit ein Fehlgriff nichts einträgt. Die Meldung steht mit dem eigenen Namen in der Historie des Ortes und lässt sich wieder zurücknehmen. Frisch Erledigtes ist eine Weile gesperrt — so wird derselbe Kasten nicht dreimal hintereinander „gegossen".
+
+RANGLISTE
+Wer wie oft gegossen oder gejätet hat — für Woche, Monat, Gießsaison, Jahr oder insgesamt, dazu die Gesamtsumme des ganzen Dorfes. Als Ansporn gedacht, nicht als Wettkampf.
+
+WAS IST LOS IN RÖSSING
+Die Termine aus dem Dorf an einer Stelle.
+
+MEIN PROFIL UND DORFBEWOHNER
+Anzeigename, Spitzname und — ganz freiwillig — Telefonnummer, E-Mail-Adresse und eine kurze Notiz. Für jedes Feld entscheidest du selbst, ob es nur die Verwaltung sieht oder alle angemeldeten Dorfbewohner. Kontaktdaten stehen von Haus aus auf „nur Verwaltung"; veröffentlicht wird nichts von allein.
+
+IDEE VORSCHLAGEN
+Was soll die App noch können? Ein Satz reicht. Die Einreichung geht nur an den Dorfentwicklungskreis und wird nirgends veröffentlicht.
+
+STANDORT
+Wer die Ortung erlaubt, sieht den eigenen Punkt auf der Dorfkarte und erkennt, welcher Blumenkasten in der Nähe ist. Die Position bleibt auf dem Gerät: Sie wird nicht gespeichert und nicht an den Server geschickt. Ohne Freigabe funktioniert die App genauso, nur ohne diesen Punkt.
+
+WAS DIE APP NICHT MACHT
+Keine Werbung, kein Tracking, keine Analyse-Bausteine, keine Werbekennung. Nichts wird verkauft und nichts zu Werbezwecken weitergegeben. Keine Käufe in der App. Keine Standortverfolgung im Hintergrund.
+
+DATEN
+Beim Anmelden kommen Nutzerkennung, Name und E-Mail-Adresse aus der Rössing-ID; die Zugangsdaten selbst sieht die App nie, sie werden nur im Browser gegenüber der Rössing-ID eingegeben. Auf dem Server des Dorfes stehen die Erledigungsmeldungen (Kennung, angezeigter Name, Zeitpunkt, gegebenenfalls Liter) und das, was du in deinem Profil einträgst. Erledigungen sind für die angemeldeten Dorfbewohner sichtbar — genau das ist der Zweck der gemeinsamen Übersicht. Die Verbindung läuft ausschließlich verschlüsselt über HTTPS. Das Kartenmaterial kommt von OpenFreeMap (OpenStreetMap-Daten); dabei erfährt dieser Dienst die IP-Adresse des Geräts, wie bei jedem Aufruf einer Internetseite.
+
+BETRIEB
+Server und Nutzerkonten betreibt der Dorfentwicklungskreis Rössing selbst. Es steckt kein Unternehmen dahinter, und es wird nichts verkauft.
+
+AUSBLICK
+„Mithelfen" ist der Anfang, nicht das Ziel. Weitere Bereiche kommen; versprochen wird nichts, was noch nicht da ist.

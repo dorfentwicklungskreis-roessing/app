@@ -48,10 +48,14 @@ spec:
             # für ein anderes Projekt derselben Rössing-ID ausgestellt wurde,
             # käme damit als gültig durch.
             #
-            # Eingetragen sind die Client-IDs der drei Anwendungen, die dieses
+            # Eingetragen sind die Client-IDs der Anwendungen, die dieses
             # Backend nutzen; Zitadel trägt die Client-ID der anfragenden
             # Anwendung in den aud-Claim ein. Ein Treffer genügt.
             #   385941807986376899  Android-App (AppAuth, PKCE)
+            #   387943892076527811  iOS-App „Dorf-App iOS" (nativ, PKCE,
+            #                       Rücksprung de.roessing.app:/oauth2redirect).
+            #                       Ohne diesen Eintrag weist das Backend jedes
+            #                       Token der iOS-App ab.
             #   385942875872952515  Web-Admin (= ADMIN_CLIENT_ID)
             #   385946294599876803  MCP (= MCP_CLIENT_ID, feste ID der DCR)
             #   385941791695700163  Projekt „Dorf-App" — zusätzlicher Fangnetz-
@@ -67,7 +71,7 @@ spec:
             # ("Token ist nicht für diese Anwendung ausgestellt (aud=…)"),
             # daran lässt sich der fehlende Wert direkt ablesen.
             - name: AUTH_AUDIENCE
-              value: "385941807986376899,385942875872952515,385946294599876803,385941791695700163"
+              value: "385941807986376899,387943892076527811,385942875872952515,385946294599876803,385941791695700163"
             - name: ADMIN_CLIENT_ID
               value: "385942875872952515"
             # Seed legt nur bei leerer DB die Beispiel-Kästen an.
@@ -89,6 +93,60 @@ spec:
             # wird vom Controller im Cluster entschlüsselt.
             - name: FCM_CREDENTIALS_FILE
               value: /secrets/fcm/firebase-admin.json
+            # --- Push für iOS (APNs) -------------------------------------
+            # Die iOS-App geht NICHT über Firebase: Sie meldet ihre rohe
+            # APNs-Kennung an, und das Backend spricht direkt mit Apple
+            # (internal/push/apns.go, Anbietertoken ES256 aus dem .p8 —
+            # dasselbe Verfahren wie das Google-Token in fcm.go, nur ohne
+            # Google). Die Weiche ist das Feld `platform` je Gerät.
+            #
+            # Diese drei Werte sind keine Geheimnisse und stehen deshalb im
+            # Klartext; geheim ist allein die .p8-Datei.
+            - name: APNS_KEY_ID
+              value: MRS72JUS43
+            - name: APNS_TEAM_ID
+              value: SK8G83Y72R
+            # Das „Topic" ist die Bundle-ID der App. Stimmt sie nicht, weist
+            # Apple jede Nachricht mit BadTopic ab.
+            - name: APNS_TOPIC
+              value: de.roessing.app
+            # produktion → api.push.apple.com, sandbox → api.sandbox.push.apple.com
+            #
+            # Das MUSS zu aps-environment im Build passen (ios/project.yml,
+            # APS_UMGEBUNG): Ein Build aus Xcode aufs Gerät bekommt eine
+            # Kennung, die NUR in der Sandbox gilt; ein Archiv für TestFlight
+            # und App Store eine, die NUR in der Produktion gilt. Eine
+            # Kennung an der falschen Adresse ergibt BadDeviceToken — und das
+            # Backend wirft das Gerät weg, obwohl daran nichts falsch ist.
+            # Der Cluster liefert die App über TestFlight/App Store aus, also:
+            - name: APNS_UMGEBUNG
+              value: produktion
+            # APNS_KEY_FILE:
+            # Der private Schlüssel, mit dem sich das Backend bei Apple
+            # ausweist. Solange der Wert fehlt, wird für iOS schlicht nicht
+            # gepusht — genau wie ohne FCM_CREDENTIALS_FILE. Der Betrieb
+            # läuft unverändert weiter: Die App holt ihre Benachrichtigungen
+            # über GET /api/v1/me/notifications ohnehin selbst ab. Android
+            # bleibt davon völlig unberührt.
+            #
+            # Zum Einrichten:
+            #
+            #   1. Im Apple Developer Portal unter
+            #      „Certificates, Identifiers & Profiles" → „Keys" → „+"
+            #      einen Schlüssel anlegen, „Apple Push Notifications service
+            #      (APNs)" ankreuzen und ihn z.B. „Dorf-App Push" nennen.
+            #      Der Schlüssel gilt für Sandbox UND Produktion; es braucht
+            #      also nur einen.
+            #   2. Die .p8-Datei herunterladen — sie ist NUR EINMAL zu haben.
+            #      Key-ID (10 Zeichen) und Team-ID stehen oben; weichen sie
+            #      ab, hier nachziehen.
+            #   3. Die Datei als SealedSecret ablegen (wie sealed-fcm.yaml),
+            #      unter /secrets/apns einhängen (Volume unten) und die beiden
+            #      Zeilen darunter einkommentieren. Die .p8 gehört NIE ins
+            #      Repo.
+            #
+            - name: APNS_KEY_FILE
+              value: /secrets/apns/AuthKey.p8
             # ZITADEL_SERVICE_USER_KEY_FILE (noch nicht eingerichtet):
             # Damit fragt das Backend die Träger-Mitgliedschaften (welcher
             # Verein, welche Rolle) über die Zitadel-Management-API ab. Sie
@@ -137,6 +195,10 @@ spec:
             - name: fcm
               mountPath: /secrets/fcm
               readOnly: true
+            # Erst zusammen mit APNS_KEY_FILE einkommentieren (siehe oben).
+            - name: apns
+              mountPath: /secrets/apns
+              readOnly: true
             # Schreibbares /tmp, weil das Wurzeldateisystem nur lesbar ist.
             - name: tmp
               mountPath: /tmp
@@ -167,6 +229,12 @@ spec:
             secretName: dorf-app-fcm
             # Fehlt das Secret (z.B. lokal), startet der Server trotzdem —
             # dann werden schlicht keine Push-Nachrichten verschickt.
+            optional: true
+        - name: apns
+          secret:
+            secretName: dorf-app-apns
+            # Dieselbe Regel wie bei fcm: fehlt es, gibt es kein iOS-Push,
+            # aber der Server läuft.
             optional: true
         - name: tmp
           emptyDir:

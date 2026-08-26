@@ -8,6 +8,7 @@ resources:
 - service.yaml
 - ingress.yaml
 - sealed-fcm.yaml
+- sealed-apns.yaml
 
 # Der konkrete Image-Tag wird von der CI via
 #   kustomize edit set image ghcr.io/dorfentwicklungskreis-roessing/app-backend=...:<git-sha>

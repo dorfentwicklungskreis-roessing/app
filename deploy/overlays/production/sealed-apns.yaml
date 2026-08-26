@@ -1,0 +1,18 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  annotations:
+    sealedsecrets.bitnami.com/namespace-wide: "true"
+  name: dorf-app-apns
+  namespace: dorf-app
+spec:
+  encryptedData:
+    AuthKey.p8: AgAYLnwKWvToIiDYhzmUCkRp4jUPdftA5lVdf3eeMK1xj1+9kBQOWuODpCX3u+2AyCfFVBfq+c77FoUMJoD1mnAN4l/FVpHsfipkIy+ZrnbeLlKsE+NYM49sqLLQJ+v1kKUf0IoBCtgLSkU8ZlSBHIJp8CxCBpUt8rR201Vnu9R+b2R2Nzs48x5Bh2R852VS5E8mn42UERviLex2Jg3toMrAs22zgw8kNKT+7OduKhLEIFaV49nS0xBb1cdhtdqKPjubDAXT5ug59F935mbvzzm6rzoyk2i+1o/haxYUNwE/ahotxDrVm8MJmsyvPEnl0su6Cw4CpA2utIdxLzbzo0T6tZZjy6snbkYymVp00i1PpZEyXVczcXbhGtcyhIyPzhU9Ivtj+Yt4iIqM/xIPP//FbBga05cEPKQcm69OTwVs6MDMiiS7VfvtGnKJK/mFfWAVMikJCN7iSJr091UMidMD2P4ILKfYBrbg6k8RMNkDDdILPx68p7Zt47FiPH/ECKtDTLxYU+ewkPG/69dwLtFmrFCwcGhPyHNO6Ox4vZ24b1QUzYNdy8G6vJoy5bMlgIj4wZqRYnvwM117HC7ej4nBQuWmU32ZRnaF71RhcBsH0xfP0AumQyP0jK3YPiRjzX0twKAz7t1Iif3SiCUwAqsEiAK4zvl3BM2Erz1lM8pNrYoHJvZ2RfBAzj3Os4ZhwLviMegfTBPHph2+rygeNwx18TZN5s0D20Ita3k7UiT4fMW7rytyJUoBpafXnertjMOVAkBZ2xz8sbCWTz2V1Wi+NVcjDf0nihxKAexykHtXvUCMLTM2v5Y78HiCCNuJFwNYOVKrcsmHE5iQGvfXIe+3lgLWkODTGHnADZrycpqbIeKxIoComNtctoNsatBCX0sm3SNGMAhdGvHMRBaD8UYBbWFObRYNwsz48Gz7IaZ9/pSQzv1/tCDYDLK3Upk3N/vc73hzTb9J66vjtb8SVw2Jpj77+mA/ylSHIdWSBYBkV14y5Jz4D9dOigne0if4bDgliLXW+N52O0hAa7tUqIFkUQ==
+  template:
+    metadata:
+      annotations:
+        sealedsecrets.bitnami.com/namespace-wide: "true"
+      name: dorf-app-apns
+      namespace: dorf-app
+    type: Opaque

@@ -1,0 +1,142 @@
+name: iOS
+
+# Baut und testet die iOS-App auf einem macOS-Runner. Das Xcode-Projekt liegt
+# nicht im Repo (siehe ios/project.yml), es wird hier mit XcodeGen erzeugt.
+#
+# Signiert wird nicht: In der CI gibt es (noch) kein Apple-Zertifikat, deshalb
+# überall CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=-. Gebaut und getestet wird für den Simulator.
+
+on:
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: ios
+
+jobs:
+  bauen-und-testen:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      # Xcode festnageln: Die App verlangt Swift 6 mit MainActor-Vorbelegung
+      # (project.yml), das kann erst Xcode 26. Auf die genaue Punktversion
+      # legen wir uns nicht fest — die wechselt mit jedem Runner-Abbild —,
+      # wohl aber auf die Hauptversion. Fehlt sie, bleibt das voreingestellte
+      # Xcode stehen und der Lauf sagt laut, welches es war.
+      - name: Xcode-Version festnageln
+        run: |
+          set -euo pipefail
+          xcode="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$xcode" ]; then
+            sudo xcode-select --switch "$xcode/Contents/Developer"
+          else
+            echo "::warning::Kein Xcode 26 gefunden — es wird mit dem voreingestellten Xcode gebaut."
+          fi
+          xcodebuild -version
+          swift --version
+
+      - name: XcodeGen bereitstellen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      # Die Kartenbibliothek (MapLibre) kommt über SPM und ist der mit Abstand
+      # längste Teil eines frischen Laufs. Sie wird deshalb neben dem Projekt
+      # abgelegt (-clonedSourcePackagesDirPath) und zwischengespeichert.
+      - name: Zwischenspeicher der Swift-Pakete
+        uses: actions/cache@v4
+        with:
+          path: ios/.spm
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/project.yml') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Xcode-Projekt erzeugen
+        run: xcodegen generate
+
+      # Kein fester Simulator-Name: Welche Geräte ein Runner-Abbild mitbringt,
+      # ändert sich mit jeder Xcode-Fassung, und ein fehlender Name macht den
+      # Lauf rot, ohne dass am Code etwas falsch wäre. Genommen wird das
+      # neueste verfügbare iPhone; gibt es keins, wird eines angelegt.
+      - name: Simulator ermitteln
+        run: |
+          set -euo pipefail
+          # Aus der Geräteliste das verfügbare iPhone mit der höchsten
+          # iOS-Fassung heraussuchen (Laufzeit heißt dort z.B. „…iOS-26-5").
+          udid="$(xcrun simctl list devices available --json | python3 -c 'import json, re, sys; laufzeit = lambda name: re.search(r"iOS-(\d+)-(\d+)", name); geraete = json.load(sys.stdin)["devices"]; kandidaten = [(tuple(map(int, laufzeit(name).groups())), g["udid"]) for name, liste in geraete.items() if laufzeit(name) for g in liste if g.get("isAvailable") and g["name"].startswith("iPhone")]; print(max(kandidaten)[1] if kandidaten else "")')"
+
+          if [ -z "$udid" ]; then
+            echo "Kein iPhone-Simulator vorhanden — es wird einer angelegt."
+            iosLaufzeit="$(xcrun simctl list runtimes available | sed -n 's/.* - \(com\.apple\.CoreSimulator\.SimRuntime\.iOS-.*\)$/\1/p' | tail -1)"
+            # Gerätetypen nach Modellnummer absteigend: das neueste zuerst,
+            # denn ein altes Modell verträgt sich nicht mit einer neuen
+            # Laufzeit. Es wird der Reihe nach probiert, bis eines passt.
+            for typ in $(xcrun simctl list devicetypes | sed -n 's/^iPhone .*(\(com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-[0-9][^)]*\))$/\1/p' | sort -t- -k2 -rn); do
+              [ -n "$iosLaufzeit" ] || break
+              udid="$(xcrun simctl create Dorf-CI "$typ" "$iosLaufzeit" 2>/dev/null || true)"
+              [ -n "$udid" ] && break
+            done
+          fi
+
+          if [ -n "$udid" ]; then
+            echo "ZIEL=platform=iOS Simulator,id=$udid" >> "$GITHUB_ENV"
+            echo "SIMULATOR_VORHANDEN=ja" >> "$GITHUB_ENV"
+            xcrun simctl list devices | grep -F "$udid"
+          else
+            # Rückfall: Bauen geht auch ohne Gerät, Testen nicht.
+            echo "::warning::Kein iOS-Simulator verfügbar — es wird nur gebaut, nicht getestet."
+            echo "ZIEL=generic/platform=iOS Simulator" >> "$GITHUB_ENV"
+            echo "SIMULATOR_VORHANDEN=nein" >> "$GITHUB_ENV"
+          fi
+
+      # Alle Adressen der App werden hier lokal übersteuert. Die Vorbelegungen
+      # in project.yml zeigen auf die Produktion; ohne Übersteuerung würde ein
+      # CI-Lauf sie anfassen — Kartenstil holen, Terminfeed laden, im
+      # schlimmsten Fall an der echten Rössing-ID anklopfen. Genau so ist der
+      # Fehler auf Android entstanden (dort -PapiBaseUrl usw.), deshalb steht
+      # jede der vier Adressen an jedem xcodebuild-Aufruf. Die Wache
+      # .github/scripts/pruefe_lokale_tests.py prüft das bei jeder Änderung.
+      # 127.0.0.1 ist der Runner selbst: Dort horcht in diesem Job niemand,
+      # ein hinausgehender Zugriff schlägt also hörbar fehl, statt still die
+      # Produktion zu treffen.
+      - name: App für den Simulator bauen
+        run: |
+          xcodebuild build -project Dorf.xcodeproj -scheme Dorf \
+            -destination "$ZIEL" \
+            -clonedSourcePackagesDirPath .spm \
+            -resultBundlePath ergebnisse/Bau.xcresult \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- \
+            API_BASE_URL=http://127.0.0.1:8099 \
+            WEBSITE_BASE_URL=http://127.0.0.1:8097 \
+            OIDC_ISSUER=http://127.0.0.1:8123 \
+            MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json
+
+      - name: Unit-Tests auf dem Simulator
+        if: env.SIMULATOR_VORHANDEN == 'ja'
+        run: |
+          xcodebuild test -project Dorf.xcodeproj -scheme Dorf \
+            -destination "$ZIEL" \
+            -clonedSourcePackagesDirPath .spm \
+            -resultBundlePath ergebnisse/Test.xcresult \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- \
+            API_BASE_URL=http://127.0.0.1:8099 \
+            WEBSITE_BASE_URL=http://127.0.0.1:8097 \
+            OIDC_ISSUER=http://127.0.0.1:8123 \
+            MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json
+
+      # Immer, nicht nur bei Fehlschlag: Das Ergebnisbündel eines grünen Laufs
+      # ist der Vergleichsmaßstab, an dem eine neue Warnung überhaupt auffällt.
+      - name: Testergebnisse hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-testergebnisse-${{ github.run_attempt }}
+          path: ios/ergebnisse/
+          if-no-files-found: warn
