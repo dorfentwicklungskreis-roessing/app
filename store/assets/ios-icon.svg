@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Quelle für ios/Dorf/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+  (1024x1024, App Store und Home-Bildschirm, helle Darstellung).
+
+  Dieselbe Blume wie store/assets/icon.svg (Play Store, 512x512), nur auf
+  1024x1024 hochgerechnet — Faktor 2, alle Koordinaten verdoppelt. Damit sieht
+  ein Screenshot der iOS-App neben der Android-App nicht wie eine andere
+  Anwendung aus.
+
+  Zwei Regeln von Apple stecken in der Datei:
+    * KEINE eigenen runden Ecken — iOS schneidet die Maske selbst zu. Ein
+      mitgeliefertes Eck ergäbe ein Eck im Eck.
+    * KEIN Alphakanal im fertigen PNG — deshalb ist der Hintergrund ein
+      deckendes Rechteck und render-ios.sh entfernt Alpha ausdrücklich.
+
+  Neu rendern: bash store/assets/render-ios.sh
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect x="0" y="0" width="1024" height="1024" fill="#3B6939"/>
+  <!-- Blütenblätter (r=85.34) -->
+  <circle cx="512" cy="324.27" r="85.34" fill="#FFF3C4"/>
+  <circle cx="512" cy="665.60" r="85.34" fill="#FFF3C4"/>
+  <circle cx="341.34" cy="494.93" r="85.34" fill="#FFF3C4"/>
+  <circle cx="682.67" cy="494.93" r="85.34" fill="#FFF3C4"/>
+  <!-- Blütenmitte -->
+  <circle cx="512" cy="512" r="102.40" fill="#F9A825"/>
+</svg>
