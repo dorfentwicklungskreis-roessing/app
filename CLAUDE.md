@@ -73,3 +73,29 @@ Parallelstrukturen zu bestehenden Vereinen aufbauen.**
   Web-Verwaltung `385942875872952515` (User-Agent, PKCE ohne Secret; der
   Code-Tausch passiert serverseitig, Redirect-URI ist `{PUBLIC_URL}/admin/`),
   Claude-MCP-Connector `385946294599876803` (Web, PKCE, kein Secret; wird via DCR-Endpoint /oauth/register an claude.ai ausgegeben).
+
+## Entwicklungsumgebung (iOS)
+
+Die iOS-App wird auf einer **headless macOS-VM** gebaut — dort hängt **kein
+Bildschirm**. Wer hier arbeitet, sieht ausschließlich Terminalausgabe.
+
+- **Keine grafischen Anwendungen starten.** `open -a Simulator`, `open
+  Dorf.xcodeproj` oder `xed` bewirken nichts Sichtbares; das Fenster geht auf,
+  aber niemand sieht es. Wer jemandem etwas zeigen will, muss es in Worte
+  fassen.
+- **Der Simulator wird ausschließlich über `xcrun simctl` bedient**: `boot`,
+  `bootstatus <id> -b`, `install`, `launch`, `io <id> screenshot <datei>`.
+  Screenshots sind zum Nachsehen für den, der sie erzeugt — sie ersetzen keine
+  Beschreibung.
+- **Der Simulator muss vor `xcodebuild test` wirklich gebootet sein.** Steht er
+  auf `Shutdown`, stirbt der Testträger reproduzierbar mit „Early unexpected
+  exit / signal kill", ohne dass am Code etwas falsch wäre. `xcrun simctl
+  bootstatus <id> -b` vorweg räumt das aus.
+- **Ohne Signatur startet im Simulator nichts**: `CODE_SIGNING_ALLOWED=NO`
+  lässt dyld das eingebettete `MapLibre.framework` abweisen. Es genügt eine
+  Ad-hoc-Signatur — in `ios/project.yml` als `CODE_SIGN_IDENTITY: "-"`
+  hinterlegt, in der CI und im `Makefile` ebenso.
+- **Ein echtes iPhone gibt es nicht.** Zum Bauen, Prüfen und für
+  Store-Screenshots reicht der Simulator; TestFlight und der App-Review
+  brauchen dagegen Hardware bei jemand anderem. Vor einer Einreichung gehört
+  ein Durchlauf auf einem echten Gerät dazu.
