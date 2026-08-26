@@ -71,7 +71,9 @@ targets:
         # Ohne Apple-Entwicklerkonto lässt sich für den Simulator bauen; für
         # Gerät und TestFlight trägt DEVELOPMENT_TEAM die Team-ID nach.
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: ""
+        # Team-ID des Apple-Entwicklerkontos. Kein Geheimnis — sie steht in
+        # jeder signierten App und in jedem Provisioning-Profil.
+        DEVELOPMENT_TEAM: SK8G83Y72R
         # Ad-hoc-Signatur („-") statt gar keiner. Ganz ohne Signatur startet die
         # App im Simulator nicht: dyld weist das eingebettete
         # MapLibre.framework ab, und der Testlauf stirbt mit SIGKILL, bevor er
