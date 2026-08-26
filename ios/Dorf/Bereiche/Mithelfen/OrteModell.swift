@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import Observation
 
 /// Woher „Mithelfen" seine Daten holt.
 ///
@@ -45,31 +45,30 @@ struct OrteQuelle {
 /// aus, wird die Liste nicht geleert — sie bekommt einen Hinweis darüber.
 /// Eine leere Seite im Funkloch wäre eine Falschaussage („es steht nichts an"),
 /// und im Dorf ist die Verbindung nun einmal nicht überall gut.
-@Observable
-final class OrteModell {
+final class OrteModell: ObservableObject {
     private let quelle: OrteQuelle
 
-    private(set) var orte: [Ort] = []
+    @Published private(set) var orte: [Ort] = []
     /// Wetterfaktor des Backends (1 = normal). Wird angezeigt, nicht gerechnet.
-    private(set) var giessfaktor: Double = 1
-    private(set) var laeuft = false
+    @Published private(set) var giessfaktor: Double = 1
+    @Published private(set) var laeuft = false
     /// Ob überhaupt schon einmal ein Abruf durch war — davor zeigt die Liste
     /// einen Ladekreis statt „nichts zu tun".
-    private(set) var jeGeladen = false
+    @Published private(set) var jeGeladen = false
     /// Der letzte Abruf ist gescheitert; im Wortlaut des Backends.
-    private(set) var hinweis: String?
+    @Published private(set) var hinweis: String?
     /// Kurze Rückmeldung nach einer Meldung („Danke fürs Gießen! 💚").
-    private(set) var bestaetigung: String?
+    @Published private(set) var bestaetigung: String?
     /// Ein abgelehnter Schreibvorgang — im Wortlaut des Backends.
-    private(set) var fehler: String?
+    @Published private(set) var fehler: String?
     /// Aufgaben, für die gerade geschrieben wird (Knopf sperren).
-    private(set) var laufendeAufgaben: Set<Int64> = []
+    @Published private(set) var laufendeAufgaben: Set<Int64> = []
     /// Orte, an denen gerade an- oder abgemeldet wird.
-    private(set) var laufendeOrte: Set<Int64> = []
+    @Published private(set) var laufendeOrte: Set<Int64> = []
     /// Historie je Aufgabe. Wird nachgeladen und blockiert das Öffnen nicht.
-    private(set) var historie: [Int64: [Erledigung]] = [:]
+    @Published private(set) var historie: [Int64: [Erledigung]] = [:]
 
-    @ObservationIgnored private var verblassen: Task<Void, Never>?
+    private var verblassen: Task<Void, Never>?
 
     init(quelle: OrteQuelle) { self.quelle = quelle }
 

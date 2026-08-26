@@ -8,8 +8,8 @@ import SwiftUI
 /// Fehler kosten nie den getippten Text: Bei einer Ablehnung bleibt alles
 /// stehen und die Begründung des Backends steht wörtlich darüber.
 struct IdeenView: View {
-    @Environment(AppUmgebung.self) private var umgebung
-    @State private var modell = IdeenModell()
+    @EnvironmentObject private var umgebung: AppUmgebung
+    @StateObject private var modell = IdeenModell()
 
     var body: some View {
         Form {
@@ -138,7 +138,7 @@ struct IdeenView: View {
         .task { modell.vorbelegen(aus: umgebung.ich) }
         // Das Profil kommt womöglich erst nach dem Öffnen an. Nachgetragen
         // wird nur, was noch leer ist (siehe `IdeenModell.vorbelegen`).
-        .onChange(of: umgebung.ich?.profile) { _, _ in
+        .onChange(of: umgebung.ich?.profile) { _ in
             modell.vorbelegen(aus: umgebung.ich)
         }
     }
@@ -163,7 +163,7 @@ struct IdeenView: View {
     NavigationStack {
         IdeenView()
     }
-    .environment(
+    .environmentObject(
         AppUmgebung(
             anmeldung: Anmeldung(),
             api: DorfApi(tokenGeber: { nil }),

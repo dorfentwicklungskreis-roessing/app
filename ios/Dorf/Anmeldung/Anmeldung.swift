@@ -1,7 +1,7 @@
 import AuthenticationServices
+import Combine
 import CryptoKit
 import Foundation
-import Observation
 
 /// Der Scope, mit dem Zitadel die Projektrollen ins Token legt.
 ///
@@ -47,19 +47,18 @@ struct OidcEndpunkte: Codable, Sendable {
 /// ein eingebettetes WebView scheitern würde. Der Rest ist ein
 /// Authorization-Code-Fluss nach Vorschrift — knapp hundert Zeilen, die
 /// niemand für uns pflegen muss.
-@Observable
-final class Anmeldung: NSObject {
-    private(set) var sitzung: Sitzungszustand = .laedt
+final class Anmeldung: NSObject, ObservableObject {
+    @Published private(set) var sitzung: Sitzungszustand = .laedt
 
     /// Das zuletzt erhaltene ID-Token — nur zur Diagnose („warum bin ich
     /// nicht Verwaltung?"). Zitadel legt Rollen je nach Einstellung ins
     /// Zugangs- oder ins ID-Token; wer das untersucht, braucht beide.
-    private(set) var letztesIdToken: String?
+    @Published private(set) var letztesIdToken: String?
 
-    @ObservationIgnored private var tokensatz: Tokensatz?
-    @ObservationIgnored private var entwicklerToken: String?
-    @ObservationIgnored private var endpunkte: OidcEndpunkte?
-    @ObservationIgnored private var laufendeAnmeldung: ASWebAuthenticationSession?
+    private var tokensatz: Tokensatz?
+    private var entwicklerToken: String?
+    private var endpunkte: OidcEndpunkte?
+    private var laufendeAnmeldung: ASWebAuthenticationSession?
 
     override init() {
         super.init()

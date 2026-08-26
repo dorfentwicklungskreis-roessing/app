@@ -3,7 +3,7 @@ import SwiftUI
 /// Entscheidet nur eins: angemeldet oder nicht. Alles Weitere hängt an
 /// [StartView].
 struct WurzelView: View {
-    @Environment(AppUmgebung.self) private var umgebung
+    @EnvironmentObject private var umgebung: AppUmgebung
 
     var body: some View {
         switch umgebung.anmeldung.sitzung {

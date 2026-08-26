@@ -4,8 +4,21 @@ Native iOS-App zur Dorf-App Rössing — dieselbe Rössing-ID, dasselbe Backend,
 dieselben Regeln wie in `android/`. Was das Backend entscheidet, entscheidet
 die App nicht noch einmal.
 
-Swift 6 und SwiftUI, Mindestfassung iOS 17, iPhone und iPad
+Swift 6 und SwiftUI, **Mindestfassung iOS 16**, iPhone und iPad
 (`TARGETED_DEVICE_FAMILY: "1,2"`). Einzige Fremdbibliothek ist MapLibre.
+
+iOS 16 statt 17 ist eine Entscheidung fürs Dorf: iOS 17 läuft erst ab
+iPhone XS/XR (2018), iOS 16 nimmt iPhone 8, 8 Plus und X (2017) dazu. Wer die
+Blumenkästen gießt, hat nicht zwangsläufig das neueste Telefon. Tiefer geht
+es bewusst nicht — ein iPhone 6s tut sich mit der Vektorkarte schwer, und
+eine App zu versprechen, die dann ruckelt, wäre keine Wohltat.
+
+Was das im Quelltext heißt: **kein Observation-Framework** (`@Observable`
+gibt es erst ab iOS 17) — die Modelle sind `ObservableObject` mit
+`@Published`, die Ansichten halten sie als `@StateObject`,
+`@ObservedObject` oder `@EnvironmentObject`. Und **kein
+`ContentUnavailableView`**: An seiner Stelle steht `Hinweistafel` unter
+`Dorf/Design/`.
 
 ## Bauen und testen
 
@@ -74,7 +87,7 @@ Der Weg im Ganzen, mit allem, was ein Mensch bei Apple klicken muss:
 | Ort | Inhalt |
 |---|---|
 | `Dorf/Konfiguration.swift` | Adressen und Kennungen, aus Build-Einstellungen (`project.yml`) über die `Info.plist` |
-| `Dorf/Umgebung.swift` | `AppUmgebung` — die Handverdrahtung, Gegenstück zu `AppContainer` auf Android |
+| `Dorf/Umgebung.swift` | `AppUmgebung` — die Handverdrahtung, Gegenstück zu `AppContainer` auf Android; reicht die Meldungen von `Anmeldung` und `OrteModell` weiter, weil `ObservableObject` nicht durch verschachtelte Objekte hindurch beobachtet |
 | `Dorf/Daten/Modelle.swift` | Die DTOs des Backends. Feldnamen 1:1 wie im JSON |
 | `Dorf/Daten/DorfApi.swift` | Der einzige Weg zum Backend (`URLSession`, kein Framework) |
 | `Dorf/Daten/DorfApi+*.swift` | Weitere Endpunkte als Anhänge — derselbe Transport |
@@ -82,7 +95,7 @@ Der Weg im Ganzen, mit allem, was ein Mensch bei Apple klicken muss:
 | `Dorf/Anmeldung/` | OIDC Authorization Code + PKCE (`ASWebAuthenticationSession`), Schlüsselbund, Anmeldebildschirm |
 | `Dorf/Navigation/` | Startseite und Verdrahtung der Bereiche (`Ziel`) |
 | `Dorf/Bereiche/<Bereich>/` | Je Bereich ein Ordner. Ein Bereich fasst keinen fremden an |
-| `Dorf/Design/` | Ampel-Farben, Zahlen- und Datumsformate |
+| `Dorf/Design/` | Ampel-Farben, Zahlen- und Datumsformate, `Hinweistafel` (leere Seiten), `Color.trennlinie` |
 | `Dorf/Assets.xcassets/` | App-Icon (hell, dunkel, eingefärbt) und Akzentfarbe |
 | `DorfTests/` | Unit-Tests (swift-testing) |
 

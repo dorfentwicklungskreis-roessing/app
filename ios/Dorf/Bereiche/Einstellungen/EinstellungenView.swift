@@ -8,7 +8,7 @@ import SwiftUI
 /// Apples Richtlinie 5.1.1 (v) verlangt von jeder App mit Konto einen Weg
 /// dorthin **in der App**, nicht per E-Mail an irgendwen.
 struct EinstellungenView: View {
-    @Environment(AppUmgebung.self) private var umgebung
+    @EnvironmentObject private var umgebung: AppUmgebung
     @State private var modell: KontoModell?
 
     var body: some View {
@@ -59,7 +59,7 @@ struct EinstellungenView: View {
 
 /// „Mein Konto": wer angemeldet ist und mit welcher Rolle.
 private struct KontoAbschnitt: View {
-    let umgebung: AppUmgebung
+    @ObservedObject var umgebung: AppUmgebung
 
     var body: some View {
         Section("Mein Konto") {
@@ -85,7 +85,7 @@ private struct KontoAbschnitt: View {
 
 /// Der Weg zum Löschen des Kontos — mit der Erklärung davor, nicht danach.
 private struct LoeschAbschnitt: View {
-    @Bindable var modell: KontoModell
+    @ObservedObject var modell: KontoModell
 
     var body: some View {
         Section {
@@ -128,7 +128,7 @@ private struct LoeschAbschnitt: View {
 /// Die Rückfrage. Bewusst ein eigenes Blatt und kein Hinweisfenster: Was hier
 /// steht, passt in keine drei Zeilen — und der Name will abgetippt werden.
 private struct KontoLoeschenBlatt: View {
-    @Bindable var modell: KontoModell
+    @ObservedObject var modell: KontoModell
     @Environment(\.dismiss) private var schliessen
 
     var body: some View {

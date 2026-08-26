@@ -43,11 +43,11 @@ extension VerwaltungModell {
 /// aus einem Tipp auf die Karte. Getippt wird sie nicht: Wer Zahlen abtippt,
 /// vertauscht Breite und Länge.
 struct OrtFormularView: View {
-    let modell: VerwaltungModell
+    @ObservedObject var modell: VerwaltungModell
     /// Die vorhandenen Orte — als Orientierung auf der Auswahlkarte.
     let orte: [Ort]
 
-    @State private var standort = Standortgeber()
+    @StateObject private var standort = Standortgeber()
     @State private var standortHinweis: String?
     @State private var wartetAufFreigabe = false
 
@@ -111,7 +111,7 @@ struct OrtFormularView: View {
         }
         .task { standort.beobachten() }
         .onDisappear { standort.ruhen() }
-        .onChange(of: standort.freigabe) { _, neue in freigabeGeaendert(neue) }
+        .onChange(of: standort.freigabe) { neue in freigabeGeaendert(neue) }
     }
 
     // MARK: Standort
@@ -210,7 +210,7 @@ struct OrtFormularView: View {
 /// das Backend wiese es ab, und die Ampel wüsste nicht, woran sie sich halten
 /// soll.
 struct AufgabeFormularView: View {
-    let modell: VerwaltungModell
+    @ObservedObject var modell: VerwaltungModell
 
     var body: some View {
         NavigationStack {
@@ -328,7 +328,7 @@ struct AufgabeFormularView: View {
 
 /// Der Hitzefaktor: eine tagesaktuelle Einstellung für das ganze Dorf.
 struct HitzefaktorAbschnitt: View {
-    let modell: VerwaltungModell
+    @ObservedObject var modell: VerwaltungModell
 
     @State private var wert: Double = 1
 
@@ -357,7 +357,7 @@ struct HitzefaktorAbschnitt: View {
             Text(Verwaltungstexte.hitzefaktor)
         }
         .task { wert = modell.hitzefaktor }
-        .onChange(of: modell.hitzefaktor) { _, neu in wert = neu }
+        .onChange(of: modell.hitzefaktor) { neu in wert = neu }
     }
 
     /// Der Stepper rechnet in Zehnteln; ohne Runden stünde nach ein paar

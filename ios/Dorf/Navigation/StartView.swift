@@ -4,7 +4,7 @@ import SwiftUI
 /// Bereich. Weitere kommen — deshalb eine Liste von Bereichen und keine
 /// Registerkarten, in die sich nichts mehr einfügen ließe.
 struct StartView: View {
-    @Environment(AppUmgebung.self) private var umgebung
+    @EnvironmentObject private var umgebung: AppUmgebung
     @State private var pfad = NavigationPath()
 
     var body: some View {

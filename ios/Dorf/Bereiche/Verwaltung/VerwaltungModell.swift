@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import Observation
 
 /// Der Stand des Bereichs „Verwaltung": welches Formular offen ist, was
 /// gerade geschickt wird, was das Backend zuletzt abgelehnt hat.
@@ -297,29 +297,28 @@ enum Verwaltungstexte {
 
 // MARK: - Modell
 
-@Observable
-final class VerwaltungModell {
+final class VerwaltungModell: ObservableObject {
     private let quelle: VerwaltungQuelle
 
     /// Das offene Ortsformular (oder keins).
-    var ortFormular: OrtFormular?
+    @Published var ortFormular: OrtFormular?
     /// Das offene Aufgabenformular (oder keins).
-    var aufgabeFormular: AufgabeFormular?
+    @Published var aufgabeFormular: AufgabeFormular?
 
     /// Orte und Aufgaben, für die gerade geschrieben wird — solange bleiben
     /// ihre Knöpfe gesperrt.
-    private(set) var laufend: Set<Int64> = []
+    @Published private(set) var laufend: Set<Int64> = []
     /// Ein abgelehnter Vorgang außerhalb eines Formulars, im Wortlaut des
     /// Backends.
-    private(set) var fehler: String?
+    @Published private(set) var fehler: String?
     /// Kurze Rückmeldung („Ort gespeichert.").
-    private(set) var bestaetigung: String?
+    @Published private(set) var bestaetigung: String?
 
-    private(set) var hitzefaktor: Double = 1
-    private(set) var hitzefaktorGeladen = false
-    private(set) var hitzefaktorLaeuft = false
+    @Published private(set) var hitzefaktor: Double = 1
+    @Published private(set) var hitzefaktorGeladen = false
+    @Published private(set) var hitzefaktorLaeuft = false
 
-    @ObservationIgnored private var verblassen: Task<Void, Never>?
+    private var verblassen: Task<Void, Never>?
 
     init(quelle: VerwaltungQuelle) { self.quelle = quelle }
 

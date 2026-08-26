@@ -3,7 +3,7 @@ import SwiftUI
 /// Ein Ort mit allem, was dort ansteht: Beschreibung, Aufgaben mit Ampel,
 /// Plan bzw. Termin, letzte Erledigung, Historie — und der Knopf zum Melden.
 struct OrtDetailView: View {
-    let modell: OrteModell
+    @ObservedObject var modell: OrteModell
     let ortId: Int64
     let meinSub: String?
 
@@ -19,10 +19,10 @@ struct OrtDetailView: View {
             if let ort {
                 inhalt(ort)
             } else {
-                ContentUnavailableView(
+                Hinweistafel(
                     "Der Ort ist nicht mehr da",
-                    systemImage: "mappin.slash",
-                    description: Text("Vielleicht wurde er gerade abgeschaltet oder erledigt.")
+                    symbol: "mappin.slash",
+                    beschreibung: "Vielleicht wurde er gerade abgeschaltet oder erledigt."
                 )
             }
         }
@@ -142,7 +142,7 @@ struct OrtDetailView: View {
 /// nicht alle auf einmal. Wann und wen, entscheidet das Backend; die App
 /// meldet nur an und ab.
 struct HelferKarte: View {
-    let modell: OrteModell
+    @ObservedObject var modell: OrteModell
     let ort: Ort
 
     /// Wofür ich mithelfen will. Nur vor dem Anmelden zu wählen — zum
@@ -240,7 +240,7 @@ struct HelferKarte: View {
 
 /// Eine Aufgabe des Ortes.
 struct AufgabenKarte: View {
-    let modell: OrteModell
+    @ObservedObject var modell: OrteModell
     let aufgabe: Aufgabe
     let meinSub: String?
     var nachfragen: (Aufgabe) -> Void

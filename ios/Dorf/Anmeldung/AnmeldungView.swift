@@ -5,7 +5,7 @@ import SwiftUI
 /// Impressum und Datenschutz stehen auch hier — wer noch kein Konto hat, muss
 /// trotzdem nachlesen können, was mit seinen Daten geschieht (§ 5 DDG).
 struct AnmeldungView: View {
-    @Environment(AppUmgebung.self) private var umgebung
+    @EnvironmentObject private var umgebung: AppUmgebung
     @State private var laeuft = false
     @State private var fehler: String?
 

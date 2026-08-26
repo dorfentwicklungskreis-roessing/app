@@ -1,4 +1,3 @@
-import Observation
 import SwiftUI
 
 /// Eine Person, so wie sie in dieser Liste erscheinen darf.
@@ -19,15 +18,14 @@ struct Bewohneransicht: Identifiable, Sendable {
 }
 
 /// Der Zustand der Dorfbewohner-Liste.
-@Observable
-final class Dorfbewohnermodell {
-    private(set) var bewohner: [Dorfbewohner] = []
+final class Dorfbewohnermodell: ObservableObject {
+    @Published private(set) var bewohner: [Dorfbewohner] = []
     /// Kam die Liste in der Verwaltungs-Sicht (`adminView`)?
-    private(set) var verwaltungssicht = false
-    private(set) var laedt = false
-    private(set) var geladen = false
-    private(set) var fehler: String?
-    var suche = ""
+    @Published private(set) var verwaltungssicht = false
+    @Published private(set) var laedt = false
+    @Published private(set) var geladen = false
+    @Published private(set) var fehler: String?
+    @Published var suche = ""
 
     /// Gesucht wird über die Namen — der angezeigte Name, der Anzeigename und
     /// der Nickname. Andere Angaben bleiben außen vor: Wer eine Rufnummer
@@ -62,12 +60,10 @@ final class Dorfbewohnermodell {
 /// wurden. Was hier fehlt, hat die Person nicht freigegeben; das Backend
 /// schickt es gar nicht erst mit.
 struct DorfbewohnerView: View {
-    @Environment(AppUmgebung.self) private var umgebung
-    @State private var modell = Dorfbewohnermodell()
+    @EnvironmentObject private var umgebung: AppUmgebung
+    @StateObject private var modell = Dorfbewohnermodell()
 
     var body: some View {
-        @Bindable var modell = modell
-
         List {
             if let fehler = modell.fehler {
                 Section {
@@ -116,15 +112,15 @@ struct DorfbewohnerView: View {
         if modell.laedt && modell.bewohner.isEmpty {
             ProgressView("Wird geladen …")
         } else if modell.gefiltert.isEmpty && !modell.suche.isEmpty {
-            ContentUnavailableView.search(text: modell.suche)
+            Hinweistafel.suche(text: modell.suche)
         } else if modell.gefiltert.isEmpty && modell.fehler == nil {
-            ContentUnavailableView(
+            Hinweistafel(
                 "Noch niemand dabei",
-                systemImage: "person.2",
-                description: Text("""
+                symbol: "person.2",
+                beschreibung: """
                 Bisher hat niemand Angaben freigegeben. Wer in „Mein Profil“ \
                 Anzeigenamen oder Nickname freigibt, steht hier.
-                """)
+                """
             )
             .accessibilityIdentifier("dorfbewohner-leer")
         }
@@ -237,7 +233,7 @@ private struct NurVerwaltungsmarke: View {
     NavigationStack {
         DorfbewohnerView()
     }
-    .environment(AppUmgebung(
+    .environmentObject(AppUmgebung(
         anmeldung: Anmeldung(),
         api: DorfApi(tokenGeber: { nil }),
         ich: Ich(sub: "abc", name: "Anna Beispiel")

@@ -16,7 +16,7 @@ keine der beiden Apps noch einmal.
 | Verzeichnis | Inhalt |
 |---|---|
 | `android/` | Native Android-App (Kotlin, Jetpack Compose, Material 3, MapLibre) |
-| `ios/` | Native iOS-App (Swift 6, SwiftUI, MapLibre, ab iOS 17, iPhone und iPad). Xcode-Projekt wird aus `project.yml` erzeugt, nicht committet. Eigener Zugang: `ios/README.md` |
+| `ios/` | Native iOS-App (Swift 6, SwiftUI, MapLibre, ab iOS 16, iPhone und iPad). Xcode-Projekt wird aus `project.yml` erzeugt, nicht committet. Eigener Zugang: `ios/README.md` |
 | `backend/` | Go-Backend: REST-API, MCP-Server, Web-Admin. SQLite (WAL) |
 | `deploy/`  | Kustomize-Overlay für den K3S-Cluster (Flux deployt) |
 | `.github/workflows/` | CI: Tests, E2E auf Emulatoren, Multi-Arch-Images, Releases |

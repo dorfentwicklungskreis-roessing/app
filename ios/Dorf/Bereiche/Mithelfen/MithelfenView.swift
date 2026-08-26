@@ -3,7 +3,7 @@ import SwiftUI
 /// Der Bereich „Mithelfen": Was gerade im Dorf ansteht — als Karte oder als
 /// Liste, und dahinter je Ort die Aufgaben mit dem Knopf zum Melden.
 struct MithelfenView: View {
-    @Environment(AppUmgebung.self) private var umgebung
+    @EnvironmentObject private var umgebung: AppUmgebung
 
     var body: some View {
         // Das Modell gehört der **Umgebung**, nicht dieser Seite: Die
@@ -36,7 +36,7 @@ enum Mithelfenansicht: String, CaseIterable, Identifiable {
 
 /// Der eigentliche Bereich, sobald das Modell steht.
 struct MithelfenInhalt: View {
-    let modell: OrteModell
+    @ObservedObject var modell: OrteModell
     let meinSub: String?
 
     @State private var ansicht: Mithelfenansicht = .liste
@@ -64,8 +64,13 @@ struct MithelfenInhalt: View {
                 OrteListe(modell: modell) { gewaehlterOrt = $0 }
             }
         }
-        .navigationDestination(item: $gewaehlterOrt) { id in
-            OrtDetailView(modell: modell, ortId: id, meinSub: meinSub)
+        // `navigationDestination(item:)` gibt es erst ab iOS 17. Mit
+        // `isPresented` steht dasselbe ab iOS 16: Der gewählte Ort liegt
+        // daneben, und beim Zurückgehen wird er wieder geleert.
+        .navigationDestination(isPresented: ortOffen) {
+            if let gewaehlterOrt {
+                OrtDetailView(modell: modell, ortId: gewaehlterOrt, meinSub: meinSub)
+            }
         }
         // Der Fehler hängt am ganzen Bereich, damit er auch über der
         // Detailseite erscheint — dort wird gemeldet.
@@ -80,12 +85,16 @@ struct MithelfenInhalt: View {
     private var fehlerOffen: Binding<Bool> {
         Binding(get: { modell.fehler != nil }, set: { if !$0 { modell.fehlerVerwerfen() } })
     }
+
+    private var ortOffen: Binding<Bool> {
+        Binding(get: { gewaehlterOrt != nil }, set: { if !$0 { gewaehlterOrt = nil } })
+    }
 }
 
 /// Hinweis und Dank über der Liste — beide sagen es im Text, nicht nur in der
 /// Farbe.
 struct Streifen: View {
-    let modell: OrteModell
+    @ObservedObject var modell: OrteModell
 
     var body: some View {
         VStack(spacing: 0) {
@@ -135,7 +144,7 @@ struct Hinweisstreifen: View {
 
 /// Die Orte, dringendste zuerst.
 struct OrteListe: View {
-    let modell: OrteModell
+    @ObservedObject var modell: OrteModell
     var auswahl: (Int64) -> Void
 
     var body: some View {

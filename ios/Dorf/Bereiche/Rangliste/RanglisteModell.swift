@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import Observation
 
 /// Der Stand der Rangliste für einen Zeitraum.
 ///
@@ -9,14 +9,13 @@ import Observation
 ///
 /// Fällt das Netz aus, bleibt der zuletzt geladene Stand stehen und bekommt
 /// einen Hinweis darüber: Eine leere Seite wäre die schlechtere Auskunft.
-@Observable
-final class RanglisteModell {
-    private(set) var stand: Rangliste?
-    private(set) var laedt = false
+final class RanglisteModell: ObservableObject {
+    @Published private(set) var stand: Rangliste?
+    @Published private(set) var laedt = false
     /// Klartext des letzten Fehlversuchs — vom Backend, nicht von der App.
-    private(set) var hinweis: String?
+    @Published private(set) var hinweis: String?
     /// Der Zeitraum, zu dem der angezeigte Stand gehört.
-    private(set) var geladenerZeitraum: Zeitraum?
+    @Published private(set) var geladenerZeitraum: Zeitraum?
 
     func laden(api: DorfApi, zeitraum: Zeitraum) async {
         laedt = true

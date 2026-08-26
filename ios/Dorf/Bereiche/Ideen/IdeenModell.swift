@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import Observation
 
 /// Zustand des Ideen-Formulars — dasselbe Verhalten wie im
 /// `IdeenViewModel` der Android-App.
@@ -8,23 +8,22 @@ import Observation
 /// Profil vorbelegt. Der Missbrauchsschutz (Zugriffsgrenze, verstecktes
 /// Feld, Mindestzeit) sitzt im Backend und wird hier bewusst **nicht**
 /// nachgebaut: Für Website und App sollen dieselben Regeln gelten.
-@Observable
-final class IdeenModell {
+final class IdeenModell: ObservableObject {
     /// Kürzer ergibt keinen Wunsch. Verbindlich prüft das Backend
     /// (5–2000 Zeichen) — hier geht es nur darum, niemanden mit einer
     /// vermeidbaren Fehlermeldung zu ärgern.
     static let mindestZeichen = 5
     static let maxZeichen = 2000
 
-    private(set) var wunsch = ""
-    private(set) var name = ""
-    private(set) var email = ""
-    private(set) var sendet = false
+    @Published private(set) var wunsch = ""
+    @Published private(set) var name = ""
+    @Published private(set) var email = ""
+    @Published private(set) var sendet = false
     /// Begründung des Backends im Wortlaut, wenn die Einreichung abgewiesen
     /// wurde — sonst nil.
-    private(set) var fehler: String?
+    @Published private(set) var fehler: String?
     /// Nach dem Abschicken: „Danke, deine Idee ist angekommen!"
-    private(set) var dank = false
+    @Published private(set) var dank = false
 
     init() {}
 
