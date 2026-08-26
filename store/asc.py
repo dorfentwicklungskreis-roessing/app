@@ -30,6 +30,7 @@ Dazu die Handgriffe, die man sonst in App Store Connect klicken müsste:
     python3 store/asc.py app-zeigen          # App-Datensatz suchen, id ausgeben
     python3 store/asc.py testflight-gruppe   # externe Gruppe „Dorf" + öffentlicher Link
     python3 store/asc.py beta-info           # Feedback-Adresse und Beta-Beschreibung
+    python3 store/asc.py screenshots-hochladen  # Store-Bilder aus store/screenshots/ios/
 
 Und die Handgriffe für den Store-Eintrag selbst:
 
@@ -58,6 +59,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import subprocess
@@ -72,6 +74,10 @@ from pathlib import Path
 # Unterbefehl zum ersten Mal ausprobiert, soll erst sehen, was er auslöst.
 PROBE = False
 
+# Ziel-Version für `screenshots-hochladen` (--store-version). Leer heißt:
+# die neueste bearbeitbare Version der App nehmen.
+STORE_VERSION = None
+
 BASIS = "https://api.appstoreconnect.apple.com"
 ZIELGRUPPE = "appstoreconnect-v1"
 # Apple weist Tokens ab, die länger als 20 Minuten gelten.
@@ -85,6 +91,27 @@ TESTFLIGHT_GRUPPE = "Dorf"
 FEEDBACK_ADRESSE = "post@levinkeller.de"
 METADATEN = Path(__file__).resolve().parent / "metadata" / "ios"
 SPRACHEN = ["de-DE", "en-US"]
+
+# Store-Bilder: store/screenshots/ios/<sprache>/<geraet>/NN-name.png
+BILDER = Path(__file__).resolve().parent / "screenshots" / "ios"
+
+# Ordnername → Anzeigetyp in App Store Connect. Die gültigen Werte sind nicht
+# geraten: Apple nennt sie in der Fehlermeldung, wenn man einen falschen
+# schickt (ENTITY_ERROR.ATTRIBUTE.TYPE bei POST /v1/appScreenshotSets).
+# Für 6,9″ (1320×2868) gibt es keinen eigenen Typ — er gehört zu
+# APP_IPHONE_67, genau wie 6,5″ und 6,7″.
+ANZEIGETYPEN = {
+    "iphone-6_9": "APP_IPHONE_67",
+    "ipad-13": "APP_IPAD_PRO_3GEN_129",
+}
+
+# In diesen Zuständen lässt sich eine Store-Version noch bearbeiten. Alles
+# andere (IN_REVIEW, READY_FOR_SALE …) weist Apple ab — dann soll der
+# Unterbefehl das sagen und nichts anfassen.
+BEARBEITBAR = {
+    "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
+    "METADATA_REJECTED", "INVALID_BINARY",
+}
 
 
 def _b64(roh: bytes) -> str:
@@ -1121,6 +1148,211 @@ def einreichstand() -> None:
               "verlangt,\nsagt erst die Einreichung selbst.")
     print("\nEingereicht wird hier bewusst nicht: Das ist der einzige Schritt, "
           "den ein\nMensch tun muss — App Store Connect → „Add for Review“.")
+# Store-Bilder hochladen
+# ---------------------------------------------------------------------------
+
+
+def store_version(vorgabe: str | None = None) -> str:
+    """Die Store-Version, an der die Bilder hängen sollen.
+
+    Ohne Angabe wird die neueste iOS-Version genommen, sofern sie sich noch
+    bearbeiten lässt. Das ist Absicht: Bilder an eine Version zu hängen, die
+    gerade in der Prüfung liegt, geht nicht — und ein stiller Fehlschlag wäre
+    hier besonders ärgerlich, weil man ihn erst in App Store Connect merkt.
+    """
+    if vorgabe:
+        return vorgabe
+    app = app_datensatz()
+    versionen = anfrage(
+        "GET", f"/v1/apps/{app['id']}/appStoreVersions?limit=10&filter[platform]=IOS"
+    ).get("data", [])
+    if not versionen:
+        raise SystemExit("Zu dieser App gibt es noch keine Store-Version.")
+    eintrag = versionen[0]
+    a = eintrag.get("attributes", {})
+    zustand = a.get("appVersionState") or a.get("appStoreState") or "?"
+    if zustand not in BEARBEITBAR:
+        raise SystemExit(
+            f"Version {a.get('versionString', '?')} steht auf {zustand} — in diesem "
+            "Zustand nimmt Apple keine neuen Bilder an.\n"
+            "Es wurde nichts geändert."
+        )
+    return eintrag["id"]
+
+
+def _lokalisierungen(version: str) -> dict[str, str]:
+    antwort = anfrage("GET", f"/v1/appStoreVersions/{version}/appStoreVersionLocalizations?limit=50")
+    return {e["attributes"]["locale"]: e["id"] for e in antwort.get("data", [])}
+
+
+def _bildsatz(lokalisierung: str, anzeigetyp: str) -> str:
+    """Den Bildsatz je Sprache und Anzeigetyp holen — oder anlegen.
+
+    Ein Satz ist der Kasten, in dem die Bilder einer Gerätegröße liegen. Es
+    gibt genau einen je Kombination; ein zweiter wäre ein Fehler, deshalb wird
+    zuerst gesucht.
+    """
+    vorhandene = anfrage(
+        "GET",
+        f"/v1/appStoreVersionLocalizations/{lokalisierung}/appScreenshotSets?limit=50",
+    ).get("data", [])
+    for satz in vorhandene:
+        if satz.get("attributes", {}).get("screenshotDisplayType") == anzeigetyp:
+            return satz["id"]
+
+    antwort = anfrage("POST", "/v1/appScreenshotSets", {
+        "data": {
+            "type": "appScreenshotSets",
+            "attributes": {"screenshotDisplayType": anzeigetyp},
+            "relationships": {
+                "appStoreVersionLocalization": {
+                    "data": {"type": "appStoreVersionLocalizations", "id": lokalisierung}
+                }
+            },
+        },
+    })
+    return antwort["data"]["id"]
+
+
+def _satz_leeren(satz: str) -> int:
+    """Alle Bilder eines Satzes löschen.
+
+    Hochladen ersetzt nicht, es hängt an. Ohne dieses Aufräumen stünden nach
+    dem zweiten Lauf vierzehn Bilder im Store — und Apple nimmt höchstens
+    zehn je Satz.
+    """
+    if PROBE and satz.startswith("("):
+        # Der Satz wurde im Trockenlauf nur *gedacht* — es gibt nichts zu leeren.
+        return 0
+    vorhandene = anfrage("GET", f"/v1/appScreenshotSets/{satz}/appScreenshots?limit=50")
+    if vorhandene.get("data") is None:
+        return 0
+    for bild in vorhandene["data"]:
+        anfrage("DELETE", f"/v1/appScreenshots/{bild['id']}")
+    return len(vorhandene["data"])
+
+
+def _hochschieben(bild: dict, inhalt: bytes) -> None:
+    """Die Teile einer Datei an die von Apple genannten Adressen schicken.
+
+    Apple zerlegt große Dateien in mehrere Abschnitte und nennt für jeden
+    Adresse, Methode, Offset, Länge und die zu setzenden Kopfzeilen. Genau die
+    sind zu nehmen — die Adressen sind kurzlebig signiert.
+    """
+    for teil in bild["attributes"].get("uploadOperations", []):
+        stueck = inhalt[teil["offset"]:teil["offset"] + teil["length"]]
+        req = urllib.request.Request(teil["url"], data=stueck,
+                                     method=teil.get("method", "PUT"))
+        for kopf in teil.get("requestHeaders", []):
+            req.add_header(kopf["name"], kopf["value"])
+        try:
+            with urllib.request.urlopen(req, timeout=120) as antwort:
+                antwort.read()
+        except urllib.error.HTTPError as fehler:
+            text = fehler.read().decode(errors="replace")
+            raise SystemExit(
+                f"Teil-Upload fehlgeschlagen (HTTP {fehler.code}): {text}\n"
+                f"Das angelegte Bild {bild['id']} bleibt unfertig zurück und sollte "
+                "gelöscht werden — ein erneuter Lauf räumt den Satz ohnehin leer."
+            )
+
+
+def _bild_hochladen(satz: str, pfad: Path) -> str:
+    inhalt = pfad.read_bytes()
+    reservierung = anfrage("POST", "/v1/appScreenshots", {
+        "data": {
+            "type": "appScreenshots",
+            "attributes": {"fileSize": len(inhalt), "fileName": pfad.name},
+            "relationships": {
+                "appScreenshotSet": {"data": {"type": "appScreenshotSets", "id": satz}}
+            },
+        },
+    })
+    bild = reservierung["data"]
+    if PROBE:
+        print(f"    [Trockenlauf] {pfad.name} ({len(inhalt) // 1024} KiB) würde in "
+              f"{len(bild['attributes'].get('uploadOperations', []))} Teilen hochgehen.")
+        return bild["id"]
+
+    _hochschieben(bild, inhalt)
+    # Erst mit `uploaded` gilt die Datei als vollständig. Die Prüfsumme ist
+    # der Beleg, dass angekommen ist, was losgeschickt wurde.
+    anfrage("PATCH", f"/v1/appScreenshots/{bild['id']}", {
+        "data": {
+            "id": bild["id"], "type": "appScreenshots",
+            "attributes": {"uploaded": True,
+                           "sourceFileChecksum": hashlib.md5(inhalt).hexdigest()},
+        },
+    })
+    return bild["id"]
+
+
+def _reihenfolge_setzen(satz: str, kennungen: list[str]) -> None:
+    """Die Reihenfolge im Satz festlegen.
+
+    Apple zeigt die ersten drei Bilder in den Suchergebnissen — die
+    Reihenfolge ist deshalb kein Schönheitsfehler, sondern der Verkaufstext.
+    """
+    anfrage("PATCH", f"/v1/appScreenshotSets/{satz}/relationships/appScreenshots", {
+        "data": [{"type": "appScreenshots", "id": k} for k in kennungen],
+    })
+
+
+def screenshots_hochladen(version: str | None = None) -> None:
+    """Die Bilder aus `store/screenshots/ios/` an die Store-Version hängen.
+
+    Je Sprache und Gerätegröße wird der Bildsatz gesucht (oder angelegt),
+    geleert und neu gefüllt. Neu füllen statt ergänzen: Sonst wächst der Satz
+    bei jedem Lauf, und welche zehn Apple dann zeigt, bestimmt der Zufall.
+
+    Aufgenommen und abgelegt werden die Bilder mit
+    `store/screenshots/aufnehmen.sh` — siehe `store/screenshots/README.md`.
+    """
+    zugang()
+    if not BILDER.is_dir():
+        raise SystemExit(
+            f"{BILDER} gibt es nicht. Die Bilder entstehen mit\n"
+            "  store/screenshots/aufnehmen.sh <simulator-udid> <geraet>\n"
+            "Es wurde nichts geändert."
+        )
+
+    version = store_version(version or STORE_VERSION)
+    lokalisierungen = _lokalisierungen(version)
+    print(f"Store-Version {version}")
+
+    for sprache in SPRACHEN:
+        if sprache not in lokalisierungen:
+            raise SystemExit(
+                f"Für {sprache} gibt es keine Lokalisierung an dieser Version — "
+                "erst die Texte anlegen, dann die Bilder."
+            )
+        for ordner, anzeigetyp in ANZEIGETYPEN.items():
+            quelle = BILDER / sprache / ordner
+            dateien = sorted(quelle.glob("*.png"))
+            if not dateien:
+                print(f"{sprache}/{ordner}: keine Bilder — übersprungen.")
+                continue
+            if len(dateien) > 10:
+                raise SystemExit(
+                    f"{sprache}/{ordner}: {len(dateien)} Bilder — Apple nimmt "
+                    "höchstens zehn je Anzeigetyp."
+                )
+
+            satz = _bildsatz(lokalisierungen[sprache], anzeigetyp)
+            geloescht = _satz_leeren(satz)
+            print(f"{sprache}/{ordner} ({anzeigetyp}): Satz {satz}"
+                  + (f", {geloescht} alte Bilder entfernt" if geloescht else ""))
+
+            kennungen = []
+            for datei in dateien:
+                kennungen.append(_bild_hochladen(satz, datei))
+                print(f"  {datei.name}")
+            if not PROBE:
+                _reihenfolge_setzen(satz, kennungen)
+            print(f"  {len(dateien)} Bilder, Reihenfolge gesetzt.")
+
+    print("\nWas hier NICHT passiert: die Version zur Prüfung einreichen. "
+          "Das bleibt ein bewusster Klick in App Store Connect.")
 
 
 BEFEHLE = {
@@ -1135,6 +1367,7 @@ BEFEHLE = {
     "version-angaben": version_angaben,
     "verfuegbarkeit": verfuegbarkeit,
     "einreichstand": einreichstand,
+    "screenshots-hochladen": screenshots_hochladen,
 }
 
 
@@ -1148,12 +1381,16 @@ def main() -> None:
     p.add_argument("--daten", help="JSON-Rumpf für POST/PATCH")
     p.add_argument("--key-id", dest="key_id")
     p.add_argument("--issuer-id", dest="issuer_id")
+    p.add_argument("--store-version", dest="store_version",
+                   help="Kennung der Store-Version für screenshots-hochladen "
+                        "(ohne Angabe: die neueste bearbeitbare)")
     p.add_argument("--probe", action="store_true",
                    help="Trockenlauf: schreibende Anfragen nur zeigen, nicht schicken")
     a = p.parse_args()
 
-    global PROBE
+    global PROBE, STORE_VERSION
     PROBE = a.probe
+    STORE_VERSION = a.store_version
 
     # Kennungen von der Kommandozeile gelten auch für die Unterbefehle.
     if a.key_id:

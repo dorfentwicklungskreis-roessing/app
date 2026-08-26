@@ -1,0 +1,44 @@
+# Prüfstand für die Store-Bilder — bewusst ein **eigenes** Xcode-Projekt.
+#
+# Es enthält nur ein UI-Test-Bündel und keine App: Die Dorf-App wird ganz
+# normal aus `ios/` gebaut, mit `xcrun simctl install` aufgespielt und hier
+# nur über ihre Bundle-ID ferngesteuert (`XCUIApplication(bundleIdentifier:)`).
+# So bleibt `ios/project.yml` unangetastet — dort arbeiten andere.
+#
+# Erzeugen:  xcodegen generate --spec store/screenshots/pruefstand/project.yml
+name: DorfAufnahmen
+
+options:
+  bundleIdPrefix: de.roessing
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    # Ohne irgendeine Signatur startet im Simulator nichts (siehe CLAUDE.md).
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGNING_ALLOWED: "YES"
+
+targets:
+  DorfAufnahmen:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Aufnahmen
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.roessing.app.aufnahmen
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  DorfAufnahmen:
+    build:
+      targets:
+        DorfAufnahmen: [test]
+    test:
+      config: Debug
+      targets:
+        - DorfAufnahmen

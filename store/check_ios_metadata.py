@@ -19,6 +19,9 @@ Geprüft wird:
     Marketing-Icon mit Transparenz weist App Store Connect ab (ITMS-90717)
   * die Asset-Kataloge: gültiges JSON, und jede dort benannte Bilddatei
     existiert
+  * die Store-Bilder unter store/screenshots/ios/: je Sprache und Gerät
+    vollständig, in einem von Apple angenommenen Maß, hochkant, und keins
+    größer als 8 MB
 
 Aufruf: python3 store/check_ios_metadata.py
 """
@@ -33,6 +36,7 @@ REPO = Path(__file__).resolve().parent.parent
 META = REPO / "store" / "metadata" / "ios"
 XCASSETS = REPO / "ios" / "Dorf" / "Assets.xcassets"
 APPICON = XCASSETS / "AppIcon.appiconset"
+SCREENSHOTS = REPO / "store" / "screenshots" / "ios"
 
 # Apples Grenzen (App Store Connect / Fastlane deliver, Stand 2026).
 LIMITS = {
@@ -67,6 +71,29 @@ ICONS = {
     "icon-1024-dark.png": (1024, 1024, True),
     "icon-1024-tinted.png": (1024, 1024, True),
 }
+
+# Store-Bilder: Ordner je Gerät -> die Maße, die Apple für den zugehörigen
+# Anzeigetyp annimmt (siehe ANZEIGETYPEN in store/asc.py). Nur Hochformat —
+# Querformat wäre erlaubt, aber die App wird stehend benutzt, und ein
+# gemischter Satz sieht im Store nach Zufall aus.
+SCREENSHOT_MASSE = {
+    "iphone-6_9": {(1320, 2868), (1290, 2796)},
+    "ipad-13": {(2064, 2752), (2048, 2732)},
+}
+
+# Die sieben Bilder je Satz, in der Reihenfolge, in der sie im Store stehen.
+SCREENSHOT_NAMEN = [
+    "01-mithelfen-karte.png",
+    "02-mithelfen-liste.png",
+    "03-ortsdetail.png",
+    "04-rangliste.png",
+    "05-veranstaltungen.png",
+    "06-profil.png",
+    "07-startseite.png",
+]
+
+# Apple weist größere Dateien ab.
+SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024
 
 errors: list[str] = []
 
@@ -193,11 +220,54 @@ def check_kataloge() -> None:
                 fail(f"{pfad.relative_to(REPO)}: nennt {datei}, die Datei fehlt aber")
 
 
+def check_screenshots() -> None:
+    """Die Store-Bilder je Sprache und Gerät.
+
+    Fehlende Bilder sind hier ein Fehler und keine Warnung: Ohne sie lässt
+    sich die Version gar nicht einreichen, und das soll auffallen, bevor
+    jemand in App Store Connect danach sucht.
+    """
+    if not SCREENSHOTS.is_dir():
+        fail("store/screenshots/ios/ fehlt — Bilder aufnehmen mit "
+             "store/screenshots/aufnehmen.sh (siehe store/screenshots/README.md)")
+        return
+
+    for locale in LOCALES:
+        for geraet, erlaubt in SCREENSHOT_MASSE.items():
+            ordner = SCREENSHOTS / locale / geraet
+            if not ordner.is_dir():
+                fail(f"screenshots/{locale}/{geraet}: Verzeichnis fehlt")
+                continue
+            vorhanden = sorted(d.name for d in ordner.glob("*.png"))
+            if vorhanden != SCREENSHOT_NAMEN:
+                fehlt = [n for n in SCREENSHOT_NAMEN if n not in vorhanden]
+                zuviel = [n for n in vorhanden if n not in SCREENSHOT_NAMEN]
+                if fehlt:
+                    fail(f"screenshots/{locale}/{geraet}: es fehlen {', '.join(fehlt)}")
+                if zuviel:
+                    fail(f"screenshots/{locale}/{geraet}: unerwartet {', '.join(zuviel)}")
+            for name in vorhanden:
+                pfad = ordner / name
+                if pfad.stat().st_size > SCREENSHOT_MAX_BYTES:
+                    fail(f"screenshots/{locale}/{geraet}/{name}: "
+                         f"{pfad.stat().st_size // 1024} KiB — Apple nimmt höchstens 8 MB")
+                try:
+                    w, h, _, _, _ = png_info(pfad)
+                except ValueError as exc:
+                    fail(f"screenshots/{locale}/{geraet}/{name}: {exc}")
+                    continue
+                if (w, h) not in erlaubt:
+                    masse = " oder ".join(f"{a}x{b}" for a, b in sorted(erlaubt))
+                    fail(f"screenshots/{locale}/{geraet}/{name}: {w}x{h}, "
+                         f"erwartet {masse}")
+
+
 def main() -> int:
     for locale in LOCALES:
         check_locale(locale)
     check_icons()
     check_kataloge()
+    check_screenshots()
 
     if errors:
         print("iOS-Metadaten fehlerhaft:", file=sys.stderr)
@@ -215,6 +285,12 @@ def main() -> int:
     for name in ICONS:
         w, h, _, _, transparent = png_info(APPICON / name)
         print(f"  AppIcon/{name}: {w}x{h}, Alphakanal: {'ja' if transparent else 'nein'}")
+    for locale in LOCALES:
+        for geraet in SCREENSHOT_MASSE:
+            ordner = SCREENSHOTS / locale / geraet
+            bilder = sorted(ordner.glob("*.png"))
+            w, h, _, _, _ = png_info(bilder[0])
+            print(f"  screenshots/{locale}/{geraet}: {len(bilder)} Bilder, {w}x{h}")
     return 0
 
 

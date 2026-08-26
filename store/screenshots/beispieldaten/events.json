@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-26T09:00:00+02:00",
+  "events": [
+    {
+      "id": "beispiel-dorfflohmarkt",
+      "name": "Dorfflohmarkt",
+      "description": "Von Hof zu Hof durchs ganze Dorf: aussortiert, angeboten, gefunden. Anmeldung im Dorfgemeinschaftshaus.",
+      "start": "2026-09-05",
+      "allDay": true,
+      "url": "http://127.0.0.1:8097/veranstaltungen/dorfflohmarkt",
+      "external": false,
+      "location": { "name": "Dorfgemeinschaftshaus", "address": "Am Dorfplatz 1" },
+      "organizer": { "name": "Dorfentwicklungskreis" }
+    },
+    {
+      "id": "beispiel-pflanzaktion",
+      "name": "Pflanzaktion am Kirchplatz",
+      "description": "Neue Stauden für die Beete am Kirchplatz. Handschuhe und gute Laune mitbringen, Werkzeug ist da.",
+      "start": "2026-09-12T10:00:00+02:00",
+      "end": "2026-09-12T13:00:00+02:00",
+      "allDay": false,
+      "url": "http://127.0.0.1:8097/veranstaltungen/pflanzaktion",
+      "external": false,
+      "location": { "name": "Kirchplatz", "address": "Kirchstraße 2" },
+      "organizer": { "name": "Verschönerungsverein" }
+    },
+    {
+      "id": "beispiel-erntedank",
+      "name": "Erntedankfest",
+      "description": "Gottesdienst, Umzug und anschließend Kaffee und Kuchen auf dem Dorfplatz.",
+      "start": "2026-09-27T14:00:00+02:00",
+      "end": "2026-09-27T18:00:00+02:00",
+      "allDay": false,
+      "url": "http://127.0.0.1:8097/veranstaltungen/erntedank",
+      "external": false,
+      "location": { "name": "Dorfplatz", "address": "Am Dorfplatz" },
+      "organizer": { "name": "Kirchengemeinde" }
+    },
+    {
+      "id": "beispiel-feuerwehr",
+      "name": "Tag der offenen Tür der Feuerwehr",
+      "description": "Fahrzeugschau, Löschübung zum Mitmachen und Bratwurst vom Grill.",
+      "start": "2026-10-03",
+      "allDay": true,
+      "url": "http://127.0.0.1:8097/veranstaltungen/feuerwehr",
+      "external": false,
+      "location": { "name": "Feuerwehrhaus", "address": "Bahnhofstraße 14" },
+      "organizer": { "name": "Freiwillige Feuerwehr" }
+    },
+    {
+      "id": "beispiel-adventsbasteln",
+      "name": "Adventsbasteln für Kinder",
+      "description": "Kränze binden und Sterne falten im Dorfgemeinschaftshaus. Für Kinder ab sechs Jahren.",
+      "start": "2026-11-21T15:00:00+01:00",
+      "end": "2026-11-21T18:00:00+01:00",
+      "allDay": false,
+      "url": "http://127.0.0.1:8097/veranstaltungen/adventsbasteln",
+      "external": false,
+      "location": { "name": "Dorfgemeinschaftshaus", "address": "Am Dorfplatz 1" },
+      "organizer": { "name": "Landfrauen" }
+    }
+  ]
+}
