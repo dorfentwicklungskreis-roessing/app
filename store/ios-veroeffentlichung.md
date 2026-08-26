@@ -478,5 +478,9 @@ sind hier nur festgehalten:
   <https://xn--rssing-wxa.de/app/daten-loeschen/> für Guideline 5.1.1(v).
 - `.github/workflows/store.yml`: `python3 store/check_ios_metadata.py`
   als zweiten Prüfschritt neben `check_metadata.py` aufnehmen.
-- Ein iOS-Release-Workflow, der mit den drei Secrets aus Schritt 4 baut und
-  hochlädt — es gibt bislang nur `android.yml` und `release.yml`.
+- Ein Auslieferungs-Workflow für iOS. `.github/workflows/ios.yml` baut und
+  testet heute nur für den Simulator und signiert ausdrücklich nicht
+  (`CODE_SIGNING_ALLOWED=NO`). Für TestFlight braucht es einen zweiten Lauf,
+  der archiviert, mit den drei Secrets aus Schritt 4 hochlädt und die
+  Metadaten aus `store/metadata/ios/` mitschickt — das Gegenstück zum
+  Play-Upload in `release.yml`.
