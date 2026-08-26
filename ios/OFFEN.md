@@ -90,6 +90,42 @@ gleichzeitig an der App gebaut haben; sie sind eingearbeitet und gelöscht.
 - **Kein Zwischenspeicher je Zeitraum** in der Rangliste: Jedes Umschalten
   fragt neu. Bei fünf Zeiträumen und kleinen Antworten verschmerzbar.
 
+## Was iOS 16 als Mindestfassung bedeutet
+
+Die App läuft ab **iOS 16** (vorher iOS 17), damit iPhone 8, 8 Plus und X
+(2017) mitkommen. Tiefer geht es bewusst nicht: Ein iPhone 6s tut sich mit
+der Vektorkarte schwer. Was dafür anders ist als in einer iOS-17-App:
+
+- **Kein Observation-Framework.** Die dreizehn Modelle sind
+  `ObservableObject` mit `@Published`; die Ansichten halten sie als
+  `@StateObject`, `@ObservedObject` oder `@EnvironmentObject`. Das beobachtet
+  **gröber** als `@Observable`: Jede Meldung zeichnet die ganze Ansicht neu,
+  nicht nur das gelesene Feld. Für eine App dieser Größe ist das nicht zu
+  merken — wer aber eine Eigenschaft **ohne** `@Published` hinzufügt,
+  bekommt eine Oberfläche, die sich nicht mehr aktualisiert, und **kein Test
+  merkt das**: Die Tests prüfen die Modelle direkt.
+- **`ObservableObject` beobachtet nicht durch verschachtelte Objekte
+  hindurch.** `AppUmgebung` reicht die Meldungen von `Anmeldung` und
+  `OrteModell` deshalb ausdrücklich weiter (siehe `Umgebung.swift`). Kommt
+  ein drittes eigenes Modell in die Umgebung, gehört es dort dazu — sonst
+  bleibt die Startseite stehen.
+- **Kein `ContentUnavailableView`.** An seiner Stelle steht `Hinweistafel`
+  (`Dorf/Design/Hinweistafel.swift`), gleiches Aussehen, gleiche
+  Zugänglichkeit. Ihre Texte sind jetzt unsere, nicht mehr Apples — eine
+  neue Systemsprache übersetzt sie also nicht mit.
+- **Ältere Fassungen einiger SwiftUI-Aufrufe**: `onChange` ohne `initial:`
+  und ohne alten Wert, `navigationDestination(isPresented:)` statt
+  `(item:)`, `Color.trennlinie` statt `ShapeStyle.separator`. Alle vier sind
+  ab iOS 17 als veraltet markiert; solange die Mindestfassung 16 ist, warnt
+  der Übersetzer nicht.
+- **Ein `if #available` gibt es nirgends.** Für jede benutzte iOS-17-API gab
+  es eine ältere Fassung mit demselben Verhalten; keine Funktion wurde
+  weggelassen.
+- **Geprüft wurde bisher nur auf einem iOS-26-Simulator.** Das Mindest-Ziel
+  ist gesenkt, ein Lauf auf einem echten iOS-16-Gerät (oder wenigstens einer
+  iOS-16-Simulator-Laufzeit) steht aus — dort verhalten sich `List`,
+  `NavigationStack` und `.searchable` in Kleinigkeiten anders.
+
 ## Aus der Zusammenführung der Zugänge
 
 Seit `refactor(ios): genau ein Weg zum Backend` gibt es wieder genau **eine**

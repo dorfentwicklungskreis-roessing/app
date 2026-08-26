@@ -61,7 +61,7 @@ struct Hinweistafel: View {
         Hinweistafel(
             "Keine Ergebnisse für \u{201E}\(text)\u{201C}",
             symbol: "magnifyingglass",
-            beschreibung: "Prüf die Schreibweise oder versuch es mit einem anderen Namen."
+            beschreibung: "Überprüfe die Schreibweise oder starte eine neue Suche."
         )
     }
 }
