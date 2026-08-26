@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>de</string>
+	<key>CFBundleDisplayName</key>
+	<string>Rössing</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- Rücksprung aus dem Anmelde-Browser. Gleiches Schema wie auf Android;
+	     die Rössing-ID kennt de.roessing.app:/oauth2redirect. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>de.roessing.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>de.roessing.app</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Der Standort wird nur gebraucht, um den eigenen Punkt auf der Karte zu
+	     zeigen und beim Anlegen eines Ortes die Koordinate zu übernehmen. Er
+	     verlässt das Gerät nur, wenn jemand ihn bewusst übernimmt. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Zeigt deinen Standort auf der Dorfkarte, damit du siehst, welcher Blumenkasten in der Nähe ist.</string>
+
+	<!-- Adressen und Kennungen kommen aus den Build-Einstellungen (project.yml),
+	     damit CI und E2E sie übersteuern können, ohne Quelltext zu ändern. -->
+	<key>DorfApiBaseUrl</key>
+	<string>$(API_BASE_URL)</string>
+	<key>DorfWebsiteBaseUrl</key>
+	<string>$(WEBSITE_BASE_URL)</string>
+	<key>DorfOidcIssuer</key>
+	<string>$(OIDC_ISSUER)</string>
+	<key>DorfOidcClientId</key>
+	<string>$(OIDC_CLIENT_ID)</string>
+	<key>DorfOidcRedirectUri</key>
+	<string>$(OIDC_REDIRECT_URI)</string>
+	<key>DorfOidcLogoutRedirectUri</key>
+	<string>$(OIDC_LOGOUT_REDIRECT_URI)</string>
+	<key>DorfMapStyleUrl</key>
+	<string>$(MAP_STYLE_URL)</string>
+	<key>DorfDevAuth</key>
+	<string>$(DEV_AUTH)</string>
+</dict>
+</plist>

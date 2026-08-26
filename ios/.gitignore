@@ -1,0 +1,7 @@
+# Aus project.yml erzeugt (`make projekt`) — eine .pbxproj ist nicht lesbar zu
+# prüfen und erzeugt bei jedem zweiten Merge einen Konflikt.
+Dorf.xcodeproj/
+*.xcworkspace/
+DerivedData/
+build/
+.swiftpm/

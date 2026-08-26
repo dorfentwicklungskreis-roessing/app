@@ -1,0 +1,103 @@
+# Xcode-Projekt wird aus dieser Datei erzeugt (`xcodegen generate`), nicht von
+# Hand gepflegt: Eine .pbxproj ist nicht lesbar zu prüfen und erzeugt bei jedem
+# zweiten Merge einen Konflikt. Die erzeugte Dorf.xcodeproj ist deshalb
+# .gitignore-t — wer das Projekt öffnen will, ruft vorher `make projekt` auf.
+name: Dorf
+
+options:
+  bundleIdPrefix: de.roessing
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: true
+
+packages:
+  # Dieselbe Kartenbibliothek wie auf Android (dort org.maplibre.gl:android-sdk).
+  # Freie Vektorkacheln, keine Google-Dienste, kein API-Schlüssel.
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    from: 6.5.0
+
+settings:
+  base:
+    # Swift 6 mit MainActor-Vorbelegung: Eine App-Oberfläche läuft ohnehin auf
+    # dem Hauptthread; die Vorbelegung erspart die Isolations-Annotation an
+    # jeder View und jedem Modell, ohne die Prüfung abzuschalten.
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: NO
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+
+    # Adressen und Kennungen — genau wie android/app/build.gradle.kts über
+    # Build-Einstellungen übersteuerbar, damit CI und E2E niemals gegen die
+    # Produktion laufen:
+    #   xcodebuild ... API_BASE_URL=http://127.0.0.1:8099
+    API_BASE_URL: https://app.xn--rssing-wxa.de
+    WEBSITE_BASE_URL: https://xn--rssing-wxa.de
+    OIDC_ISSUER: https://id.xn--rssing-wxa.de
+    # „Dorf-App iOS", nativer PKCE-Client im Zitadel-Projekt dorf-app.
+    OIDC_CLIENT_ID: "387943892076527811"
+    OIDC_REDIRECT_URI: de.roessing.app:/oauth2redirect
+    OIDC_LOGOUT_REDIRECT_URI: de.roessing.app:/logout
+    MAP_STYLE_URL: https://tiles.openfreemap.org/styles/liberty
+    # Entwickler-Login (ohne Zitadel) — nur zusammen mit einem Backend im
+    # AUTH_MODE=insecure-dev. In Release-Builds hart aus, siehe Konfiguration.swift.
+    DEV_AUTH: "0"
+
+targets:
+  Dorf:
+    type: application
+    platform: iOS
+    sources:
+      - path: Dorf
+    dependencies:
+      - package: MapLibre
+        product: MapLibre
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.roessing.app
+        PRODUCT_NAME: Rössing
+        INFOPLIST_FILE: Dorf/Info.plist
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.1.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # Ohne Apple-Entwicklerkonto lässt sich für den Simulator bauen; für
+        # Gerät und TestFlight trägt DEVELOPMENT_TEAM die Team-ID nach.
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+
+  DorfTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: DorfTests
+    dependencies:
+      - target: Dorf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.roessing.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Dorf:
+    build:
+      targets:
+        Dorf: all
+        DorfTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - DorfTests
+    archive:
+      config: Release
