@@ -4,16 +4,31 @@ Geschrieben für jemanden, der das zum ersten Mal macht. Alles, was im Repo
 liegen kann, liegt in `store/`; was hier steht, geht nur mit einem
 Apple-Developer-Konto und muss von Hand gemacht werden.
 
-**Ausgangslage**
+**Ausgangslage** (Stand 26.08.2026)
 
-| | |
-|---|---|
-| Apple-ID | `post+apple@levinkeller.de` |
-| Apple Developer Program | **soeben abgeschlossen** (99 $/Jahr) |
-| Bundle-ID | `de.roessing.app` — steht schon in `ios/project.yml` als `PRODUCT_BUNDLE_IDENTIFIER` |
-| App-Name im Store | **Rössing** (`store/metadata/ios/de-DE/name.txt`) |
-| Anzeigename auf dem Home-Bildschirm | **Rössing** (`CFBundleDisplayName` in `ios/Dorf/Info.plist`) |
-| Version | `MARKETING_VERSION 0.1.0`, `CURRENT_PROJECT_VERSION 1` (`ios/project.yml`) |
+| | | |
+|---|---|---|
+| Apple-ID | `post+apple@levinkeller.de` | |
+| Apple Developer Program | abgeschlossen (99 $/Jahr) | ✅ |
+| Team-ID | `SK8G83Y72R` — in `ios/project.yml` als `DEVELOPMENT_TEAM` und als GitHub-Secret `APPLE_TEAM_ID` | ✅ |
+| Bundle-ID | `de.roessing.app`, id `K59697H99T`, Plattform `UNIVERSAL` | ✅ |
+| App-Datensatz | App-ID **6805373613**, Name „Rössing", SKU `de-roessing-app`, Primärsprache `de-DE` | ✅ |
+| App-Store-Connect-API-Schlüssel | angelegt; die drei GitHub-Secrets sind gesetzt | ✅ |
+| App-Name im Store | **Rössing** (`store/metadata/ios/de-DE/name.txt`) | |
+| Anzeigename auf dem Home-Bildschirm | **Rössing** (`CFBundleDisplayName` in `ios/Dorf/Info.plist`) | |
+| Version | `MARKETING_VERSION 0.1.0` (`ios/project.yml`); die Buildnummer setzt die CI | |
+| Signierzertifikat / Profil | **fehlt noch** — legt der Auslieferungs-Workflow beim ersten Lauf selbst an | ⬜ |
+| Screenshots | **fehlen noch** | ⬜ |
+| APNs-Schlüssel | **fehlt noch** (Push ist in der App noch nicht gebaut) | ⬜ |
+
+Nachsehen lässt sich der Stand jederzeit — der Befehl fragt App Store Connect
+und gibt App-ID, Store-Versionen, Builds und TestFlight-Gruppen aus:
+
+```sh
+export APP_STORE_CONNECT_KEY_ID=…
+export APP_STORE_CONNECT_ISSUER_ID=…
+python3 store/asc.py app-zeigen
+```
 
 Die beiden Apple-Portale heißen ähnlich und werden gern verwechselt:
 
@@ -23,115 +38,89 @@ Die beiden Apple-Portale heißen ähnlich und werden gern verwechselt:
   Hier wird die App *veröffentlicht*.
 
 Die Reihenfolge unten ist die Reihenfolge, in der es gemacht werden muss.
-Schritt 1 blockiert alles Weitere.
+Die Schritte 1 bis 4 sind inzwischen **erledigt** und stehen nur noch als
+Beleg da — wer heute weitermacht, fängt bei **Schritt 5 (TestFlight)** an.
+Was ein Mensch noch tun muss, steht am Ende gebündelt.
 
 ---
 
-## 1. Team-ID holen und eintragen (blockiert alles andere)
+## 1. Team-ID — erledigt
 
-Ohne Team-ID lässt sich nichts signieren, und ohne Signatur gibt es kein
-TestFlight. `ios/project.yml` hat das Feld schon, aber leer:
+Die Team-ID ist `SK8G83Y72R`. Sie steht in `ios/project.yml` als
+`DEVELOPMENT_TEAM` und zusätzlich als GitHub-Secret `APPLE_TEAM_ID` — der
+Auslieferungs-Workflow nimmt das Secret, damit der Wert an genau einer Stelle
+änderbar bleibt, und fällt auf `project.yml` zurück, wenn es fehlt.
 
-```yaml
-DEVELOPMENT_TEAM: ""
-CODE_SIGNING_REQUIRED: NO
-CODE_SIGNING_ALLOWED: NO
+Sie ist **kein Geheimnis**: Sie steckt in jeder signierten App und in jedem
+Provisioning-Profil. Nachzulesen auf
+<https://developer.apple.com/account> → **Membership details**.
+
+Für den Simulator bleibt in `ios/project.yml` die Ad-hoc-Signatur stehen
+(`CODE_SIGN_IDENTITY: "-"`, `CODE_SIGNING_REQUIRED: NO`) — ohne irgendeine
+Signatur startet die App im Simulator nicht (siehe `CLAUDE.md`). Für den
+Archivlauf übersteuert `.github/workflows/ios-release.yml` das auf der
+Kommandozeile:
+
+```
+DEVELOPMENT_TEAM=… CODE_SIGN_STYLE=Automatic
+CODE_SIGN_IDENTITY="Apple Distribution"
+CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES
 ```
 
-**Wo die Team-ID steht:** <https://developer.apple.com/account> → in der
-linken Spalte **Membership details** (früher „Membership"). Dort steht neben
-*Team ID* eine zehnstellige Kennung aus Großbuchstaben und Ziffern, z.B.
-`A1B2C3D4E5`. Sie ist kein Geheimnis — sie steckt in jeder signierten App.
+So bleibt `project.yml` für alle anderen Zwecke unangetastet.
 
-**Was damit passiert** (Änderung an `ios/project.yml`, die *nicht* zu diesem
-Arbeitsstand gehört — sieben andere Leute arbeiten gerade an der Datei):
+---
 
-```yaml
-DEVELOPMENT_TEAM: "A1B2C3D4E5"   # die echte Kennung
-CODE_SIGN_STYLE: Automatic
-# Für Simulator-Builds und CI bleibt das Abschalten richtig; für den
-# Archivlauf (TestFlight) müssen die beiden Zeilen weg bzw. auf YES:
-CODE_SIGNING_REQUIRED: YES
-CODE_SIGNING_ALLOWED: YES
+## 2. App ID (Bundle-ID) — erledigt
+
+`de.roessing.app` ist registriert (id `K59697H99T`, Plattform `UNIVERSAL`),
+ohne Capabilities. Das ist so gewollt: Die App braucht heute keine.
+
+- **Push Notifications** — noch nicht. Push ist nach der ersten Fassung
+  vorgesehen (`ios/OFFEN.md`); im ganzen Verzeichnis `ios/` gibt es keinen
+  Aufruf von `UNUserNotificationCenter`. Wenn es kommt, wird hier
+  *Push Notifications* angehakt, dazu gehört ein **APNs-Key**
+  (Keys → ＋ → *Apple Push Notifications service*) und ein
+  `aps-environment`-Entitlement — siehe die Warnung in Schritt 5.
+- **Sign in with Apple** — nein, Begründung in Schritt 7.
+- **Associated Domains**, **App Groups**, **HealthKit**, **In-App Purchase**,
+  **Maps** — alles nein. Die Karte ist MapLibre mit OpenFreeMap-Kacheln, nicht
+  Apple Maps. Die Anmeldung läuft über `ASWebAuthenticationSession` mit dem
+  eigenen URL-Schema (`CFBundleURLTypes` in `ios/Dorf/Info.plist`) — eine
+  Info.plist-Angabe, keine Capability.
+
+Falls die ID je neu angelegt werden muss (anderes Team, anderer Bezeichner),
+geht das ohne Klicken:
+
+```sh
+python3 store/asc.py bundle-id-anlegen
+# → de.roessing.app gibt es schon (id K59697H99T) — nichts zu tun.
 ```
 
-Danach `cd ios && make projekt` — das erzeugt `Dorf.xcodeproj` neu. Beim
-ersten Öffnen in Xcode (`make oeffnen`) meldet sich *Signing & Capabilities*
-und legt das Entwicklungszertifikat automatisch an; man muss dort nur einmal
-das Team auswählen und Xcode „Automatically manage signing" lassen.
-
-> **Zweiter Handgriff an `ios/project.yml`, der ebenfalls noch fehlt:** Der
-> Asset-Katalog liegt seit diesem Arbeitsstand unter
-> `ios/Dorf/Assets.xcassets/`, aber Xcode muss noch gesagt bekommen, welches
-> Symbol und welche Akzentfarbe daraus die der App sind:
->
-> ```yaml
-> ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-> ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-> ```
->
-> Ohne die erste Zeile baut die App **ohne Icon**, und der Upload scheitert
-> mit „Missing app icon".
+Der Befehl sucht erst und legt nur an, was fehlt. Das ist Absicht: Eine
+Bundle-ID lässt sich weder umbenennen noch löschen.
 
 ---
 
-## 2. App ID (Bundle-ID) anlegen
+## 3. App-Datensatz in App Store Connect — angelegt
 
-<https://developer.apple.com/account> → **Certificates, Identifiers &
-Profiles** → in der linken Spalte **Identifiers** → blaues **＋** oben.
+Der Datensatz existiert: **App-ID 6805373613**, Name „Rössing", SKU
+`de-roessing-app`, Primärsprache Deutsch (Deutschland), Bundle-ID
+`de.roessing.app`. Dafür gibt es bewusst keine API — einen App-Datensatz legt
+nur ein Mensch an.
 
-1. **Register a new identifier** → *App IDs* → **Continue**
-2. **Select a type** → *App* → **Continue**
-3. Formular:
-   - **Description:** `Roessing Dorf-App` (nur intern, keine Umlaute und
-     keine Sonderzeichen erlaubt)
-   - **Bundle ID:** **Explicit** (nicht Wildcard) → `de.roessing.app`
-   - Das muss **exakt** so geschrieben sein wie
-     `PRODUCT_BUNDLE_IDENTIFIER` in `ios/project.yml`. Ein Tippfehler ist
-     hier teuer: Eine Bundle-ID lässt sich nicht umbenennen und nicht löschen.
-4. **Capabilities: keine ankreuzen.** Die App braucht heute keine:
-   - **Push Notifications** — nein. Push ist ausdrücklich nach der ersten
-     Fassung vorgesehen (`ios/README.md`, „Was noch fehlt"); im ganzen
-     Verzeichnis `ios/` gibt es keinen Aufruf von `UNUserNotificationCenter`.
-   - **Sign in with Apple** — nein, siehe Schritt 7.
-   - **Associated Domains**, **App Groups**, **HealthKit**, **In-App
-     Purchase**, **Maps** — alles nein. Die Karte ist MapLibre mit
-     OpenFreeMap-Kacheln (`MAP_STYLE_URL` in `ios/project.yml`), nicht
-     Apple Maps; dafür braucht es keine Capability.
-   - Die Anmeldung braucht ebenfalls keine: Sie läuft über
-     `ASWebAuthenticationSession` mit dem eigenen URL-Schema
-     `de.roessing.app` (`CFBundleURLTypes` in `ios/Dorf/Info.plist`) — das
-     ist eine Info.plist-Angabe, keine Capability.
-5. **Continue** → **Register**
+In App Store Connect steht bereits eine Version **1.0** im Zustand
+*PREPARE_FOR_SUBMISSION*. `ios/project.yml` trägt dagegen
+`MARKETING_VERSION 0.1.0`. **Für TestFlight ist das egal** — ein Build bringt
+seine Versionsnummer selbst mit und erscheint unter ihr. Vor der
+Store-Einreichung müssen die beiden Zahlen aber zusammenpassen: entweder
+`MARKETING_VERSION` auf `1.0` heben oder in App Store Connect eine Version
+`0.1.0` anlegen.
 
-**Was später nachgetragen wird:** Capabilities lassen sich jederzeit
-hinzufügen. Wenn Push kommt, wird hier *Push Notifications* angehakt, dazu
-gehört dann ein **APNs-Key** (Keys → ＋ → *Apple Push Notifications service*)
-und ein `aps-environment`-Entitlement in der App. Beides ist heute nicht
-nötig und würde die Prüfung nur mit unbenutzten Berechtigungen belasten.
+### Was noch auszufüllen ist
 
----
-
-## 3. App-Datensatz in App Store Connect anlegen
-
-<https://appstoreconnect.apple.com> → **Apps** (Kacheln auf der Startseite)
-→ blaues **＋** oben links → **New App**.
-
-| Feld | Wert | Anmerkung |
-|---|---|---|
-| **Platforms** | ☑ **iOS** | tvOS/visionOS/macOS leer lassen |
-| **Name** | `Rössing` | aus `store/metadata/ios/de-DE/name.txt`; im ganzen Store eindeutig — ist der Name vergeben, meldet Apple das sofort |
-| **Primary Language** | **German (Germany)** | die App ist deutschsprachig (`CFBundleDevelopmentRegion` = `de`) |
-| **Bundle ID** | `de.roessing.app` | Auswahlliste. Steht die ID nicht drin, ist Schritt 2 nicht fertig oder die Seite muss neu geladen werden |
-| **SKU** | `roessing-ios` | frei wählbar, wird nie öffentlich gezeigt, lässt sich nicht mehr ändern. Nur für die eigene Abrechnung |
-| **User Access** | **Full Access** | Ein-Personen-Team |
-
-**Create** drücken. Danach steht die App in der Liste, Status *Prepare for
-Submission*.
-
-### Was gleich danach ausgefüllt wird
-
-Alles unter **App Store** (Reiter oben) bzw. der linken Spalte:
+Alles unter **App Store** (Reiter oben) bzw. der linken Spalte. Die Inhalte
+liegen im Repo, sie müssen nur hinüber:
 
 | Ort in App Store Connect | Woher der Inhalt kommt |
 |---|---|
@@ -160,103 +149,250 @@ python3 store/check_ios_metadata.py
 Das Skript prüft Vollständigkeit beider Sprachen, alle Grenzen (Name 30,
 Untertitel 30, Schlüsselwörter 100, Werbetext 170, Beschreibung 4000,
 Neuerungen 4000), die URL-Felder und das App-Icon. Es läuft ohne
-Fremdbibliotheken.
+Fremdbibliotheken und ist der erste Schritt des Auslieferungs-Workflows.
 
 ---
 
-## 4. App Store Connect API-Key für die CI
+## 4. App-Store-Connect-API-Schlüssel — vorhanden
 
-Damit die GitHub-Action später Builds hochladen kann, ohne dass jemand ein
-Apple-Passwort in ein Secret schreibt.
-
-<https://appstoreconnect.apple.com> → **Users and Access** (oben) → Reiter
-**Integrations** → links **App Store Connect API** → Abschnitt **Team Keys**
-→ **＋**.
-
-1. **Name:** `CI GitHub Actions`
-2. **Access (Rolle):** **App Manager**.
-   *Developer* würde zum reinen Hochladen reichen, kann aber die
-   TestFlight-Angaben und die Store-Metadaten nicht pflegen — genau das soll
-   die CI später tun. *Admin* wäre mehr als nötig; ein Schlüssel in einer CI
-   soll nie mehr dürfen als seine Aufgabe.
-3. **Generate**.
-
-Danach stehen auf derselben Seite drei Dinge:
-
-| Was | Wo | Beispiel |
-|---|---|---|
-| **Issuer ID** | ganz oben über der Schlüsselliste, gilt fürs ganze Team | `57246542-96fe-1a63-e053-0824d011072a` |
-| **Key ID** | in der Zeile des neuen Schlüssels | `2X9R4HXF34` |
-| **Die `.p8`-Datei** | Spalte *Download*, Button **Download API Key** | `AuthKey_2X9R4HXF34.p8` |
-
-> **Die `.p8`-Datei lässt sich genau einmal herunterladen.** Danach ist der
-> Knopf weg — für immer. Geht sie verloren, hilft nur: Schlüssel widerrufen
-> („Revoke") und einen neuen anlegen. Sie ist ein Passwort-Äquivalent:
-> nicht ins Repo, nicht in eine Chat-Nachricht, sondern in den Passwort-Safe.
-
-### Die drei GitHub-Secrets
-
-Repo → *Settings → Secrets and variables → Actions → New repository secret*.
-Benennung im Stil des bestehenden `PLAY_SERVICE_ACCOUNT_JSON`:
+Der Schlüssel existiert (Rolle **App Manager**), und die drei GitHub-Secrets
+im Repo `dorfentwicklungskreis-roessing/app` sind gesetzt:
 
 | Name | Inhalt |
 |---|---|
-| `APP_STORE_CONNECT_ISSUER_ID` | die Issuer ID (UUID) |
+| `APP_STORE_CONNECT_ISSUER_ID` | die Issuer ID (UUID, für das ganze Team dieselbe) |
 | `APP_STORE_CONNECT_KEY_ID` | die Key ID (10 Zeichen) |
-| `APP_STORE_CONNECT_PRIVATE_KEY` | der **komplette Inhalt** der `.p8`-Datei, einschließlich der Zeilen `-----BEGIN PRIVATE KEY-----` und `-----END PRIVATE KEY-----` (`cat AuthKey_*.p8 \| pbcopy`) |
+| `APP_STORE_CONNECT_PRIVATE_KEY` | der **komplette Inhalt** der `.p8`-Datei, einschließlich `-----BEGIN PRIVATE KEY-----` und `-----END PRIVATE KEY-----` |
+| `APPLE_TEAM_ID` | `SK8G83Y72R` — kein Geheimnis, aber so an einer Stelle änderbar |
 
-Solange die drei Secrets fehlen, kann ein iOS-Workflow den Upload
-überspringen — genauso, wie es der Android-Workflow ohne
-`PLAY_SERVICE_ACCOUNT_JSON` tut.
+Damit tut der Auslieferungs-Workflow zweierlei mit **einem** Schlüssel:
+`xcodebuild` weist sich damit aus, um Zertifikat und Provisioning-Profil
+automatisch anzulegen (`-allowProvisioningUpdates`), und `xcrun altool`
+lädt damit hoch. Kein zweites Geheimnis, kein Schlüsselbund-Gefummel, keine
+Passwörter in Secrets.
+
+### Auf dem eigenen Rechner
+
+Die `.p8` gehört **nicht ins Repo**, sondern dorthin, wo Xcode und `altool`
+von selbst nachsehen:
+
+```sh
+mkdir -p ~/.appstoreconnect/private_keys
+cp AuthKey_<KEY_ID>.p8 ~/.appstoreconnect/private_keys/
+chmod 600 ~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8
+export APP_STORE_CONNECT_KEY_ID=<KEY_ID>
+export APP_STORE_CONNECT_ISSUER_ID=<UUID>
+```
+
+> **Die `.p8`-Datei lässt sich genau einmal herunterladen.** Danach ist der
+> Knopf weg — für immer. Geht sie verloren, hilft nur: widerrufen („Revoke")
+> und einen neuen anlegen. Sie ist ein Passwort-Äquivalent: nicht ins Repo,
+> nicht in eine Chat-Nachricht, sondern in den Passwortspeicher.
+
+Im Workflow wird sie aus dem Secret in genau diese Datei geschrieben
+(`chmod 600`) und am Ende jedes Laufs wieder gelöscht — auch nach einem
+Fehlschlag.
+
+### Was `store/asc.py` damit kann
+
+```sh
+python3 store/asc.py app-zeigen          # App-ID, Zustand, Builds, Gruppen
+python3 store/asc.py bundle-id-anlegen   # de.roessing.app registrieren
+python3 store/asc.py testflight-gruppe   # externe Gruppe „Dorf" + öffentlicher Link
+python3 store/asc.py beta-info           # Feedback-Adresse und Beta-Beschreibung
+python3 store/asc.py team-id             # Team-ID aus einem Zertifikat lesen
+python3 store/asc.py GET '/v1/apps?limit=10'   # alles Übrige von Hand
+```
+
+Zwei Dinge dazu:
+
+* **`--probe` zeigt erst, was passieren würde.** Jeder schreibende
+  Unterbefehl gibt mit diesem Schalter nur Methode, Pfad und Rumpf aus und
+  schickt nichts. Die Objekte gehören einem echten Verein — wer einen Befehl
+  zum ersten Mal aufruft, sieht damit vorher hinein.
+* **`team-id` funktioniert erst, wenn ein Zertifikat existiert.** Die API hat
+  kein Feld für die Team-ID; das Skript liest sie aus dem `OU`-Feld eines
+  Zertifikats. Solange keins da ist, meldet es das und verweist auf die
+  Mitgliedschaftsseite.
 
 ---
 
 ## 5. TestFlight
 
-**Vor jedem TestFlight-Test muss ein Build da sein.** Der erste kommt von
-Hand aus Xcode: *Product → Destination → Any iOS Device (arm64)* → *Product →
-Archive* → im Organizer **Distribute App** → **TestFlight & App Store** →
-**Upload**. Danach dauert es 5–30 Minuten, bis der Build in App Store Connect
-unter *TestFlight → iOS Builds* auftaucht („Processing").
+### Einen Lauf auslösen
+
+Die Auslieferung macht `.github/workflows/ios-release.yml`. **Getaggt und
+ausgelöst wird von Hand** — dieselbe Haltung wie bei Android (siehe
+`README.md`, „Releases (Android)").
+
+```sh
+# 1. Stand prüfen: der iOS-Workflow muss für diesen Commit grün sein
+gh run list --workflow=ios.yml --limit 3
+
+# 2. Metadaten prüfen (macht der Workflow auch, aber lieber vorher)
+python3 store/check_ios_metadata.py
+
+# 3. Taggen und pushen
+git tag ios-v0.1.0 && git push origin ios-v0.1.0
+
+# Der Tag-Push startet den Workflow normalerweise selbst. Passiert nach
+# ~1 Minute nichts (kommt bei Pushes aus Workflows vor):
+gh workflow run ios-release.yml --ref ios-v0.1.0
+gh run watch "$(gh run list --workflow=ios-release.yml --limit 1 \
+  --json databaseId --jq '.[0].databaseId')"
+```
+
+Ohne Tag geht es auch: *Actions → iOS-Auslieferung → Run workflow*. Zwei
+Eingaben stehen dort:
+
+- **`bauzahl`** — die `CFBundleVersion` für diesen Lauf. Leer lassen für die
+  Vorgabe.
+- **`hochladen`** — auf `false` bleibt es beim Archivieren und Exportieren.
+  Damit lässt sich die Signierung prüfen, ohne eine Buildnummer zu verbrauchen.
+
+**Das Tag-Muster ist `ios-v*`, nicht `v*`.** Android hängt an `v*`; die beiden
+überschneiden sich nicht, ein iOS-Tag löst also keinen Play-Upload aus und
+umgekehrt.
+
+### Die Buildnummer steigt automatisch
+
+Apple nimmt jede `CFBundleVersion` zu einer Marketing-Version **genau einmal**
+an. Der Workflow setzt sie deshalb auf die **Zahl der Commits**
+(`git rev-list --count HEAD`) — monoton mit dem Trunk, reproduzierbar, im
+Protokoll nachlesbar, ohne dass jemand eine Datei anfassen muss.
+
+Warum das hier anders läuft als der `versionCode` auf Android, der von Hand
+gezählt wird: Dort steht die Zahl in einer committeten Datei, ist die
+öffentliche Aktualisierungs-Reihenfolge im Play Store und gehört zu einer
+Änderungshinweis-Datei, die **nach ihr benannt** ist —
+`store/check_metadata.py` erzwingt das Paar. Eine maschinell erzeugte Zahl
+zerrisse das. `CFBundleVersion` dagegen ist bloß ein Zähler *innerhalb* einer
+Marketing-Version, es hängt kein Text daran, und sie steht in
+`ios/project.yml` — einer Datei, die für ein Release niemand anfassen soll.
+
+Soll derselbe Stand ein zweites Mal hochgeladen werden (der erste Versuch ist
+in der Verarbeitung gescheitert), wäre die Commit-Zahl dieselbe und Apple
+lehnte ab. Dafür gibt es die Eingabe `bauzahl`.
+
+### Erst der Zustand, dann der Upload
+
+Der Workflow schlägt zu Beginn den App-Datensatz nach
+(`python3 store/asc.py app-zeigen`). Fehlt er, wird der Upload **übersprungen
+statt rot**, mit einem Hinweis, wo er anzulegen ist — genauso, wie
+`release.yml` es ohne `PLAY_SERVICE_ACCOUNT_JSON` hält. Dasselbe gilt für
+fehlende Secrets; archiviert wird dann trotzdem, unsigniert, damit ein
+kaputter Release-Bau auffällt.
 
 ### Interne Tester — der schnelle Weg
 
-*TestFlight* → linke Spalte **Internal Testing** → **＋** neben *Testers* →
-Gruppe anlegen (z.B. `Dorf`) → Personen hinzufügen.
+*TestFlight* → linke Spalte **Internal Testing**. Im Konto steht bereits eine
+interne Gruppe **„Testerinnen"**.
 
-- Interne Tester sind **Mitglieder des eigenen App-Store-Connect-Teams**.
-  Wer noch keins ist, wird vorher unter *Users and Access* eingeladen (Rolle
+- Interne Tester sind **Mitglieder des eigenen App-Store-Connect-Teams**. Wer
+  noch keins ist, wird vorher unter *Users and Access* eingeladen (Rolle
   *Developer* reicht; die Person braucht eine Apple-ID).
 - Bis **100 interne Tester**, je bis zu 30 Geräte.
-- **Interne Tests brauchen keine Beta App Review.** Apple prüft hier nur
-  automatisch: gültige Signatur, vollständige Info.plist, keine verbotenen
-  APIs — und die **Export-Compliance-Angabe** (Schritt 6). Sobald der Build
-  „Processing" verlassen hat, kann er freigegeben und installiert werden.
-  Das ist der Weg, um die App in den nächsten Tagen aufs eigene Telefon zu
+- **Keine Beta App Review.** Apple prüft nur automatisch: gültige Signatur,
+  vollständige Info.plist, keine verbotenen APIs — und die
+  Export-Compliance-Angabe (Schritt 6). Sobald der Build „Processing"
+  verlassen hat, ist er installierbar.
+- Das ist der Weg, um die App in den nächsten Tagen aufs eigene Telefon zu
   bekommen.
-- Ein Build läuft **90 Tage** ab dem Hochladen.
 
 ### Externe Tester — was zusätzlich nötig ist
 
-*TestFlight* → **External Testing** → Gruppe anlegen. Hier prüft ein Mensch
-bei Apple, deshalb kommt Folgendes dazu:
+*TestFlight* → **External Testing**. Der Unterschied in einem Satz: **extern
+heißt ohne Team-Zugang.** Wer eingeladen wird, braucht keine Rolle in App
+Store Connect, sondern nur die TestFlight-App — dafür schaut einmal ein Mensch
+bei Apple auf den Build.
 
-1. **Beta App Review** — dauert meist ein bis zwei Werktage, bei der **ersten**
-   Einreichung einer App auch länger. Bei jedem Build mit neuer
-   Versionsnummer erneut, kleine Build-Nummern-Erhöhungen meist automatisch.
-2. **Test Information** (*TestFlight → Test Information*), Pflicht:
-   - **Beta App Description** — was zu testen ist
-   - **Feedback Email** — eine Adresse, die auch gelesen wird
-   - **Marketing URL** und **Privacy Policy URL** (dieselben wie oben)
-3. **Ein funktionierendes Demo-Konto** — ohne das wird abgelehnt, siehe
-   Schritt 8. Bei External Testing steht es unter *Test Information → Sign-in
-   Information*.
-4. Einladung per E-Mail oder über einen **öffentlichen Link** (bis 10.000
-   Tester).
+| | intern | extern |
+|---|---|---|
+| Wer | Mitglieder des App-Store-Connect-Teams | jede Person mit Apple-ID |
+| Plätze | 100 (je 30 Geräte) | **10.000** |
+| Beta App Review | nein | **ja**, beim ersten Build und bei jeder neuen Versionsnummer |
+| Öffentlicher Link | nein | **ja** |
+
+Für die externe Gruppe samt öffentlichem Link gibt es einen Befehl:
+
+```sh
+python3 store/asc.py testflight-gruppe --probe   # erst zeigen
+python3 store/asc.py testflight-gruppe           # dann anlegen
+```
+
+Er legt die externe Gruppe **„Dorf"** an, schaltet `publicLinkEnabled` ein
+(ohne Platzdeckel — 10.000 reichen für ein Dorf mit rund 1.500 Einwohnern) und
+gibt die URL aus. Der Link entsteht bei Apple asynchron und **trägt erst,
+wenn ein Build die Beta-Prüfung bestanden hat**.
+
+Was die **erste** Beta App Review verlangt:
+
+1. **Zeit.** Meist ein bis zwei Werktage; beim allerersten Build einer App
+   auch länger. Danach gehen reine Buildnummer-Erhöhungen innerhalb derselben
+   Version meist automatisch durch.
+2. **Test Information** (*TestFlight → Test Information*) — Pflicht:
+   - **Beta App Description**: `store/metadata/ios/<sprache>/beta_description.txt`
+   - **Feedback Email**: `post@levinkeller.de`
+   - **Marketing URL** und **Privacy Policy URL** (dieselben wie im Store)
+
+   Setzt der Auslieferungs-Workflow nach jedem Upload selbst
+   (`python3 store/asc.py beta-info`), für beide Sprachen. Von Hand:
+
+   ```sh
+   python3 store/asc.py beta-info --probe
+   python3 store/asc.py beta-info
+   ```
+3. **Ein funktionierendes Prüfkonto** — ohne das wird abgelehnt. Es
+   existiert (`apple.review`, siehe unten), das Passwort trägt ein Mensch
+   unter *Test Information → Sign-in Information* ein. **Nicht ins Repo.**
+4. **Export-Compliance** (Schritt 6) muss beantwortet sein.
 
 **Empfehlung:** erst intern testen, bis die App steht. Externe Tester lohnen
-sich erst, wenn mehr als der eigene Kreis mitmachen soll — und der Aufwand ist
-derselbe wie eine echte Store-Prüfung.
+sich, sobald mehr als der eigene Kreis mitmachen soll — und der Aufwand ist
+dann derselbe wie eine echte Store-Prüfung.
+
+Ein Build läuft **90 Tage** ab dem Hochladen; danach müssen Tester einen
+neuen bekommen.
+
+### ⚠️ Push in TestFlight: das APNs-Umfeld ist die Falle
+
+Push gibt es in der iOS-App **noch nicht** (`ios/OFFEN.md`). Wenn es kommt,
+ist das hier der Punkt, an dem sonst stundenlang gerätselt wird — deshalb
+steht er jetzt schon da:
+
+**Ein APNs-Gerätetoken gilt nicht überall.** Es gehört entweder zum
+**Sandbox**- oder zum **Produktions**-APNs, und welches, entscheidet das
+`aps-environment`-Entitlement des Provisioning-Profils, mit dem der
+installierte Build signiert wurde:
+
+| Wie installiert | Profil | APNs-Umfeld | Server spricht mit |
+|---|---|---|---|
+| aus Xcode aufs Gerät | Development | **Sandbox** | `api.sandbox.push.apple.com` |
+| über TestFlight | App-Store-Distribution | siehe Warnung | `api.push.apple.com` |
+| aus dem App Store | App-Store-Distribution | Produktion | `api.push.apple.com` |
+
+> **Der weitverbreitete Merksatz lautet: „TestFlight-Builds bekommen
+> Sandbox-Tokens, keine Produktions-Tokens."** Er stammt aus älteren
+> Apple-Unterlagen und hält sich hartnäckig; neuere Beschreibungen sagen für
+> TestFlight das Produktions-Umfeld. **Verlass dich auf keine der beiden
+> Aussagen, sondern prüfe es beim ersten Push-Test nach** — der Fehler sieht
+> in beiden Richtungen gleich aus: Der Server bekommt von Apple
+> `BadDeviceToken` (bzw. FCM meldet `Unregistered`/`InvalidRegistration`),
+> obwohl Token und Schlüssel richtig sind. Auf dem Gerät kommt schlicht
+> nichts an.
+
+Praktische Folgen für dieses Projekt:
+
+- Der Server pusht über **Firebase Cloud Messaging** (`backend/internal/push`,
+  HTTP v1). Firebase braucht dafür den **APNs-Auth-Key** (`.p8`) — derselbe
+  Schlüssel deckt **beide** Umfelder ab, Firebase wählt das passende. Der
+  Schlüssel existiert noch nicht.
+- Beim ersten Test also: eine Meldung an ein TestFlight-Gerät schicken und
+  **nachsehen, was FCM antwortet**, statt zu vermuten. Kommt nichts an,
+  ist das Umfeld der erste Verdacht — nicht der Code.
+- Ein Gerätetoken aus einem TestFlight-Build und eines aus einem
+  Xcode-Build sind **nicht austauschbar**. Wer beim Debuggen zwischen beiden
+  wechselt, muss das Gerät neu registrieren lassen.
 
 ---
 
@@ -282,9 +418,11 @@ dann fragt Apple nie wieder:
 <false/>
 ```
 
-Der Eintrag fehlt heute noch (`ios/Dorf/Info.plist` gehört zu einem anderen
-Arbeitsstand). Bis er drin ist, erscheint die Frage bei jedem Build unter
-*TestFlight → Builds → [Build] → Manage* und ist mit **No** zu beantworten.
+**Der Eintrag steht inzwischen in `ios/Dorf/Info.plist`** — damit fragt Apple
+nicht mehr, und ein hochgeladener Build ist sofort verteilbar, statt auf eine
+Antwort zu warten. Beim ersten echten Upload lohnt trotzdem ein Blick unter
+*TestFlight → Builds → [Build]*: Steht dort „Missing Compliance", ist der
+Schlüssel nicht in der ausgelieferten Info.plist angekommen.
 
 ---
 
@@ -371,19 +509,18 @@ Ort in App Store Connect: beim Einreichen unter **App Review Information**
 >
 > [Absatz aus Schritt 7 zu Guideline 4.8 hier anhängen.]
 
-### ⚠️ Dieses Konto gibt es noch nicht — es muss angelegt werden
+### Das Konto existiert — das Passwort fehlt in App Store Connect
 
-Vorschlag, parallel zum bereits vorhandenen Play-Prüfkonto `google-reviewer`
-(`store/veroeffentlichung.md`, Schritt 4):
+Angelegt ist es (Einzelheiten am Ende dieser Datei): Anmeldename
+`apple.review`, Rolle `member` im Zitadel-Projekt `dorf-app`, kein
+Passwortwechsel, keine Zwei-Faktor-Pflicht. Bewusst getrennt von `test-dorf`
+(automatische Tests) und `google-reviewer` (Play): drei Konten, drei Zwecke.
 
-| | |
-|---|---|
-| **Wo** | Rössing-ID (Zitadel) auf `id.xn--rssing-wxa.de`, Organisation des Dorfes |
-| **Benutzername** | `apple-reviewer` |
-| **Rolle** | `member` im Projekt `dorf-app` — **nicht** `admin`. Ein Prüfer soll die App sehen, nicht das Dorf verwalten |
-| **Passwort** | erzeugen und in `.env` ablegen unter dem Schlüssel `APPLE_REVIEWER_PASSWORD` — genau wie `GOOGLE_REVIEWER_PASSWORD` |
-| **Einstellungen** | Passwortwechsel beim ersten Anmelden **aus**, Zwei-Faktor **aus**. Ein Prüfer kommt sonst nicht durch — er hat kein Telefon des Dorfes |
-| **Bewusst getrennt** | von `test-dorf` (automatische Tests) und von `google-reviewer` (Play). Drei Konten, drei Zwecke; fällt eines aus, fällt nicht alles aus |
+**Offen bleibt der Handgriff, den nur ein Mensch tun kann:** das Passwort aus
+dem Passwortspeicher in App Store Connect eintragen — für TestFlight unter
+*Test Information → Sign-in Information*, für die Store-Prüfung unter
+*App Review Information*. Ins Repo gehört es nicht (`CLAUDE.md`, „Keine
+Secrets committen").
 
 Vor dem Einreichen **einmal selbst damit anmelden** — am besten auf einem
 Gerät, auf dem sonst niemand angemeldet ist. Ein Prüfkonto, das nicht
@@ -441,8 +578,9 @@ aller drei Bilder mit.
 
 ## 10. Und dann?
 
-1. Build hochladen (Schritt 5), intern testen, Fehler beheben, neuen Build
-   mit erhöhtem `CURRENT_PROJECT_VERSION` hochladen.
+1. Build hochladen (Schritt 5), intern testen, Fehler beheben, neu
+   hochladen. Die Buildnummer erhöht der Workflow selbst — von Hand ist da
+   nichts zu zählen.
 2. Wenn die App steht: *App Store → [Version] → **Add for Review*** →
    **Submit for Review**.
 3. Erste Prüfung dauert erfahrungsgemäß ein bis drei Werktage. Die häufigsten
@@ -463,27 +601,61 @@ aller drei Bilder mit.
 
 ---
 
+## Was der Mensch noch tun muss
+
+Der Stand von heute, in der Reihenfolge, in der es sinnvoll ist. Alles
+darüber Hinausgehende macht die CI.
+
+1. **Einen TestFlight-Lauf auslösen** und ihn zu Ende sehen (Schritt 5).
+   Das ist der Schritt, der die noch fehlenden Zertifikate und
+   Provisioning-Profile bei Apple **selbst anlegt** — dafür ist der Lauf
+   gedacht. Beim ersten Mal lohnt `hochladen: false`: Dann wird nur
+   signiert, archiviert und exportiert, ohne eine Buildnummer zu verbrauchen.
+2. **Export-Compliance nachsehen** (Schritt 6). Steht am ersten Build
+   „Missing Compliance", ist `ITSAppUsesNonExemptEncryption` nicht in der
+   ausgelieferten Info.plist angekommen.
+3. **Screenshots aufnehmen und hochladen** — mindestens einer für 6,9″
+   iPhone (1290×2796 oder 1320×2868). Der Simulator genügt dafür
+   (`xcrun simctl io <id> screenshot …`, siehe `CLAUDE.md`). Ohne sie geht
+   keine Store-Einreichung; für TestFlight sind sie nicht nötig.
+4. **Store-Texte in App Store Connect eintragen** (Schritt 3, Tabelle). Sie
+   liegen fertig unter `store/metadata/ios/`.
+5. **Passwort des Prüfkontos `apple.review` eintragen** (Schritt 8) — in
+   App Store Connect, nicht ins Repo.
+6. **Auf einem echten iPhone durchgehen.** Hier gibt es keins
+   (`CLAUDE.md`); vor einer Einreichung gehört ein Durchlauf auf Hardware
+   dazu.
+7. **Externe Tests, falls gewünscht**: `python3 store/asc.py beta-info` und
+   `python3 store/asc.py testflight-gruppe` (jeweils erst mit `--probe`),
+   danach die Beta App Review abwarten.
+8. **Version angleichen** vor der Store-Einreichung: App Store Connect führt
+   `1.0`, `ios/project.yml` `0.1.0` (Schritt 3).
+9. **APNs-Schlüssel anlegen** — erst, wenn Push in der App wirklich gebaut
+   ist. Dann auch die Capability *Push Notifications* an der Bundle-ID
+   nachtragen und die Warnung zum APNs-Umfeld in Schritt 5 lesen.
+
 ## Was noch am Repo zu tun ist (nicht in diesem Arbeitsstand)
 
 Diese Änderungen gehören in Dateien, an denen gerade andere arbeiten, und
 sind hier nur festgehalten:
 
-- `ios/project.yml`: `DEVELOPMENT_TEAM` füllen, `CODE_SIGNING_REQUIRED`/
-  `CODE_SIGNING_ALLOWED` für den Archivlauf auf `YES`,
-  `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` und
-  `ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor` ergänzen.
-- `ios/Dorf/Info.plist`: `ITSAppUsesNonExemptEncryption` = `false`
-  (Schritt 6).
 - `ios/Dorf/Bereiche/Rechtliches/RechtlichesLeiste.swift`: Link auf
   <https://xn--rssing-wxa.de/app/daten-loeschen/> für Guideline 5.1.1(v).
+  Für TestFlight nicht nötig, für die Store-Einreichung schon.
 - `.github/workflows/store.yml`: `python3 store/check_ios_metadata.py`
-  als zweiten Prüfschritt neben `check_metadata.py` aufnehmen.
-- Ein Auslieferungs-Workflow für iOS. `.github/workflows/ios.yml` baut und
-  testet heute nur für den Simulator und signiert ausdrücklich nicht
-  (`CODE_SIGNING_ALLOWED=NO`). Für TestFlight braucht es einen zweiten Lauf,
-  der archiviert, mit den drei Secrets aus Schritt 4 hochlädt und die
-  Metadaten aus `store/metadata/ios/` mitschickt — das Gegenstück zum
-  Play-Upload in `release.yml`.
+  als zweiten Prüfschritt neben `check_metadata.py` aufnehmen. Der
+  Auslieferungs-Workflow prüft die iOS-Metadaten bereits selbst; im
+  Store-Workflow fehlen sie noch.
+
+Erledigt, seit diese Datei zuletzt eine Liste hatte:
+
+- ~~`ios/project.yml`: `DEVELOPMENT_TEAM` füllen~~ — steht drin
+  (`SK8G83Y72R`), dazu `ASSETCATALOG_COMPILER_APPICON_NAME` und
+  `…_GLOBAL_ACCENT_COLOR_NAME`. Die Signier-Einstellungen bleiben absichtlich
+  auf Simulator-Werten; der Archivlauf übersteuert sie (Schritt 1).
+- ~~`ios/Dorf/Info.plist`: `ITSAppUsesNonExemptEncryption`~~ — steht drin.
+- ~~Ein Auslieferungs-Workflow für iOS~~ — das ist
+  `.github/workflows/ios-release.yml`.
 
 ## Prüfkonto in der Rössing-ID — angelegt
 

@@ -1,0 +1,19 @@
+Test build of the Rössing village app.
+
+The app is meant for the residents of Rössing (municipality of Nordstemmen, Germany). It shows what needs doing in the village: flower boxes and beds on a map, who watered or weeded last, the village calendar and a leaderboard as encouragement. The interface is in German only.
+
+SIGN-IN REQUIRED
+Without a Rössing-ID you cannot get past the sign-in screen. Accounts are issued by the Dorfentwicklungskreis.
+
+WHAT WE ARE LOOKING AT
+- Signing in and out: does the browser return to the app cleanly?
+- Map: do the tiles load, is the initial region right, are the pins in place?
+- Reporting a completed task and withdrawing it again.
+- Profile: are the per-field visibility switches understandable?
+- Layout on different device sizes, in light and dark appearance.
+
+FEEDBACK
+Preferably through the TestFlight button (please attach a screenshot) or by e-mail to post@levinkeller.de. Please mention device and iOS version.
+
+NOT THERE YET
+Push notifications are not implemented. More sections beyond "Mithelfen" will follow.

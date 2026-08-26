@@ -1,0 +1,407 @@
+name: iOS-Auslieferung
+
+# Archiviert die iOS-App signiert und lädt sie nach TestFlight.
+#
+# Gegenstück zu .github/workflows/release.yml (Android/Play). Dieselbe
+# Haltung: **Getaggt und ausgelöst wird von Hand.** Eine Automatik, die aus
+# einem grünen main-Lauf heraus veröffentlicht, gibt es bewusst nicht.
+#
+# Ausgelöst wird von Tags nach dem Muster `ios-v*` — Android hört auf `v*`.
+# Die beiden Muster überschneiden sich nicht, ein iOS-Tag löst also keinen
+# Play-Upload aus und umgekehrt.
+#
+# Der Upload schaltet sich scharf, sobald die Secrets im Repo liegen:
+#   APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_KEY_ID,
+#   APP_STORE_CONNECT_PRIVATE_KEY  → App-Store-Connect-API (Signierung + Upload)
+#   APPLE_TEAM_ID                  → Team-ID; fehlt sie, gilt die aus project.yml
+# Fehlt eines davon, wird der Upload **übersprungen statt rot** — genau wie
+# release.yml es ohne PLAY_SERVICE_ACCOUNT_JSON hält. Archiviert wird dann
+# trotzdem, unsigniert: So merkt man wenigstens, wenn die Release-Konfiguration
+# gar nicht mehr baut.
+#
+# Kein fastlane, keine Marketplace-Action für den Upload: `xcodebuild` und
+# `xcrun altool` können das, und beide nehmen den API-Schlüssel direkt.
+#
+# Anders als .github/workflows/ios.yml werden die Adressen der App hier
+# **nicht** auf den Runner umgebogen. Das ist Absicht — eine ausgelieferte App
+# muss auf die Produktion zeigen. Auslieferungs-Workflows sind von der Wache
+# .github/scripts/pruefe_lokale_tests.py ausdrücklich ausgenommen.
+
+on:
+  push:
+    tags: ["ios-v*"]
+  workflow_dispatch:
+    inputs:
+      bauzahl:
+        description: >-
+          CFBundleVersion für diesen Lauf. Leer lassen für die Vorgabe
+          (Zahl der Commits). Nur nötig, wenn derselbe Stand ein zweites Mal
+          hochgeladen werden soll — Apple nimmt jede Buildnummer zu einer
+          Version genau einmal an.
+        required: false
+        default: ""
+      hochladen:
+        description: >-
+          Nach TestFlight hochladen. Auf "false" bleibt es beim Archivieren
+          und Exportieren — nützlich, um die Signierung zu prüfen, ohne eine
+          Buildnummer zu verbrauchen.
+        type: boolean
+        required: false
+        default: true
+
+# Ein Tag-Push löst diesen Workflow in der Regel selbst aus; wer zusätzlich von
+# Hand auslöst, bekäme sonst zwei Läufe, die um dieselbe Buildnummer rennen.
+concurrency:
+  group: ios-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ausliefern:
+    runs-on: macos-26
+    # Es wird nichts ins Repo geschrieben — Lesen genügt.
+    permissions:
+      contents: read
+    steps:
+      # Volle Historie: Die Buildnummer ist die Zahl der Commits (siehe unten).
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Wie in ios.yml: Die App verlangt Swift 6 mit MainActor-Vorbelegung,
+      # das kann erst Xcode 26. Auf die Punktversion legen wir uns nicht fest.
+      - name: Xcode-Version festnageln
+        run: |
+          set -euo pipefail
+          xcode="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -n "$xcode" ]; then
+            sudo xcode-select --switch "$xcode/Contents/Developer"
+          else
+            echo "::warning::Kein Xcode 26 gefunden — es wird mit dem voreingestellten Xcode gebaut."
+          fi
+          xcodebuild -version
+
+      - name: XcodeGen bereitstellen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      # Erst prüfen, dann bauen: Ein zu langer Werbetext oder ein Icon mit
+      # Alphakanal soll auffallen, bevor eine halbe Stunde Bauzeit vergeht und
+      # bevor App Store Connect den Upload mit ITMS-90717 abweist.
+      - name: Store-Metadaten prüfen
+        run: python3 store/check_ios_metadata.py
+
+      # Ohne die drei Secrets geht weder die automatische Signierung noch der
+      # Upload. Statt rot zu werden, sagt der Lauf laut, was fehlt, und macht
+      # den Rest, den er machen kann.
+      - name: Voraussetzungen prüfen
+        env:
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          fehlend=""
+          [ -n "$ISSUER_ID" ]   || fehlend="$fehlend APP_STORE_CONNECT_ISSUER_ID"
+          [ -n "$KEY_ID" ]      || fehlend="$fehlend APP_STORE_CONNECT_KEY_ID"
+          [ -n "$PRIVATE_KEY" ] || fehlend="$fehlend APP_STORE_CONNECT_PRIVATE_KEY"
+
+          if [ -n "$fehlend" ]; then
+            echo "::notice::Secrets fehlen —$fehlend. Es wird unsigniert archiviert, nicht hochgeladen."
+            echo "SIGNIEREN=nein" >> "$GITHUB_ENV"
+          else
+            echo "SIGNIEREN=ja" >> "$GITHUB_ENV"
+          fi
+
+          # Die Team-ID ist kein Geheimnis (sie steht in jeder signierten App),
+          # liegt aber als Secret vor, damit sie an einer Stelle änderbar ist.
+          # Fehlt sie dort, gilt die aus ios/project.yml.
+          if [ -n "$TEAM_ID" ]; then
+            echo "TEAM=$TEAM_ID" >> "$GITHUB_ENV"
+          else
+            aus_projekt="$(sed -n 's/^ *DEVELOPMENT_TEAM: *"\{0,1\}\([A-Z0-9]*\)"\{0,1\} *$/\1/p' ios/project.yml | head -1)"
+            if [ -z "$aus_projekt" ]; then
+              echo "::warning::Weder Secret APPLE_TEAM_ID noch DEVELOPMENT_TEAM in ios/project.yml — ohne Team-ID kann nicht signiert werden."
+              echo "SIGNIEREN=nein" >> "$GITHUB_ENV"
+            else
+              echo "::notice::Kein Secret APPLE_TEAM_ID — es gilt $aus_projekt aus ios/project.yml."
+            fi
+            echo "TEAM=$aus_projekt" >> "$GITHUB_ENV"
+          fi
+
+      # Der Schlüssel landet genau dort, wo `xcodebuild` und `xcrun altool`
+      # von selbst nachsehen — und wo store/asc.py ihn erwartet. Gelöscht wird
+      # er am Ende des Laufs (Schritt „Schlüssel wieder entfernen"), damit er
+      # nicht in einem zwischengespeicherten Runner-Zustand liegen bleibt.
+      - name: API-Schlüssel ablegen
+        if: env.SIGNIEREN == 'ja'
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          pfad="$HOME/.appstoreconnect/private_keys/AuthKey_$KEY_ID.p8"
+          printf '%s\n' "$PRIVATE_KEY" > "$pfad"
+          chmod 600 "$pfad"
+          echo "SCHLUESSEL=$pfad" >> "$GITHUB_ENV"
+          # Nur die Form prüfen — der Inhalt wird nie ausgegeben.
+          head -1 "$pfad" | grep -q "BEGIN PRIVATE KEY" \
+            || { echo "::error::APP_STORE_CONNECT_PRIVATE_KEY ist keine .p8-Datei im PEM-Format."; exit 1; }
+          echo "Schlüssel liegt unter $pfad (600)."
+
+      # Den App-Datensatz gibt es nur von Hand (dafür hat Apple keine API).
+      # Hier wird nachgesehen, ob er da ist — auf dieser Maschine ist ein
+      # Workflow-Lauf die einzige Möglichkeit dazu, weil der private Schlüssel
+      # nirgends sonst liegt. Fehlt der Datensatz, wird nicht hochgeladen;
+      # rot wird der Lauf davon nicht, denn am Code ist dann nichts falsch.
+      - name: App-Datensatz in App Store Connect nachschlagen
+        if: env.SIGNIEREN == 'ja'
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -uo pipefail
+          if python3 store/asc.py app-zeigen; then
+            echo "APP_DA=ja" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Kein App-Datensatz zu de.roessing.app — TestFlight-Upload wird übersprungen. Anlegen: appstoreconnect.apple.com → Apps → ＋ → New App (store/ios-veroeffentlichung.md, Schritt 3)."
+            echo "APP_DA=nein" >> "$GITHUB_ENV"
+          fi
+
+      # Die Buildnummer muss bei JEDEM Upload steigen: Apple nimmt eine
+      # CFBundleVersion je MARKETING_VERSION genau einmal an.
+      #
+      # Anders als der `versionCode` auf Android wird sie NICHT von Hand
+      # gezählt. Der Unterschied ist begründet:
+      #   * Auf Android steht der versionCode in einer committeten Datei, ist
+      #     die öffentliche Aktualisierungs-Reihenfolge im Play Store und
+      #     gehört zu einer Änderungshinweis-Datei, die nach ihm benannt ist
+      #     (store/check_metadata.py erzwingt das Paar). Eine maschinell
+      #     erzeugte Zahl zerrisse dieses Paar.
+      #   * CFBundleVersion ist dagegen bloß ein Zähler INNERHALB einer
+      #     Marketing-Version; Apple ordnet nach (Version, Build). Es hängt
+      #     kein Text daran, und die Zahl steht in ios/project.yml — einer
+      #     Datei, die hier niemand für ein Release anfassen soll.
+      # Genommen wird deshalb die Zahl der Commits: monoton mit dem Trunk,
+      # reproduzierbar, im Protokoll nachlesbar, ohne Handgriff.
+      #
+      # Zwei Fälle, für die es die Eingabe `bauzahl` gibt:
+      #   * derselbe Stand soll ein zweites Mal hochgeladen werden (die
+      #     Commit-Zahl wäre dieselbe, Apple lehnte ab),
+      #   * die Historie ist einmal geschrumpft (Squash-Rebase).
+      - name: Version und Buildnummer bestimmen
+        env:
+          EINGABE: ${{ inputs.bauzahl }}
+        run: |
+          set -euo pipefail
+          if [ -n "$EINGABE" ]; then
+            bauzahl="$EINGABE"
+            echo "Buildnummer von Hand vorgegeben: $bauzahl"
+          else
+            bauzahl="$(git rev-list --count HEAD)"
+            echo "Buildnummer aus der Zahl der Commits: $bauzahl"
+          fi
+          case "$bauzahl" in
+            ''|*[!0-9]*) echo "::error::Buildnummer '$bauzahl' ist keine Zahl."; exit 1;;
+          esac
+          # Apple erlaubt je Zahlengruppe höchstens vier Stellen.
+          [ "$bauzahl" -le 9999 ] || {
+            echo "::error::Buildnummer $bauzahl ist zu groß (höchstens 9999 je Gruppe). Ab hier eine zweite Gruppe verwenden, z.B. 1.0."
+            exit 1; }
+          echo "BAUZAHL=$bauzahl" >> "$GITHUB_ENV"
+
+          # Aus dem Tag `ios-v0.1.0` wird MARKETING_VERSION 0.1.0. Ohne Tag
+          # (workflow_dispatch) bleibt die Vorbelegung aus ios/project.yml.
+          fall="${GITHUB_REF_NAME}"
+          case "$GITHUB_REF" in
+            refs/tags/ios-v*) version="${fall#ios-v}";;
+            *) version="";;
+          esac
+          if [ -n "$version" ]; then
+            echo "Marketing-Version aus dem Tag: $version"
+            echo "VERSION=$version" >> "$GITHUB_ENV"
+          else
+            aus_projekt="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9.]*\)"\{0,1\} *$/\1/p' ios/project.yml | head -1)"
+            echo "Marketing-Version aus ios/project.yml: $aus_projekt"
+            echo "VERSION=$aus_projekt" >> "$GITHUB_ENV"
+          fi
+
+      # Dieselbe Ablage wie im Bau- und Testlauf: MapLibre über SPM ist der
+      # längste Teil eines frischen Laufs.
+      - name: Zwischenspeicher der Swift-Pakete
+        uses: actions/cache@v4
+        with:
+          path: ios/.spm
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/project.yml') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Xcode-Projekt erzeugen
+        working-directory: ios
+        run: xcodegen generate
+
+      # Automatische Signierung: -allowProvisioningUpdates lässt xcodebuild
+      # Zertifikat und Provisioning-Profil bei Apple selbst anlegen bzw.
+      # erneuern; die drei -authenticationKey…-Parameter sind der Ausweis
+      # dafür — derselbe API-Schlüssel wie für den Upload, kein zweites
+      # Geheimnis, kein Schlüsselbund-Gefummel.
+      #
+      # ios/project.yml steht auf Ad-hoc-Signatur (CODE_SIGN_IDENTITY "-",
+      # CODE_SIGNING_REQUIRED NO) — richtig für den Simulator, untauglich für
+      # den Store. Für diesen einen Aufruf wird das übersteuert, statt die
+      # Datei anzufassen.
+      - name: Archivieren (signiert)
+        if: env.SIGNIEREN == 'ja'
+        working-directory: ios
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project Dorf.xcodeproj -scheme Dorf \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Dorf.xcarchive" \
+            -clonedSourcePackagesDirPath .spm \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$SCHLUESSEL" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM" \
+            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            CURRENT_PROJECT_VERSION="$BAUZAHL" \
+            MARKETING_VERSION="$VERSION"
+
+      # Ohne Secrets: wenigstens beweisen, dass die Release-Konfiguration für
+      # ein Gerät durchbaut. Ohne diesen Zweig wäre der Lauf ein leeres Grün.
+      - name: Archivieren (unsigniert, Probelauf)
+        if: env.SIGNIEREN != 'ja'
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project Dorf.xcodeproj -scheme Dorf \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Dorf.xcarchive" \
+            -clonedSourcePackagesDirPath .spm \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CURRENT_PROJECT_VERSION="$BAUZAHL" \
+            MARKETING_VERSION="$VERSION"
+          echo "::notice::Unsigniertes Archiv — kein Export, kein Upload."
+
+      # manageAppVersionAndBuildNumber steht bewusst auf false: Sonst zählt
+      # Xcode die Buildnummer beim Export selbst hoch und die oben begründete,
+      # nachvollziehbare Zahl wäre wieder Zufall.
+      - name: Exportieren (app-store-connect)
+        if: env.SIGNIEREN == 'ja'
+        working-directory: ios
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>stripSwiftSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          PLIST
+          plutil -lint "$RUNNER_TEMP/ExportOptions.plist"
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Dorf.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$SCHLUESSEL" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+          ipa="$(ls "$RUNNER_TEMP/export"/*.ipa | head -1)"
+          echo "IPA=$ipa" >> "$GITHUB_ENV"
+          ls -lh "$RUNNER_TEMP/export"
+
+      # Erst prüfen, dann hochladen: --validate-app findet dieselben Mängel wie
+      # der Upload (fehlendes Icon, ungültige Info.plist, zu niedrige
+      # Buildnummer), verbraucht die Nummer aber nicht.
+      #
+      # Die Schalter sind gegen das altool aus Xcode 26.5 gegengeprüft:
+      # --apiKey/--apiIssuer werden weiterhin angenommen (die neuere
+      # Schreibweise --api-key/--api-issuer ebenso), und die .p8-Datei sucht
+      # altool von sich aus unter ~/.appstoreconnect/private_keys — genau
+      # dorthin legt sie der Schritt oben.
+      #
+      # In den Berichtsdateien steht vor dem JSON noch altools eigene
+      # „Running altool at path …"-Zeile. Sie werden nicht ausgewertet,
+      # sondern gelesen — das stört nicht.
+      - name: Nach TestFlight hochladen
+        if: env.SIGNIEREN == 'ja' && env.APP_DA == 'ja' && (github.event_name != 'workflow_dispatch' || inputs.hochladen)
+        env:
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bericht"
+
+          xcrun altool --validate-app \
+            --file "$IPA" --type ios \
+            --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID" \
+            --output-format json | tee "$RUNNER_TEMP/bericht/validierung.json"
+
+          xcrun altool --upload-app \
+            --file "$IPA" --type ios \
+            --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID" \
+            --output-format json | tee "$RUNNER_TEMP/bericht/upload.json"
+
+          echo "::notice::Build $VERSION ($BAUZAHL) hochgeladen. Bis er in TestFlight auftaucht, dauert die Verarbeitung 5–30 Minuten."
+
+      # Beschreibung, Feedback-Adresse und die beiden URLs stehen im Repo und
+      # gehören nach jedem Upload frisch nach App Store Connect. Der Aufruf ist
+      # wiederholbar; scheitert er, ist der Build trotzdem oben — deshalb nur
+      # eine Warnung.
+      - name: Beta-Angaben aktualisieren
+        if: env.SIGNIEREN == 'ja' && env.APP_DA == 'ja' && (github.event_name != 'workflow_dispatch' || inputs.hochladen)
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -uo pipefail
+          python3 store/asc.py beta-info \
+            || echo "::warning::Beta-Angaben konnten nicht gesetzt werden — von Hand unter TestFlight → Test Information nachtragen."
+
+      # Der Upload-Bericht ist das Einzige, woran sich später nachvollziehen
+      # lässt, welche Buildnummer wann oben angekommen ist — und Apples
+      # Fehlermeldungen (ITMS-…) stehen ausschließlich darin.
+      - name: Upload-Bericht als Artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-upload-bericht-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/bericht/
+            ${{ runner.temp }}/export/*.ipa
+            ${{ runner.temp }}/ExportOptions.plist
+          if-no-files-found: warn
+
+      # Immer, auch nach einem Fehlschlag: Der Schlüssel ist ein
+      # Passwort-Äquivalent und hat auf dem Runner nichts verloren, sobald der
+      # Lauf vorbei ist.
+      - name: Schlüssel wieder entfernen
+        if: always()
+        run: |
+          rm -f "$HOME/.appstoreconnect/private_keys/"AuthKey_*.p8
+          rmdir "$HOME/.appstoreconnect/private_keys" "$HOME/.appstoreconnect" 2>/dev/null || true
+          echo "Privater Schlüssel entfernt."
