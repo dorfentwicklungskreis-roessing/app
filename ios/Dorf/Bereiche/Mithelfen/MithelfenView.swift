@@ -20,7 +20,7 @@ struct MithelfenView: View {
         .task {
             // Das Modell gehört der Seite und wird einmal gebaut — beim
             // zweiten Erscheinen (Zurück aus dem Detail) wird nur neu geladen.
-            let vorhanden = modell ?? OrteModell(api: umgebung.api)
+            let vorhanden = modell ?? OrteModell(api: umgebung.api, vergabe: umgebung.vergabe)
             modell = vorhanden
             await vorhanden.laden()
         }

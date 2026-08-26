@@ -71,6 +71,11 @@ struct OrtDetailView: View {
                 }
                 .padding(.horizontal, 16)
 
+                if !ort.aktiveAufgaben.isEmpty {
+                    HelferKarte(modell: modell, ort: ort)
+                        .padding(.horizontal, 16)
+                }
+
                 if ort.aktiveAufgaben.isEmpty {
                     Text("An diesem Ort ist gerade keine Aufgabe eingetragen.")
                         .foregroundStyle(.secondary)
@@ -131,6 +136,108 @@ struct OrtDetailView: View {
     }
 }
 
+/// Der Eintrag als Helferin oder Helfer für diesen Ort.
+///
+/// Wer hier zusagt, wird gefragt, sobald etwas ansteht — der Reihe nach,
+/// nicht alle auf einmal. Wann und wen, entscheidet das Backend; die App
+/// meldet nur an und ab.
+struct HelferKarte: View {
+    let modell: OrteModell
+    let ort: Ort
+
+    /// Wofür ich mithelfen will. Nur vor dem Anmelden zu wählen — zum
+    /// Wechseln erst abmelden, sonst stünden zwei Anmeldungen nebeneinander.
+    @State private var wahl: Helferwahl = .alles
+
+    private var laeuft: Bool { modell.laeuftGerade(ort: ort.id) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(ort.helfeIchMit ? "Du hilfst hier mit" : "Ich helfe hier mit",
+                  systemImage: ort.helfeIchMit ? "hands.clap.fill" : "hand.raised")
+                .font(.headline)
+
+            Text(erklaerung)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if ort.helferArten.count > 1 && !ort.helfeIchMit {
+                Picker("Wobei möchtest du helfen?", selection: $wahl) {
+                    Text(Helferwahl.alles.titel).tag(Helferwahl.alles)
+                    ForEach(ort.helferArten, id: \.self) { art in
+                        Text(Helferwahl.name(art)).tag(Helferwahl.art(art))
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(laeuft)
+                .accessibilityIdentifier("helfer-auswahl-\(ort.id)")
+            }
+
+            knopf
+
+            if ort.helferzahl > 0 {
+                Text(ort.helferzahl == 1
+                    ? "Eine Person hilft hier mit."
+                    : "\(ort.helferzahl) helfen hier mit.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("helferzahl-\(ort.id)")
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+        .accessibilityIdentifier("helfer-karte-\(ort.id)")
+    }
+
+    private var erklaerung: String {
+        guard ort.helfeIchMit else {
+            return "Dann wirst du gefragt, sobald hier etwas ansteht — der Reihe nach, "
+                + "nicht alle auf einmal. Zusagen musst du trotzdem nie."
+        }
+        switch ort.meineHelferwahl {
+        case .alles: return "Du wirst gefragt, wenn hier etwas ansteht."
+        case .art(let kind):
+            return "Du wirst gefragt, wenn hier \(Helferwahl.name(kind)) ansteht."
+        }
+    }
+
+    @ViewBuilder
+    private var knopf: some View {
+        if ort.helfeIchMit {
+            Button {
+                Task { await modell.abmelden(ort: ort.id) }
+            } label: {
+                HStack(spacing: 8) {
+                    if laeuft { ProgressView().controlSize(.small) }
+                    Text("Ich mag nicht mehr")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(laeuft)
+            .accessibilityIdentifier("abmelden-\(ort.id)")
+        } else {
+            Button {
+                Task { await modell.anmelden(ort: ort.id, art: wahl.taskKind) }
+            } label: {
+                HStack(spacing: 8) {
+                    if laeuft { ProgressView().controlSize(.small) }
+                    Text("Ich helfe hier mit")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(laeuft)
+            .accessibilityIdentifier("anmelden-\(ort.id)")
+        }
+    }
+}
+
 /// Eine Aufgabe des Ortes.
 struct AufgabenKarte: View {
     let modell: OrteModell
@@ -158,6 +265,8 @@ struct AufgabenKarte: View {
                 .foregroundStyle(.secondary)
                 .accessibilityIdentifier("aufgabe-zuletzt-\(aufgabe.id)")
 
+            vergabestand
+
             knopf
 
             if let eigene = aufgabe.eigeneLetzteMeldung(meinSub) {
@@ -177,6 +286,29 @@ struct AufgabenKarte: View {
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
         )
         .accessibilityIdentifier("aufgabe-\(aufgabe.id)")
+    }
+
+    /// Wer hier zugesagt hat und wie viele mithelfen.
+    ///
+    /// Steht eine Zusage, ist das die wichtigere Nachricht: Wer sie gegeben
+    /// hat, weiß, dass er dran ist; alle anderen wissen, dass es keine
+    /// zweite braucht. Die Zahl der Helfenden steht darunter.
+    @ViewBuilder
+    private var vergabestand: some View {
+        if let text = aufgabe.zusagetext(meinSub: meinSub) {
+            Label(text, systemImage: aufgabe.zusagesymbol(meinSub: meinSub))
+                .font(.subheadline)
+                .foregroundStyle(aufgabe.assignment?.vonMir(meinSub) == true
+                    ? Ampel.green.farbe : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("vergabe-\(aufgabe.id)")
+        }
+        if let helfer = aufgabe.helfertext {
+            Text(helfer)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("helfer-\(aufgabe.id)")
+        }
     }
 
     /// Melden, gesperrt oder gar nicht — die Entscheidung steckt in
