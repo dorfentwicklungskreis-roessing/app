@@ -139,41 +139,6 @@ data class NotificationDto(
 @Serializable
 data class NotificationsResponse(val notifications: List<NotificationDto> = emptyList())
 
-/**
- * Eingabe von POST/PUT /api/v1/places — die Verwaltung legt einen Ort an
- * oder ändert ihn. Nur mit der Rolle „admin"; das Backend weist alles
- * andere mit 403 ab.
- */
-@Serializable
-data class PlaceEingabe(
-    val name: String,
-    val description: String = "",
-    val kind: String = "blumenkasten",
-    val lat: Double,
-    val lon: Double,
-    val active: Boolean = true,
-)
-
-/**
- * Eingabe von POST /api/v1/places/{id}/tasks bzw. PUT /api/v1/tasks/{id}.
- *
- * Entweder regelmäßig (intervalDays/redAfterDays) oder einmalig (oneOff mit
- * dueDate) — beides zusammen weist das Backend ab.
- */
-@Serializable
-data class TaskEingabe(
-    val kind: String,
-    val title: String = "",
-    val liters: Double? = null,
-    val intervalDays: Double = 0.0,
-    val redAfterDays: Double = 0.0,
-    val oneOff: Boolean = false,
-    /** Datum („2026-08-20") oder RFC3339; leer bei regelmäßigen Aufgaben. */
-    val dueDate: String = "",
-    val removeWhenDone: Boolean = false,
-    val active: Boolean = true,
-)
-
 /** Eingabe von POST /api/v1/places/{id}/signup (taskKind leer = alle Aufgaben). */
 @Serializable
 data class SignupInput(val taskKind: String = "")

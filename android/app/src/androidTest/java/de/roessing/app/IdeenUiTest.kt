@@ -25,7 +25,6 @@ import de.roessing.app.data.ProfileRepository
 import de.roessing.app.data.StatsRepository
 import de.roessing.app.ui.HomeScreen
 import de.roessing.app.ui.IdeenViewModel
-import de.roessing.app.ui.VerwaltungViewModel
 import de.roessing.app.ui.LeaderboardViewModel
 import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.ProfileViewModel
@@ -74,7 +73,6 @@ class IdeenUiTest {
                     leaderboardViewModel = LeaderboardViewModel(FakeStats()),
                     profileViewModel = ProfileViewModel(FakeProfile()),
                     ideenViewModel = IdeenViewModel(ideen),
-                    verwaltungViewModel = VerwaltungViewModel(FakeVerwaltung()),
                     onLogout = {},
                 )
             }

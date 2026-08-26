@@ -27,7 +27,6 @@ import de.roessing.app.ui.IdeenViewModel
 import de.roessing.app.ui.LeaderboardViewModel
 import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.ProfileViewModel
-import de.roessing.app.ui.VerwaltungViewModel
 import de.roessing.app.ui.VeranstaltungenViewModel
 import de.roessing.app.ui.theme.DorfAppTheme
 import org.junit.Rule
@@ -100,7 +99,6 @@ class VeranstaltungenUiTest {
                     leaderboardViewModel = LeaderboardViewModel(FakeStats()),
                     profileViewModel = ProfileViewModel(FakeProfile()),
                     ideenViewModel = IdeenViewModel(FakeIdeen()),
-                    verwaltungViewModel = VerwaltungViewModel(FakeVerwaltung()),
                     veranstaltungenViewModel = VeranstaltungenViewModel(
                         repo,
                         uhr = { Instant.parse("2026-08-14T10:00:00Z") },

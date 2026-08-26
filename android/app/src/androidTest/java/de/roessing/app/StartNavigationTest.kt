@@ -24,7 +24,6 @@ import de.roessing.app.ui.HomeScreen
 import de.roessing.app.ui.LeaderboardViewModel
 import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.IdeenViewModel
-import de.roessing.app.ui.VerwaltungViewModel
 import de.roessing.app.ui.ProfileViewModel
 import de.roessing.app.ui.theme.DorfAppTheme
 import org.junit.Rule
@@ -73,7 +72,6 @@ class StartNavigationTest {
                     leaderboardViewModel = LeaderboardViewModel(FakeStats()),
                     profileViewModel = ProfileViewModel(FakeProfile()),
                     ideenViewModel = IdeenViewModel(FakeIdeen()),
-                    verwaltungViewModel = VerwaltungViewModel(FakeVerwaltung()),
                     onLogout = {},
                 )
             }

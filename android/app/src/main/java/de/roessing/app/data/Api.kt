@@ -60,30 +60,6 @@ interface DorfApi {
     @POST("api/v1/assignments/{id}/release")
     suspend fun release(@Path("id") assignmentId: Long): AssignmentDto
 
-    // --- Verwaltung von Orten und Aufgaben ----------------------------------
-    //
-    // Alle diese Endpunkte verlangen die Rolle „admin" im Token. Geprüft wird
-    // das im Backend (403 ohne Rolle) — die App blendet die Knöpfe nur
-    // zusätzlich aus.
-
-    @POST("api/v1/places")
-    suspend fun ortAnlegen(@Body eingabe: PlaceEingabe): PlaceDto
-
-    @PUT("api/v1/places/{id}")
-    suspend fun ortAendern(@Path("id") id: Long, @Body eingabe: PlaceEingabe): PlaceDto
-
-    @DELETE("api/v1/places/{id}")
-    suspend fun ortLoeschen(@Path("id") id: Long)
-
-    @POST("api/v1/places/{id}/tasks")
-    suspend fun aufgabeAnlegen(@Path("id") placeId: Long, @Body eingabe: TaskEingabe): TaskDto
-
-    @PUT("api/v1/tasks/{id}")
-    suspend fun aufgabeAendern(@Path("id") id: Long, @Body eingabe: TaskEingabe): TaskDto
-
-    @DELETE("api/v1/tasks/{id}")
-    suspend fun aufgabeLoeschen(@Path("id") id: Long)
-
     // --- Ideen-Sammlung ------------------------------------------------------
 
     /**

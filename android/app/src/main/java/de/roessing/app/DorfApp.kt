@@ -9,7 +9,6 @@ import de.roessing.app.data.ApiPlacesRepository
 import de.roessing.app.data.ApiProfileRepository
 import de.roessing.app.data.ApiStatsRepository
 import de.roessing.app.data.ApiVergabeRepository
-import de.roessing.app.data.ApiVerwaltungRepository
 import de.roessing.app.data.DeviceRepository
 import de.roessing.app.data.IdeenRepository
 import de.roessing.app.data.DorfApi
@@ -18,7 +17,6 @@ import de.roessing.app.data.ProfileRepository
 import de.roessing.app.data.StatsRepository
 import de.roessing.app.data.VeranstaltungenRepository
 import de.roessing.app.data.VergabeRepository
-import de.roessing.app.data.VerwaltungRepository
 import de.roessing.app.data.WebsiteApi
 import de.roessing.app.data.WebsiteVeranstaltungenRepository
 import de.roessing.app.push.Kanaele
@@ -49,7 +47,6 @@ class AppContainer(context: Context) {
     val vergabeRepository: VergabeRepository = ApiVergabeRepository(api)
     val deviceRepository: DeviceRepository = ApiDeviceRepository(api)
     val ideenRepository: IdeenRepository = ApiIdeenRepository(api)
-    val verwaltungRepository: VerwaltungRepository = ApiVerwaltungRepository(api)
 
     // Die Veranstaltungen kommen nicht aus dem Dorf-Backend, sondern von der
     // Website — dort werden sie gepflegt. Eigener Client, ohne Token.

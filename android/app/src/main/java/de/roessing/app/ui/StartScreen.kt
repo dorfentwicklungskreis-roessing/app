@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.LocalFlorist
@@ -46,7 +45,7 @@ import de.roessing.app.ui.theme.statusFarben
  * Die Bereiche der App. „Mithelfen" ist der erste — weitere kommen, deshalb
  * ist die Startseite eine Übersicht und nicht die Gieß-Karte.
  */
-enum class Bereich { START, MITHELFEN, VERANSTALTUNGEN, PROFIL, DORFBEWOHNER, IDEEN, VERWALTUNG }
+enum class Bereich { START, MITHELFEN, VERANSTALTUNGEN, PROFIL, DORFBEWOHNER, IDEEN }
 
 /**
  * Startseite: freundlicher Einstieg mit dem Namen aus dem Profil, darunter
@@ -59,8 +58,6 @@ fun StartScreen(
     faelligeOrte: Int,
     ladend: Boolean,
     modifier: Modifier = Modifier,
-    /** Nur Verwaltende sehen die Kachel „Verwaltung". */
-    istVerwaltung: Boolean = false,
     notifications: List<de.roessing.app.data.NotificationDto> = emptyList(),
     pendingAssignments: Set<Long> = emptySet(),
     meineVorgaenge: Set<Long> = emptySet(),
@@ -146,19 +143,6 @@ fun StartScreen(
         }
 
         IdeenKachel(onClick = { onBereich(Bereich.IDEEN) })
-
-        // Die Verwaltung steht unten und nur für die, die sie brauchen. Das
-        // Backend weist Änderungen ohne die Rolle „admin" ohnehin ab — die
-        // Kachel ist die Bequemlichkeit, nicht die Absicherung.
-        if (istVerwaltung) {
-            BereichKachel(
-                titel = stringResource(R.string.area_admin_title),
-                text = stringResource(R.string.area_admin_subtitle),
-                symbol = Icons.Filled.Build,
-                testTag = "bereich-verwaltung",
-                onClick = { onBereich(Bereich.VERWALTUNG) },
-            )
-        }
 
         // Impressum und Datenschutz stehen am Fuß der Startseite — dort, wo
         // man sie sucht, und dauerhaft erreichbar.
