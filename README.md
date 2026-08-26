@@ -560,6 +560,103 @@ hinterlegtem `PLAY_SERVICE_ACCOUNT_JSON`) in den Play-Track „internal".
 Play-Store-Upload und Firebase-Verteilung aktivieren sich, sobald die Secrets
 existieren (siehe `.github/workflows/release.yml`, Kopfkommentar).
 
+## Releases (iOS)
+
+**Getaggt und veröffentlicht wird von Hand** — dieselbe Haltung wie auf
+Android und aus demselben Grund. Das Tag-Muster ist aber ein anderes:
+`ios-v*` statt `v*`. Die beiden überschneiden sich nicht, ein iOS-Tag löst
+also keinen Play-Upload aus und ein Android-Tag keinen TestFlight-Lauf.
+
+### Der Weg
+
+1. **Stand prüfen** — der iOS-Workflow muss für den Commit grün sein, der
+   ausgeliefert wird:
+   ```sh
+   gh run list --workflow=ios.yml --limit 3
+   ```
+2. **Metadaten prüfen** (der Auslieferungs-Workflow tut es auch, aber lieber
+   vorher):
+   ```sh
+   python3 store/check_ios_metadata.py
+   ```
+3. **Taggen und den Auslieferungs-Workflow starten**:
+   ```sh
+   git tag ios-v0.1.0 && git push origin ios-v0.1.0
+   # Der Tag-Push startet den Workflow normalerweise selbst. Passiert nach
+   # ~1 Minute nichts:
+   gh workflow run ios-release.yml --ref ios-v0.1.0
+   gh run watch "$(gh run list --workflow=ios-release.yml --limit 1 \
+     --json databaseId --jq '.[0].databaseId')"
+   ```
+
+`.github/workflows/ios-release.yml` archiviert signiert (`xcodebuild archive`
+mit automatischer Signierung und `-allowProvisioningUpdates`), exportiert nach
+`app-store-connect` und lädt mit `xcrun altool --upload-app` nach TestFlight.
+Kein fastlane, keine Marketplace-Action — beide Werkzeuge nehmen den
+App-Store-Connect-Schlüssel direkt. Der Upload-Bericht hängt als Artefakt am
+Lauf; Apples Fehlermeldungen (`ITMS-…`) stehen ausschließlich darin.
+
+Von Hand geht dasselbe auch lokal:
+
+```sh
+cd ios
+make store-pruefen   # Metadaten, Icon, Asset-Kataloge
+make archiv          # signiertes Archiv (braucht Team-ID und API-Schlüssel)
+make ipa             # Export als app-store-connect
+make hochladen       # erst --validate-app, dann --upload-app
+```
+
+### Drei Unterschiede zu Android
+
+* **Die Buildnummer wird nicht von Hand gezählt.** Apple nimmt jede
+  `CFBundleVersion` zu einer Marketing-Version genau einmal an; der Workflow
+  setzt sie auf die **Zahl der Commits** (`git rev-list --count HEAD`) —
+  monoton, reproduzierbar, ohne Handgriff. Anders als der `versionCode` auf
+  Android hängt an ihr kein Änderungshinweis, und sie steht in
+  `ios/project.yml`, einer Datei, die für ein Release niemand anfassen soll.
+  Muss derselbe Stand ein zweites Mal hoch, gibt es die Workflow-Eingabe
+  `bauzahl`.
+* **Die Marketing-Version kommt aus dem Tag.** Aus `ios-v0.1.0` wird
+  `MARKETING_VERSION=0.1.0`. Ohne Tag gilt die Vorbelegung aus
+  `ios/project.yml`.
+* **Fehlt etwas, wird übersprungen statt rot.** Ohne die Secrets
+  (`APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_KEY_ID`,
+  `APP_STORE_CONNECT_PRIVATE_KEY`, dazu `APPLE_TEAM_ID`) oder ohne
+  App-Datensatz in App Store Connect archiviert der Lauf unsigniert und lädt
+  nichts hoch — genau wie `release.yml` es ohne `PLAY_SERVICE_ACCOUNT_JSON`
+  hält.
+
+### Zwei Dinge, die man leicht übersieht
+
+* **TestFlight-Builds laufen nach 90 Tagen ab.** Danach brauchen die Tester
+  einen neuen.
+* **Push kommt in TestFlight nicht an, wenn das APNs-Umfeld nicht passt.**
+  Ein Gerätetoken gehört entweder zum Sandbox- oder zum Produktions-APNs. Die
+  iOS-App hat noch kein Push; wenn es kommt, steht die Falle ausführlich in
+  `store/ios-veroeffentlichung.md`, Schritt 5.
+
+## Veröffentlichung im App Store
+
+Alles, was ohne App-Store-Connect-Zugang vorbereitbar ist, liegt in `store/`:
+
+| Datei | Inhalt |
+|---|---|
+| `store/metadata/ios/{de-DE,en-US}/` | Store-Texte (Name, Untertitel, Beschreibung, Schlüsselwörter, Neuerungen) und die TestFlight-Beschreibung `beta_description.txt` |
+| `store/ios-veroeffentlichung.md` | Schritt für Schritt: Team-ID, Bundle-ID, App-Datensatz, API-Schlüssel, TestFlight, Beta-Prüfung, Prüfkonto |
+| `store/ios-datenschutz.md` | Antworten für „App Privacy", je Datenart am Code belegt |
+| `store/asc.py` | Zugang zur App-Store-Connect-API ohne Fremdbibliotheken (ES256-JWT über `openssl`) |
+| `store/assets/render-ios.sh` | erzeugt die drei App-Icons (hell, dunkel, eingefärbt) |
+
+```sh
+python3 store/check_ios_metadata.py    # Zeichengrenzen, URLs, Icon, Asset-Kataloge
+python3 store/asc.py app-zeigen        # App-ID, Zustand, Builds, TestFlight-Gruppen
+python3 store/asc.py beta-info --probe # zeigen, was gesetzt würde, ohne es zu tun
+```
+
+Jeder schreibende Unterbefehl von `asc.py` kennt `--probe`: Er gibt dann nur
+aus, was er schicken würde. Die Objekte in App Store Connect gehören einem
+echten Verein — ein Blick vorher ist billiger als ein Rückbau nachher.
+
 ## Veröffentlichung im Play Store
 
 Alles, was ohne Play-Console-Konto vorbereitbar ist, liegt in **`store/`**:
