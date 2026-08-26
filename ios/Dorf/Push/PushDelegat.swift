@@ -47,7 +47,7 @@ final class PushDelegat: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// Eine Meldung trifft ein, während die App im Vordergrund läuft. Ohne
     /// diese Antwort zeigt iOS gar nichts an — wer gerade die Ortsliste
     /// ansieht, bekäme die Anfrage sonst nicht mit.
-    nonisolated func userNotificationCenter(
+    func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
@@ -56,18 +56,27 @@ final class PushDelegat: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     /// Jemand hat auf die Meldung getippt.
     ///
+    /// **Diese Methode muss auf dem Hauptthread laufen.** Sie war einmal
+    /// `nonisolated` — dann erledigt Swift den Rückweg auf einem beliebigen
+    /// Nebenläufigkeits-Thread, und UIKit ruft den daraus erzeugten
+    /// Abschluss-Baustein ebenfalls dort auf. `UIApplication` prüft das mit
+    /// einer Assertion und bricht die App ab (`EXC_CRASH (SIGABRT)` in
+    /// `_performBlockAfterCATransactionCommitSynchronizes`). Das traf **jede**
+    /// angetippte Meldung, nicht nur solche mit ungewöhnlicher Nutzlast.
+    ///
+    /// Ohne `nonisolated` ist die Methode `MainActor`-isoliert (Vorbelegung
+    /// des Ziels, siehe `project.yml`), und der Rückweg stimmt.
+    ///
     /// Die Nutzlast wird noch hier ausgelesen: `UNNotificationResponse` darf
     /// die Isolationsgrenze nicht überqueren, `PushZiel` schon — es ist
     /// `Sendable` und trägt genau die Zeichenketten, die das Backend
     /// mitgeschickt hat.
-    nonisolated func userNotificationCenter(
+    func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
         let ziel = PushZiel.ausDaten(response.notification.request.content.userInfo)
         guard let ziel else { return }
-        await MainActor.run {
-            Benachrichtigungen.gemeinsam.beiTipp?(ziel)
-        }
+        Benachrichtigungen.gemeinsam.beiTipp?(ziel)
     }
 }

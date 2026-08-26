@@ -86,45 +86,52 @@ private struct TerminZeile: View {
     let termin: Termin
 
     var body: some View {
-        Gruppierung(ziel: termin.adresse) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(termin.datumText)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.tint)
-                    if termin.extern {
-                        Image(systemName: "arrow.up.forward.square")
-                            .font(.footnote)
+        Gruppierung(termin: termin) {
+            HStack(alignment: .top, spacing: 14) {
+                Datumsmarke(termin: termin)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(termin.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    // Ganztägig heißt: Es gibt keine Uhrzeit. Dann wird auch
+                    // keine erfunden, sondern schlicht „Ganztägig" gesagt.
+                    Angabe(symbol: "clock", text: termin.zeitText ?? "Ganztägig")
+                    if let ortName = termin.ortName {
+                        Angabe(symbol: "mappin.and.ellipse", text: ortName)
+                        if let adresse = termin.ortAdresse {
+                            Angabe(symbol: nil, text: adresse)
+                        }
+                    }
+                    if let veranstalter = termin.veranstalter {
+                        Angabe(symbol: "person.2", text: veranstalter)
+                    }
+
+                    if !termin.beschreibung.isEmpty {
+                        Text(termin.beschreibung)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .padding(.top, 1)
+                    }
+                    if termin.extern, let gastgeber = termin.veranstalter ?? termin.ortName {
+                        Text("Mehr bei \(gastgeber)")
+                            .font(.caption)
+                            .foregroundStyle(.tint)
+                            .padding(.top, 1)
                     }
                 }
 
-                Text(termin.name).font(.headline)
+                Spacer(minLength: 0)
 
-                // Ganztägig heißt: Es gibt keine Uhrzeit. Dann wird auch keine
-                // erfunden, sondern schlicht „Ganztägig" gesagt.
-                Angabe(symbol: "clock", text: termin.zeitText ?? "Ganztägig")
-                if let ortName = termin.ortName {
-                    Angabe(symbol: "mappin.and.ellipse", text: ortName)
-                    if let adresse = termin.ortAdresse {
-                        Angabe(symbol: nil, text: adresse)
-                    }
-                }
-                if let veranstalter = termin.veranstalter {
-                    Angabe(symbol: "person.2", text: veranstalter)
-                }
-
-                if !termin.beschreibung.isEmpty {
-                    Text(termin.beschreibung)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
-                }
-                if termin.extern {
-                    Text("Zur Seite des Veranstalters")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                // Ein Termin, der nach draußen führt, sagt das mit dem Symbol,
+                // das iOS dafür benutzt — nicht mit einer anderen Textfarbe.
+                Image(systemName: termin.extern ? "arrow.up.forward.app" : "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 3)
             }
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -133,7 +140,7 @@ private struct TerminZeile: View {
         .accessibilityLabel(vorlesetext)
         .accessibilityHint(termin.extern
             ? "Öffnet die Seite des Veranstalters."
-            : "Öffnet die Seite auf rössing.de.")
+            : "Zeigt den Termin ausführlich.")
         .accessibilityIdentifier("termin-\(termin.id)")
     }
 
@@ -147,17 +154,60 @@ private struct TerminZeile: View {
     }
 }
 
-/// Ein Termin ohne brauchbare Adresse bekommt keinen Knopf ins Leere, sondern
-/// bleibt schlicht eine Zeile.
+/// Datum als kleine Marke statt als grüner Fließtext: Wochentag, Tag, Monat
+/// untereinander. Das ist die einzige Stelle der Zeile, die Farbe trägt — so
+/// findet das Auge beim Blättern die Daten, ohne dass alles bunt ist.
+private struct Datumsmarke: View {
+    let termin: Termin
+
+    private static func teil(_ muster: String, _ datum: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "de_DE")
+        f.timeZone = Zeitpunkt.dorfZone
+        f.dateFormat = muster
+        return f.string(from: datum)
+    }
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(Self.teil("EEEEEE", termin.beginn).uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(Self.teil("d", termin.beginn))
+                .font(.title2.weight(.bold))
+                .foregroundStyle(.tint)
+            Text(Self.teil("MMM", termin.beginn))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 46)
+        .padding(.vertical, 8)
+        .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityHidden(true)
+    }
+}
+
+/// Wohin ein Tipp führt: bei einer fremden Primärquelle nach draußen, sonst
+/// auf die eigene Detailseite.
 private struct Gruppierung<Inhalt: View>: View {
-    let ziel: URL?
+    let termin: Termin
     @ViewBuilder let inhalt: () -> Inhalt
 
     var body: some View {
-        if let ziel {
+        if termin.extern, let ziel = termin.adresse {
+            // Fremde Primärquelle: Der Tipp führt dorthin, wo der Termin zu
+            // Hause ist. Ihn hier nachzuerzählen hieße, eine zweite Fassung in
+            // die Welt zu setzen, die irgendwann von der ersten abweicht.
+            //
+            // .plain ist dabei der springende Punkt: Ohne ihn färbt Link
+            // seinen *gesamten* Inhalt mit der Akzentfarbe — Titel, Ort,
+            // Veranstalter, alles grün.
             Link(destination: ziel) { inhalt() }
+                .buttonStyle(.plain)
         } else {
-            inhalt()
+            // Termin des Dorfes: Alles, was wir dazu haben, steht schon in der
+            // Datei. Dafür muss niemand die App verlassen.
+            NavigationLink { TerminDetailView(termin: termin) } label: { inhalt() }
         }
     }
 }
