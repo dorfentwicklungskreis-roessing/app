@@ -52,6 +52,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# Trockenlauf: `--probe` zeigt jede schreibende Anfrage, statt sie zu schicken.
+# Die Objekte in App Store Connect gehören einem echten Verein — wer einen
+# Unterbefehl zum ersten Mal ausprobiert, soll erst sehen, was er auslöst.
+PROBE = False
+
 BASIS = "https://api.appstoreconnect.apple.com"
 ZIELGRUPPE = "appstoreconnect-v1"
 # Apple weist Tokens ab, die länger als 20 Minuten gelten.
@@ -182,6 +187,15 @@ def anfrage(methode: str, pfad: str, daten: dict | None = None,
     antworten, statt den Lauf rot zu machen.
     """
     key_id, issuer_id = zugang(key_id, issuer_id)
+
+    if PROBE and methode.upper() != "GET":
+        print(f"[Trockenlauf] {methode.upper()} {pfad}")
+        if daten is not None:
+            for zeile in json.dumps(daten, indent=2, ensure_ascii=False).splitlines():
+                print(f"    {zeile}")
+        # Genug Gerüst, damit die aufrufende Funktion weiterläuft und ihre
+        # restlichen Schritte ebenfalls zeigt.
+        return {"data": {"id": "(Trockenlauf)", "type": "", "attributes": {}}}
 
     rumpf = json.dumps(daten).encode() if daten is not None else None
     req = urllib.request.Request(BASIS + pfad, data=rumpf, method=methode)
@@ -343,8 +357,11 @@ def app_zeigen() -> None:
     else:
         print("Store-Versionen: noch keine — die App wurde nie eingereicht.")
 
+    # Bewusst /v1/builds mit Filter statt /v1/apps/<id>/builds: Die
+    # Beziehungs-Adresse lehnt `sort` ab („The parameter 'sort' can not be used
+    # with this request"), und ohne Sortierung ist „die letzten fünf" sinnlos.
     builds = anfrage(
-        "GET", f"/v1/apps/{app['id']}/builds?limit=5&sort=-uploadedDate"
+        "GET", f"/v1/builds?filter[app]={app['id']}&limit=5&sort=-uploadedDate"
     ).get("data", [])
     if builds:
         print("Builds (neueste zuerst):")
@@ -355,6 +372,17 @@ def app_zeigen() -> None:
                   f"  {b.get('uploadedDate', '?')}{abgelaufen}")
     else:
         print("Builds: noch keiner hochgeladen — TestFlight ist damit leer.")
+
+    gruppen = anfrage("GET", f"/v1/apps/{app['id']}/betaGroups?limit=200").get("data", [])
+    if gruppen:
+        print("TestFlight-Gruppen:")
+        for eintrag in gruppen:
+            g = eintrag.get("attributes", {})
+            art = "intern" if g.get("isInternalGroup") else "extern"
+            link = g.get("publicLink") or "kein öffentlicher Link"
+            print(f"  {g.get('name')} ({art}) — {link}")
+    else:
+        print("TestFlight-Gruppen: noch keine.")
 
 
 def testflight_gruppe() -> None:
@@ -407,7 +435,7 @@ def testflight_gruppe() -> None:
         print(f"Gruppe „{TESTFLIGHT_GRUPPE}“ gibt es schon, öffentlicher Link ist an.")
 
     link = gefunden.get("attributes", {}).get("publicLink")
-    if not link:
+    if not link and not PROBE:
         # Apple erzeugt den Link asynchron; direkt nach dem Anlegen ist er oft
         # noch leer. Einmal nachfragen genügt in aller Regel.
         link = anfrage("GET", f"/v1/betaGroups/{gefunden['id']}") \
@@ -415,6 +443,8 @@ def testflight_gruppe() -> None:
 
     if link:
         print(f"Öffentlicher Link: {link}")
+    elif PROBE:
+        print("Öffentlicher Link: entsteht erst beim echten Lauf.")
     else:
         print("Öffentlicher Link noch nicht erzeugt — in ein paar Minuten erneut aufrufen.")
     print("Der Link trägt erst, wenn ein Build die Beta App Review bestanden hat.")
@@ -480,7 +510,12 @@ def main() -> None:
     p.add_argument("--daten", help="JSON-Rumpf für POST/PATCH")
     p.add_argument("--key-id", dest="key_id")
     p.add_argument("--issuer-id", dest="issuer_id")
+    p.add_argument("--probe", action="store_true",
+                   help="Trockenlauf: schreibende Anfragen nur zeigen, nicht schicken")
     a = p.parse_args()
+
+    global PROBE
+    PROBE = a.probe
 
     # Kennungen von der Kommandozeile gelten auch für die Unterbefehle.
     if a.key_id:
@@ -490,6 +525,8 @@ def main() -> None:
 
     if a.methode in BEFEHLE:
         BEFEHLE[a.methode]()
+        if PROBE:
+            print("\nTrockenlauf — es wurde nichts geändert.")
         return
     if not a.pfad:
         p.error("Pfad fehlt")
