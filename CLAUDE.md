@@ -34,6 +34,12 @@ Details: siehe `README.md`.
   `.github/workflows/lokale-tests.yml` prüft das bei jeder Änderung. Ausgenommen
   ist allein die **Auslieferung** (Play-Upload, Firebase-Verteilung,
   GHCR-Push). E2E ohne Mocks bleibt Vorgabe — lokal heißt nicht gemockt.
+  Für iOS-Tests (`ios/DorfTests/`) prüft die Wache zusätzlich **strukturell**,
+  nicht nur nach Adressen: `Konfiguration.*`, ein `DorfApi(` ohne `basis:`
+  sowie `URLSession.shared`/`URLSession.dorfSitzung` sind dort verboten — über
+  sie greift die Produktions-Vorbelegung aus `ios/project.yml`, ohne dass eine
+  Adresse in der Datei stünde. Ein Test setzt seine Basis selbst und fängt
+  seine Sitzung über `protocolClasses` ab.
 - **Docker-Images**: Immer native ARM-Runner (`ubuntu-24.04-arm`), niemals
   QEMU — siehe Workflow-Muster in `.github/workflows/backend.yml`.
 - **SQLite**: eine Schreibverbindung (`SetMaxOpenConns(1)`), WAL-Modus wird
