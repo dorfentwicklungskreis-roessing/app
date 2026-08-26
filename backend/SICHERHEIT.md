@@ -413,6 +413,101 @@ niemand mit der Motorsense losgeschickt werden. Speicherdauer: solange die
 Person dem Träger angehört. Für die App-Nutzung ändert sich an der
 Play-Datensicherheit nichts — es kommen keine neuen Kategorien hinzu.
 
+## Kontolöschung (Stand 26.08.2026)
+
+`DELETE /api/v1/me` (`internal/api/konto.go`, `internal/db/konto.go`) löscht
+das **eigene** Konto — angestoßen aus der App heraus, nicht per E-Mail an den
+Dorfentwicklungskreis. Apples Richtlinie 5.1.1 (v) verlangt genau das von
+jeder App mit Konto, Art. 17 DSGVO ohnehin. Eine fremde Kennung im Rumpf
+ergibt **403**, auch für Admins: Fremde Konten löscht die Verwaltung, nicht
+die Selbstbedienung.
+
+**Gelöscht** werden: das Profil, die Gerätekennungen (der Push hört damit
+sofort auf), die Helfer-Eintragungen, die Zustellungen (Anfragen und
+Hinweise) und die Befähigungsanträge samt Begründung und interner Notiz.
+Laufende Zusagen werden **freigegeben** statt anonym festzuhängen — sonst
+wartete ein Blumenkasten auf jemanden, den es nicht mehr gibt; die Vergabe
+fragt beim nächsten Durchlauf die Übrigen.
+
+**Anonymisiert** statt gelöscht werden zwei Dinge:
+
+- die **Erledigungen** (`completions`): Kennung raus, Name ersetzt durch
+  „Ehemaliges Mitglied";
+- die **beendeten Zusagen**: dieselbe Behandlung, sie sind Historie.
+
+Eingereichte **Ideen** bleiben stehen, weil die Verwaltung sie abarbeitet,
+verlieren aber Kennung, Name und E-Mail.
+
+**Warum die Erledigungen bleiben.** An ihnen hängen die Gesamtsummen des
+Dorfes und die Historie der Orte („zuletzt gegossen am …"). Sie zu löschen
+hieße, die Arbeit **anderer** zu verfälschen — eine gemeinsame Bilanz, aus
+der jemand nachträglich Zeilen entfernt, stimmt nicht mehr. Sie unter Namen
+zu behalten hieße umgekehrt, das Löschen zu verweigern. Also bleibt die
+Zeile, der Name wird ersetzt und die Kennung entfernt: Die Rangliste bleibt
+stimmig, und die Person verschwindet. Dass danach **alle** Gelöschten in der
+Rangliste zu einer Zeile zusammenfallen (Gruppierung nach Kennung und Name),
+ist gewollt: Ein Ersatzschlüssel je Person wäre wieder ein Personenbezug.
+
+**Die Rössing-ID bleibt unangetastet.** Dieser Endpunkt löscht ausdrücklich
+**nicht** das Konto in Zitadel. Es gehört der Rössing-ID, und dieselbe
+Anmeldung dient auch anderen Anwendungen des Dorfes — die Dorf-App darf sie
+nicht mit wegräumen. Wer auch sie loswerden will, wendet sich an die
+Rössing-ID; die Antwort des Endpunkts sagt das im Klartext (`roessingId`,
+`roessingIdUrl`), und die App zeigt es an, bevor sie sich abmeldet. Damit
+glaubt niemand, mit dem einen Knopf sei beides erledigt.
+
+Alles läuft in **einer Transaktion** — ein halb gelöschtes Konto wäre das
+Schlechteste von beidem. Ein zweiter Aufruf ist unschädlich. Zurück kommt
+eine `bilanz` mit den Zeilenzahlen; sie enthält keine personenbezogenen
+Daten.
+
+## Gerätekennung für iOS: APNs statt Firebase (Stand 26.08.2026)
+
+Für iOS spricht das Backend **direkt mit Apple** (`internal/push/apns.go`),
+nicht über Firebase. Kein Firebase-iOS-SDK: Das Backend baut sein
+Anbietertoken ohnehin selbst (bei Apple ES256 mit einem `.p8`-Schlüssel), und
+der iOS-Weg kommt damit **ganz ohne Google** aus. Die Weiche steht im Feld
+`platform` von `POST /api/v1/me/devices` (`internal/api/geraete.go`,
+`internal/push/weiche.go`): „ios" geht zu APNs, alles andere zu FCM.
+
+- **Was gespeichert wird**: derselbe Satz wie auf Android (`push_devices`:
+  Kennung, Person, Plattform, Zeitstempel) — nur ist die Kennung hier der
+  **rohe APNs-Token als Hex-Zeichenkette**, den die App aus Apples
+  `Data`-Objekt bildet. Sie kommt in **keiner** Antwort vor (auch nicht in
+  der auf das Anmelden), gehört immer nur einer Person und lässt sich nur von
+  ihr selbst abmelden.
+- **Was an Apple geht**: Gerätekennung, Titel und Text der Meldung (also
+  Ortsname und Aufgabe) sowie die Kennungen von Benachrichtigung, Vorgang,
+  Aufgabe und Ort — dieselbe Nutzlast wie bei FCM. **Namen anderer Personen
+  stehen nie in einer Push-Nachricht.** Empfänger ist damit Apple statt
+  Google; eine Weitergabe an ein anderes Unternehmen bleibt es.
+- **Die Kennung entsteht erst nach der Erlaubnis.** `ios/Dorf/Push/`
+  fordert die Kennung nur an, wenn die Benachrichtigungserlaubnis wirklich
+  vorliegt, und meldet sie beim Entzug wieder ab
+  (`DELETE /api/v1/me/devices`). Das ist genau das, was oben unter „Push ist
+  da" als **offener Punkt** für Android notiert ist — auf iOS ist es von
+  Anfang an so gebaut.
+- **Ungültige Kennungen wirft der Server weg.** Was Apple zurückweist
+  (`BadDeviceToken`, `Unregistered`, `DeviceTokenNotForTopic` oder 410 Gone),
+  wird gelöscht — ebenso eine Kennung, die
+  gar keine Hex-Zeichenkette ist (dann war es eine FCM-Kennung, die als
+  „ios" gemeldet wurde). Sonst prallte sie bei jeder Vergabe erneut ab.
+- **Sandbox ist kein Testserver, sondern eine eigene Welt.** Eine Kennung aus
+  einem Build, der direkt aus Xcode aufs Gerät ging, gilt *nur* dort;
+  **TestFlight-Builds tragen dagegen das App-Store-Distributionsprofil mit
+  `aps-environment: production` und bekommen Produktions-Kennungen.** Deshalb
+  ist `APNS_UMGEBUNG` eine eigene Einstellung und keine Ableitung aus
+  irgendetwas anderem — ein Tippfehler wird abgewiesen, statt still in der
+  Produktion zu landen, wo jede fremde Kennung als „ungültig" zurückkäme und
+  das Gerät weggeworfen würde.
+- **Ohne `APNS_KEY_FILE` wird für iOS gar nicht gepusht.** Der Betrieb läuft
+  unverändert weiter: Die App holt ihre Benachrichtigungen ohnehin ab. Push
+  ist die Abkürzung, nicht der Weg.
+- **Kein Test spricht mit Apple.** `api.push.apple.com` und
+  `api.sandbox.push.apple.com` stehen in `.github/scripts/pruefe_lokale_tests.py`
+  auf der Sperrliste; die Go-Tests prüfen die ES256-Signatur gegen einen
+  lokalen Server, der sich verhält wie Apple.
+
 ## Wenn doch etwas klemmt
 
 Alle Riegel sind über die Umgebung steuerbar, ohne neues Image:
