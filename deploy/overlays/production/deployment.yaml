@@ -121,7 +121,7 @@ spec:
             # Der Cluster liefert die App über TestFlight/App Store aus, also:
             - name: APNS_UMGEBUNG
               value: produktion
-            # APNS_KEY_FILE (noch nicht eingerichtet):
+            # APNS_KEY_FILE:
             # Der private Schlüssel, mit dem sich das Backend bei Apple
             # ausweist. Solange der Wert fehlt, wird für iOS schlicht nicht
             # gepusht — genau wie ohne FCM_CREDENTIALS_FILE. Der Betrieb
@@ -145,8 +145,8 @@ spec:
             #      Zeilen darunter einkommentieren. Die .p8 gehört NIE ins
             #      Repo.
             #
-            # - name: APNS_KEY_FILE
-            #   value: /secrets/apns/AuthKey.p8
+            - name: APNS_KEY_FILE
+              value: /secrets/apns/AuthKey.p8
             # ZITADEL_SERVICE_USER_KEY_FILE (noch nicht eingerichtet):
             # Damit fragt das Backend die Träger-Mitgliedschaften (welcher
             # Verein, welche Rolle) über die Zitadel-Management-API ab. Sie
@@ -196,9 +196,9 @@ spec:
               mountPath: /secrets/fcm
               readOnly: true
             # Erst zusammen mit APNS_KEY_FILE einkommentieren (siehe oben).
-            # - name: apns
-            #   mountPath: /secrets/apns
-            #   readOnly: true
+            - name: apns
+              mountPath: /secrets/apns
+              readOnly: true
             # Schreibbares /tmp, weil das Wurzeldateisystem nur lesbar ist.
             - name: tmp
               mountPath: /tmp
@@ -230,12 +230,12 @@ spec:
             # Fehlt das Secret (z.B. lokal), startet der Server trotzdem —
             # dann werden schlicht keine Push-Nachrichten verschickt.
             optional: true
-        # - name: apns
-        #   secret:
-        #     secretName: dorf-app-apns
-        #     # Dieselbe Regel wie bei fcm: fehlt es, gibt es kein iOS-Push,
-        #     # aber der Server läuft.
-        #     optional: true
+        - name: apns
+          secret:
+            secretName: dorf-app-apns
+            # Dieselbe Regel wie bei fcm: fehlt es, gibt es kein iOS-Push,
+            # aber der Server läuft.
+            optional: true
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
