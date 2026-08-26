@@ -20,6 +20,11 @@ final class Standortgeber: NSObject, CLLocationManagerDelegate {
 
     private(set) var freigabe: Freigabe = .ungefragt
 
+    /// Der zuletzt gemeldete eigene Standort — nur gefüllt, solange jemand
+    /// ihn ausdrücklich angefordert hat (`beobachten()`). Die Karte selbst
+    /// braucht ihn nicht: Den eigenen Punkt zeichnet MapLibre.
+    private(set) var letzterPunkt: Kartenpunkt?
+
     private let verwalter = CLLocationManager()
 
     override init() {
@@ -33,6 +38,22 @@ final class Standortgeber: NSObject, CLLocationManagerDelegate {
     func anfragen() {
         guard freigabe == .ungefragt else { return }
         verwalter.requestWhenInUseAuthorization()
+    }
+
+    /// Beginnt, den eigenen Standort zu verfolgen — für „Meinen Standort
+    /// übernehmen" beim Anlegen eines Ortes.
+    ///
+    /// Bewusst nicht dauerhaft: Wer das Formular schließt, ruft `ruhen()`.
+    /// Genauigkeit „nächste zehn Meter" reicht für einen Blumenkasten und
+    /// kostet weniger Strom als die feinste Stufe.
+    func beobachten() {
+        guard freigabe == .erlaubt else { return }
+        verwalter.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+        verwalter.startUpdatingLocation()
+    }
+
+    func ruhen() {
+        verwalter.stopUpdatingLocation()
     }
 
     static func freigabe(aus stand: CLAuthorizationStatus) -> Freigabe {
@@ -53,4 +74,23 @@ final class Standortgeber: NSObject, CLLocationManagerDelegate {
             self?.freigabe = Self.freigabe(aus: stand)
         }
     }
+
+    nonisolated func locationManager(
+        _ manager: CLLocationManager,
+        didUpdateLocations orte: [CLLocation]
+    ) {
+        guard let ort = orte.last else { return }
+        // Nur die beiden Zahlen wandern über die Grenze — ein CLLocation ist
+        // kein Sendable-Wert.
+        let breite = ort.coordinate.latitude
+        let laenge = ort.coordinate.longitude
+        Task { @MainActor [weak self] in
+            let punkt = Kartenpunkt(breite: breite, laenge: laenge)
+            self?.letzterPunkt = punkt.gueltig ? punkt : nil
+        }
+    }
+
+    /// Eine gescheiterte Ortung ist kein Fehler der App: Im Haus zwischen
+    /// Wänden kommt eben nichts. Der letzte bekannte Punkt bleibt stehen.
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError fehler: Error) {}
 }

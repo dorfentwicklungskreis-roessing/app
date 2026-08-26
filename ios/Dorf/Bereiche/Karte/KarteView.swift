@@ -6,13 +6,30 @@ import UIKit
 /// Feste Schnittstelle, damit „Mithelfen" und die Karte unabhängig gebaut
 /// werden können: Die Karte bekommt die Orte gereicht und meldet den Tipp
 /// zurück — sie lädt selbst nichts und weiß nichts vom Backend.
+///
+/// **Auswahlmodus** (für die Verwaltung): Wird `flaecheGetippt` gesetzt,
+/// liefert ein Tipp auf die freie Fläche die Koordinate zurück, und
+/// `gewaehlterPunkt` zeigt die getroffene Wahl. Beide Angaben haben
+/// Vorgabewerte — der Aufruf aus „Mithelfen" (`KarteView(orte:auswahl:)`)
+/// bleibt unverändert gültig.
 struct KarteView: View {
     let orte: [Ort]
     var auswahl: (Ort) -> Void
+    /// Der bereits gewählte Punkt. Er wird eigens hervorgehoben und ist
+    /// bewusst kein Ort: Angelegt ist noch nichts.
+    var gewaehlterPunkt: Kartenpunkt?
+    /// Tipp auf die freie Fläche. `nil` heißt: kein Auswahlmodus — dann
+    /// verändert ein Tipp neben eine Nadel gar nichts.
+    var flaecheGetippt: ((Kartenpunkt) -> Void)?
 
-    init(orte: [Ort], auswahl: @escaping (Ort) -> Void = { _ in }) {
+    init(orte: [Ort],
+         auswahl: @escaping (Ort) -> Void = { _ in },
+         gewaehlterPunkt: Kartenpunkt? = nil,
+         flaecheGetippt: ((Kartenpunkt) -> Void)? = nil) {
         self.orte = orte
         self.auswahl = auswahl
+        self.gewaehlterPunkt = gewaehlterPunkt
+        self.flaecheGetippt = flaecheGetippt
     }
 
     @State private var standort = Standortgeber()
@@ -39,6 +56,8 @@ struct KarteView: View {
                 hinfahren: hinfahren,
                 stilVersuch: stilVersuch,
                 auswahl: auswahl,
+                gewaehlterPunkt: gewaehlterPunkt,
+                flaecheGetippt: flaecheGetippt,
                 stilzustand: { meldung in stilFehler = meldung }
             )
         }
@@ -148,10 +167,18 @@ struct KarteView: View {
     }
 }
 
-#Preview {
+#Preview("Karte") {
     KarteView(orte: [
         Ort(id: 1, name: "Unter den Eichen", lat: 52.1832, lon: 9.8168, status: "red"),
         Ort(id: 2, name: "Am Bahnhof", lat: 52.1961, lon: 9.8151, status: "yellow"),
         Ort(id: 3, name: "Kirchplatz", lat: 52.1902, lon: 9.8102),
     ])
+}
+
+#Preview("Auswahlmodus") {
+    KarteView(
+        orte: [Ort(id: 1, name: "Kirchplatz", lat: 52.1902, lon: 9.8102)],
+        gewaehlterPunkt: Kartenpunkt(breite: 52.1912, laenge: 9.8122),
+        flaecheGetippt: { _ in }
+    )
 }
