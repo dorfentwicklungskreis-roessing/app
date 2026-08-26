@@ -133,11 +133,11 @@ liegen im Repo, sie müssen nur hinüber:
 | Marketing URL | `marketing_url.txt` → <https://xn--rssing-wxa.de/> |
 | What's New in This Version | `release_notes.txt` |
 | *App Information* → **Privacy Policy URL** | `privacy_url.txt` → <https://xn--rssing-wxa.de/app/datenschutz/> |
-| *App Information* → **Category** | Primary: **Utilities**, Secondary: **Lifestyle** (frei wählbar, jederzeit änderbar) |
-| *App Information* → **Content Rights** | „Enthält keine Inhalte Dritter" |
-| *Age Rating* → Fragebogen | Antworten stehen in `store/content-rating.md`. **Abweichung für iOS:** „Werden Daten an Dritte weitergegeben?" ist hier **Nein** — es gibt kein Push und damit kein Firebase |
-| **App Privacy** | `store/ios-datenschutz.md` — je Datenart erhoben/verknüpft/Tracking |
-| *Pricing and Availability* | **Free**, weltweit verfügbar |
+| *App Information* → **Category** | Primary: **Utilities**, Secondary: **Lifestyle** — **gesetzt**, `python3 store/asc.py kategorien` (Begründung in Schritt 11) |
+| *App Information* → **Content Rights** | **„Enthält Inhalte Dritter"** — gesetzt; die Karte zeigt OpenStreetMap-Daten (Schritt 11). Die frühere Angabe „keine" war falsch. |
+| *Age Rating* → Fragebogen | **beantwortet**, Ergebnis 4+ — `python3 store/asc.py alterseinstufung`. Apple hat den Fragebogen 2025 umgebaut; die heutigen Felder und die Belege dazu stehen in Schritt 11, nicht mehr in `store/content-rating.md` (das ist der IARC-Bogen für Play) |
+| **App Privacy** | `store/ios-datenschutz.md` — je Datenart erhoben/verknüpft/Tracking. **Nur von Hand:** Für die Datenschutzangaben gibt es keine API (Schritt 11) |
+| *Pricing and Availability* | **Free**, weltweit — **gesetzt**, `python3 store/asc.py verfuegbarkeit` (Begründung in Schritt 11) |
 | **App Screenshots** | **fehlen noch** — mindestens einer für 6,9″ iPhone (1290×2796 oder 1320×2868). Apple rechnet daraus die kleineren Größen selbst |
 
 Die Zeichengrenzen sind nachgerechnet, nicht geschätzt:
@@ -601,6 +601,176 @@ aller drei Bilder mit.
 
 ---
 
+## 11. Store-Eintrag über die API vervollständigt — Stand 26.08.2026
+
+Alles, was sich über die App-Store-Connect-API setzen ließ, steht. Die
+Handgriffe sind Unterbefehle von `store/asc.py` und lassen sich jederzeit
+wiederholen; jeder versteht `--probe`.
+
+```sh
+export APP_STORE_CONNECT_KEY_ID=…
+export APP_STORE_CONNECT_ISSUER_ID=…
+
+python3 store/asc.py einreichstand      # zuerst: was fehlt noch?
+python3 store/asc.py kategorien
+python3 store/asc.py alterseinstufung
+python3 store/asc.py version-angaben
+python3 store/asc.py verfuegbarkeit
+PRUEFKONTO_PASSWORT='…' python3 store/asc.py pruefangaben
+```
+
+### Was jetzt gesetzt ist
+
+| Feld | Wert | Warum genau der |
+|---|---|---|
+| Kategorie primär | **Utilities** (Dienstprogramme) | Die App ist ein Werkzeug für eine Arbeit: Welcher Blumenkasten ist fällig, wer hat gegossen, wann ist der nächste Termin. |
+| Kategorie sekundär | **Lifestyle** | Die Schublade für Haus, Garten und Nachbarschaft. |
+| — nicht gewählt: | ~~Social Networking~~ | Klang naheliegend, wäre aber eine Falschaussage: Es gibt keinen Chat, keine Kommentare, keinen Beitragsstrom und kein Teilen — nur ein Verzeichnis der angemeldeten Dorfbewohner. Die Kategorie hätte etwas versprochen, was die App nicht kann, und die Prüfung auf Richtlinie 1.2 unnötig scharf gestellt. |
+| Content Rights | **Enthält Inhalte Dritter** (`USES_THIRD_PARTY_CONTENT`) | Korrektur der früheren Angabe in Schritt 3: Die Karte zeigt OpenStreetMap-Daten über OpenFreeMap (`Konfiguration.kartenstil`), MapLibre blendet dafür den Attributionsknopf ein (`MapLibreKarte.swift`), und Termine können auf Seiten fremder Veranstalter zeigen (`external` in `events.json`). Die Rechte sind da (ODbL mit sichtbarer Namensnennung) — „keine Inhalte Dritter" wäre trotzdem gelogen gewesen. |
+| Alterseinstufung | **4+** (`FOUR_PLUS`) | Fragebogen vollständig beantwortet, siehe unten. |
+| Copyright | `2026 Dorfentwicklungskreis Rössing` | |
+| Freigabeart | **manuell** (`MANUAL`) | Apple gäbe eine bestandene Prüfung sonst sofort frei — auch nachts um drei. Die App nützt aber erst, wenn im Dorf bekannt ist, dass es sie gibt, und die Rössing-IDs verteilt sind. Der Dorfentwicklungskreis drückt den Knopf, wenn der Aushang hängt. |
+| Werbekennung (IDFA) | **nein** | Einzige Fremdbibliothek ist MapLibre (`ios/project.yml`). |
+| Preis | **kostenlos**, Basisland Deutschland | |
+| Länder | **alle 175**, neue automatisch | Begründung unten. |
+| Prüfangaben | Kontakt Levin Keller, `post@levinkeller.de`, `+4915156041082`; Prüfkonto `apple.review`, Anmeldung erforderlich; Notiz deutsch **und** englisch (2087 Zeichen) | Zweisprachig, weil die Prüfung nicht zwingend in Deutschland sitzt. |
+| Build | Nr. 1 der Version 1.0 zugeordnet | ⚠ siehe offener Punkt 3 |
+
+Das Passwort des Prüfkontos ist über die API gesetzt, steht aber **nicht im
+Repo**: `pruefangaben` liest es aus `PRUEFKONTO_PASSWORT` und bricht ohne die
+Variable mit einer Anleitung ab. Im Trockenlauf wird es durch Sterne ersetzt,
+damit es nicht im Terminal oder in einem Workflow-Protokoll landet. Damit ist
+Punkt 5 der Liste „Was der Mensch noch tun muss" erledigt.
+
+### Weltweit oder nur Deutschland?
+
+**Weltweit**, und neue Länder kommen von selbst dazu. Die Überlegung dahinter:
+
+Die Absperrung dieser App ist die Rössing-ID, nicht der Ländershop. Ohne
+Konto kommt niemand über den Anmeldebildschirm — egal, aus welchem Store die
+App geladen wurde. Eine Beschränkung auf Deutschland schützt also nichts.
+
+Sie kostet aber etwas: Welcher Store einem offensteht, hängt am Wohnsitz des
+Apple-Kontos, nicht am Aufenthaltsort. Wer aus Rössing stammt und im Ausland
+lebt, wer zugezogen ist und sein Apple-Konto behalten hat, wer für ein Jahr
+weg ist — die alle hätten die Dorf-App nicht laden können. Für ein Dorf, das
+seine Leute zusammenhalten will, ist das die falsche Richtung.
+
+### Die Alterseinstufung, Frage für Frage
+
+Apple hat den Fragebogen 2025 umgebaut; die hier beantworteten Felder sind die
+von heute (über `/v1/appInfos/<id>/ageRatingDeclaration` geprüft, nicht aus
+dem Gedächtnis). Alle Inhaltsfragen — Gewalt, Waffen, Sexualität, Schimpfwörter,
+Alkohol/Tabak/Drogen, Horror, medizinische Auskünfte, simuliertes Glücksspiel,
+Wettbewerbe — stehen auf `NONE`. Glücksspiel, Lootboxen, Werbung, Chat,
+soziale Medien, Gesundheitsthemen, Kindersicherung und Altersprüfung stehen
+auf **nein**. Zwei Antworten verdienen eine Begründung:
+
+**Nutzergenerierte Inhalte: ja.** Anzeigename, Spitzname und Notiz im Profil
+sind freie Texte (`ProfilView.swift`), und wer ein Feld auf „öffentlich"
+stellt, zeigt es allen angemeldeten Dorfbewohnern (`DorfbewohnerView.swift`).
+Auch die Verwaltung legt Orts- und Aufgabennamen als Text an. Wenig, aber
+Nutzerinhalt.
+
+Nicht mitgezählt, obwohl es zunächst danach aussieht:
+
+- **Die Erledigungsnotiz.** `DorfApi.melden` kennt zwar ein Feld `notiz`, die
+  Oberfläche schickt aber ausnahmslos den leeren String — `OrteModell.melden`
+  ruft `quelle.melden(aufgabe.id, aufgabe.liters, "")`. In der App gibt es
+  kein Eingabefeld dafür. (`store/content-rating.md` sagt dasselbe für Play.)
+- **Die eingereichte Idee.** Der Text aus „Idee vorschlagen" geht an den
+  Dorfentwicklungskreis und an sonst niemanden; kein anderes Konto bekommt
+  ihn in der App zu sehen (`IdeenView.swift`).
+
+**Unbeschränkter Web-Zugriff: nein.** Im ganzen Quelltext gibt es kein
+`WKWebView` und kein `SFSafariViewController` — die App hat keinen eingebauten
+Browser. Was sie öffnet, sind `Link`-Ziele, und die übergibt iOS an Safari,
+wo Bildschirmzeit und Beschränkungen greifen. Geöffnet werden:
+
+| Wohin | Wo im Code |
+|---|---|
+| Impressum, Datenschutzerklärung auf rössing.de | `RechtlichesLeiste.swift` |
+| Rössing-ID (`id.rössing.de`) | `EinstellungenView.swift` |
+| `tel:` und `mailto:` aus dem Bewohnerverzeichnis | `Profilstand.swift` (`Kontakt`) |
+| iOS-Systemeinstellungen (Ortungsfreigabe) | `KarteView.swift` |
+| **die Adresse eines Termins** | `VeranstaltungenView.swift`, `Termine.swift` |
+
+Der letzte Punkt ist der einzige, der nicht auf eine feste Liste zeigt: Steht
+ein Termin in der `events.json` der Dorf-Website als `external`, führt der
+Tipp auf die Seite des Veranstalters — eine beliebige fremde Adresse. Ein
+Surfbrett ist das trotzdem nicht: Der Sprung endet in Safari, nicht in der
+App, und die Liste der Adressen pflegt das Dorf auf seiner eigenen Website.
+Deshalb **nein** — mit dieser Fundstelle als Beleg, falls Apple nachfragt.
+
+### Was zur Einreichung noch fehlt
+
+1. **Screenshots**, de-DE und en-US, mindestens einer für 6,9″ iPhone
+   (1290×2796 oder 1320×2868). Beide Sprachen haben derzeit **null**
+   Screenshot-Sätze. Daran arbeitet ein anderer; `store/screenshots/**` ist
+   deshalb hier nicht angefasst worden.
+2. **App Privacy** — die Datenschutzangaben je Datenart. **Das geht nicht über
+   die API**: `appDataUsages`, `appDataUsagePublishState` und
+   `appPrivacyDeclarations` gibt es in der öffentlichen ASC-API schlicht
+   nicht (alle drei antworten mit „The resource does not exist"). Das muss
+   ein Mensch in App Store Connect klicken — die Antworten liegen fertig in
+   `store/ios-datenschutz.md`, Abschnitte 2 und 3.
+3. **Versionsnummern zusammenbringen.** Der einzige Build trägt die
+   Marketing-Version **0.1.0** (`ios/project.yml`), der Store-Eintrag heißt
+   **1.0**. Die API hat die Zuordnung angenommen, aber im Store stünde dann
+   eine andere Zahl als in der App. Zwei Wege, beide brauchen eine Änderung
+   außerhalb dieses Arbeitsstands:
+   - `MARKETING_VERSION` in `ios/project.yml` auf `1.0` heben und einen neuen
+     Build hochladen — die erste öffentliche Fassung heißt dann 1.0, oder
+   - den Store-Eintrag auf `0.1.0` umbenennen
+     (`PATCH /v1/appStoreVersions/<id>` mit `versionString`) — dann heißt die
+     erste Fassung ehrlich 0.1.0.
+   Das ist eine Entscheidung, keine Einstellung; sie ist hier bewusst nicht
+   getroffen worden.
+4. **Händlerstatus (Trader Status)** in App Store Connect unter *Business →
+   App Information* nachsehen. Seit Februar 2025 verlangt die EU-Verordnung
+   über digitale Dienste diese Angabe für jede App, die in der EU verkauft
+   oder verteilt wird; ohne sie verschwindet die App aus den EU-Stores. Über
+   die API ist das Feld **nicht abfragbar**, deshalb steht hier nur der
+   Hinweis und keine Feststellung.
+5. **„Add for Review" drücken.** Der letzte Knopf ist bewusst nicht gedrückt
+   worden: *App Store → Version 1.0 → Add for Review → Submit for Review*.
+
+Was **nicht** mehr fehlt und in der Liste „Was der Mensch noch tun muss"
+weiter unten überholt ist: die Store-Texte (beide Sprachen stehen im
+Eintrag), das Passwort des Prüfkontos (über `pruefangaben` gesetzt) und die
+Export-Compliance (der Build meldet `usesNonExemptEncryption: false`).
+
+### Bewusst offengelassen
+
+- **Nicht eingereicht.** Siehe Punkt 5.
+- **`kidsAgeBand` leer** — die App gehört nicht in die Kinderkategorie
+  (`isOrEverWasMadeForKids` steht bei Apple auf `false`).
+- **`developerAgeRatingInfoUrl` leer** — freiwillig; es gibt keine Seite, die
+  die Einstufung zusätzlich erklärt.
+- **Barrierefreiheits-Etikett** (`accessibilityDeclarations`) leer — seit 2025
+  freiwillig. Die App ist durchgehend mit `accessibilityLabel` und
+  `accessibilityHint` versehen; ob sie Apples Kriterien in voller Breite
+  erfüllt, ist ohne echtes Gerät nicht zu behaupten.
+- **„Neu in dieser Version" (`whatsNew`) leer** — bei einer ersten Version
+  verlangt Apple das Feld nicht.
+
+### Ein Risiko, das die Zahlen nicht zeigen
+
+Weil „nutzergenerierte Inhalte: ja" stimmt, kann die Prüfung Richtlinie 1.2
+anlegen: Apps mit Nutzerinhalten sollen eine Möglichkeit haben, Inhalte zu
+melden und Nutzer zu blockieren. **Beides gibt es in der App nicht** — im
+Quelltext findet sich keine Melde- und keine Blockierfunktion.
+
+Dagegen steht, was ebenfalls stimmt und in der Prüfnotiz erwähnt ist: Konten
+vergibt der Dorfentwicklungskreis von Hand, es gibt keine Selbstregistrierung,
+die Inhalte sind auf das eigene Profil beschränkt und nur für angemeldete
+Dorfbewohner sichtbar. Das ist eine gute Antwort, falls Apple fragt — aber
+eben eine Antwort auf eine Frage, die kommen kann. Wer sie nicht riskieren
+will, baut vorher einen Melde-Weg ein (und sei es ein `mailto:` an den
+Dorfentwicklungskreis).
+
+---
+
 ## Was der Mensch noch tun muss
 
 Der Stand von heute, in der Reihenfolge, in der es sinnvoll ist. Alles
@@ -618,10 +788,11 @@ darüber Hinausgehende macht die CI.
    iPhone (1290×2796 oder 1320×2868). Der Simulator genügt dafür
    (`xcrun simctl io <id> screenshot …`, siehe `CLAUDE.md`). Ohne sie geht
    keine Store-Einreichung; für TestFlight sind sie nicht nötig.
-4. **Store-Texte in App Store Connect eintragen** (Schritt 3, Tabelle). Sie
-   liegen fertig unter `store/metadata/ios/`.
-5. **Passwort des Prüfkontos `apple.review` eintragen** (Schritt 8) — in
-   App Store Connect, nicht ins Repo.
+4. ~~**Store-Texte in App Store Connect eintragen**~~ — steht drin, beide
+   Sprachen (Schritt 11).
+5. ~~**Passwort des Prüfkontos `apple.review` eintragen**~~ — über
+   `python3 store/asc.py pruefangaben` gesetzt; das Passwort kommt dabei aus
+   `PRUEFKONTO_PASSWORT` und nicht aus dem Repo (Schritt 11).
 6. **Auf einem echten iPhone durchgehen.** Hier gibt es keins
    (`CLAUDE.md`); vor einer Einreichung gehört ein Durchlauf auf Hardware
    dazu.
@@ -629,7 +800,9 @@ darüber Hinausgehende macht die CI.
    `python3 store/asc.py testflight-gruppe` (jeweils erst mit `--probe`),
    danach die Beta App Review abwarten.
 8. **Version angleichen** vor der Store-Einreichung: App Store Connect führt
-   `1.0`, `ios/project.yml` `0.1.0` (Schritt 3).
+   `1.0`, `ios/project.yml` `0.1.0` (Schritt 3). Der Build ist der Version
+   inzwischen zugeordnet, die Zahlen passen aber weiterhin nicht zueinander —
+   die beiden Wege stehen in Schritt 11, offener Punkt 3.
 9. **APNs-Schlüssel anlegen** — erst, wenn Push in der App wirklich gebaut
    ist. Dann auch die Capability *Push Notifications* an der Bundle-ID
    nachtragen und die Warnung zum APNs-Umfeld in Schritt 5 lesen.
@@ -639,9 +812,13 @@ darüber Hinausgehende macht die CI.
 Diese Änderungen gehören in Dateien, an denen gerade andere arbeiten, und
 sind hier nur festgehalten:
 
-- `ios/Dorf/Bereiche/Rechtliches/RechtlichesLeiste.swift`: Link auf
-  <https://xn--rssing-wxa.de/app/daten-loeschen/> für Guideline 5.1.1(v).
-  Für TestFlight nicht nötig, für die Store-Einreichung schon.
+- ~~`ios/Dorf/Bereiche/Rechtliches/RechtlichesLeiste.swift`: Link auf
+  <https://xn--rssing-wxa.de/app/daten-loeschen/> für Guideline 5.1.1(v)~~ —
+  **überholt.** Die App löscht das Konto inzwischen selbst: *Einstellungen →
+  Konto löschen*, mit Abschreiben des eigenen Namens als Bestätigung
+  (`EinstellungenView.swift`, `KontoModell.swift`). Genau das verlangt
+  5.1.1(v); die Prüfnotiz nennt den Weg. Ein zusätzlicher Link schadet nicht,
+  ist aber nichts, worauf die Einreichung warten muss.
 - `.github/workflows/store.yml`: `python3 store/check_ios_metadata.py`
   als zweiten Prüfschritt neben `check_metadata.py` aufnehmen. Der
   Auslieferungs-Workflow prüft die iOS-Metadaten bereits selbst; im
