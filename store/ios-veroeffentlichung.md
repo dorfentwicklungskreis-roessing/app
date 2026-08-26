@@ -484,3 +484,29 @@ sind hier nur festgehalten:
   der archiviert, mit den drei Secrets aus Schritt 4 hochlädt und die
   Metadaten aus `store/metadata/ios/` mitschickt — das Gegenstück zum
   Play-Upload in `release.yml`.
+
+## Prüfkonto in der Rössing-ID — angelegt
+
+Das Konto für den App-Review **existiert** (angelegt am 26.08.2026):
+
+| | |
+|---|---|
+| Anmeldename | `apple.review` |
+| E-Mail | `post+applereview@levinkeller.de` (als bestätigt hinterlegt) |
+| Anzeigename | Apple App Review |
+| Rolle | `member` im Zitadel-Projekt `dorf-app` — melden ja, verwalten nein |
+| Passwortwechsel | nicht verlangt |
+| Zwei-Faktor | nicht verlangt (die Anmelderichtlinie der Organisation erzwingt keine) |
+
+**Das Passwort steht bewusst nicht in diesem Repo** (Regel „Keine Secrets
+committen", `CLAUDE.md`). Es gehört an genau zwei Stellen: in den
+Passwortspeicher des Betreibers und in App Store Connect unter
+*App-Version → App-Prüfungsinformationen → Anmeldedaten erforderlich* mit
+Benutzername `apple.review`.
+
+Ohne diese Angabe sieht der Prüfer nur den Anmeldebildschirm und lehnt die
+App nach Richtlinie 2.1 ab.
+
+Läuft das Konto irgendwann nicht mehr, ist es in der Rössing-ID unter
+*Benutzer → apple.review* zu erneuern — nicht zu löschen, solange eine
+Version in Prüfung ist.
