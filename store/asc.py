@@ -31,9 +31,24 @@ Dazu die Handgriffe, die man sonst in App Store Connect klicken müsste:
     python3 store/asc.py testflight-gruppe   # externe Gruppe „Dorf" + öffentlicher Link
     python3 store/asc.py beta-info           # Feedback-Adresse und Beta-Beschreibung
 
+Und die Handgriffe für den Store-Eintrag selbst:
+
+    python3 store/asc.py kategorien          # Kategorien + Rechteangabe
+    python3 store/asc.py alterseinstufung    # Fragebogen zur Altersfreigabe
+    python3 store/asc.py pruefangaben        # Kontakt, Prüfkonto, Notiz an die Prüfung
+    python3 store/asc.py version-angaben     # Copyright und Freigabeart
+    python3 store/asc.py verfuegbarkeit      # kostenlos, weltweit
+    python3 store/asc.py einreichstand       # was zur Einreichung noch fehlt
+
+Jeder davon versteht `--probe`: dann wird gezeigt, was geschickt würde, und
+nichts geschickt.
+
 Was hier bewusst NICHT geht: den App-Datensatz selbst anlegen. Dafür gibt es
 keine API — das macht ein Mensch einmalig in App Store Connect
-(`store/ios-veroeffentlichung.md`, Schritt 3).
+(`store/ios-veroeffentlichung.md`, Schritt 3). Ebenso wenig geht hier die
+Einreichung zur Prüfung: Der letzte Knopf gehört dem Menschen, der dafür
+geradesteht. Und die Datenschutzangaben („App Privacy") führt Apple gar nicht
+über die API — auch die bleiben Handarbeit.
 
 Ohne Schlüssel bricht kein Unterbefehl mit einem Stacktrace ab, sondern sagt,
 was fehlt und wie man es hinlegt.
@@ -177,6 +192,22 @@ def token(key_id: str, issuer_id: str) -> str:
     return f"{zusignieren}.{_b64(_der_zu_roh(lauf.stdout))}"
 
 
+def _ohne_geheimnisse(wert):
+    """Kopie eines Anfragerumpfs, in der Passwörter durch Sterne ersetzt sind.
+
+    Nur für den Trockenlauf: Der zeigt den ganzen Rumpf, und das Passwort des
+    Prüfkontos hat weder im Terminal noch in einem Workflow-Protokoll etwas
+    verloren.
+    """
+    if isinstance(wert, dict):
+        return {schluessel: ("********" if "assword" in schluessel
+                             else _ohne_geheimnisse(inhalt))
+                for schluessel, inhalt in wert.items()}
+    if isinstance(wert, list):
+        return [_ohne_geheimnisse(eintrag) for eintrag in wert]
+    return wert
+
+
 def anfrage(methode: str, pfad: str, daten: dict | None = None,
             key_id: str | None = None, issuer_id: str | None = None,
             dulden: tuple[int, ...] = ()) -> dict:
@@ -191,7 +222,8 @@ def anfrage(methode: str, pfad: str, daten: dict | None = None,
     if PROBE and methode.upper() != "GET":
         print(f"[Trockenlauf] {methode.upper()} {pfad}")
         if daten is not None:
-            for zeile in json.dumps(daten, indent=2, ensure_ascii=False).splitlines():
+            for zeile in json.dumps(_ohne_geheimnisse(daten), indent=2,
+                                    ensure_ascii=False).splitlines():
                 print(f"    {zeile}")
         # Genug Gerüst, damit die aufrufende Funktion weiterläuft und ihre
         # restlichen Schritte ebenfalls zeigt.
@@ -491,12 +523,618 @@ def beta_info() -> None:
           "wird von Hand eingetragen — siehe store/ios-veroeffentlichung.md.")
 
 
+# ---------------------------------------------------------------------------
+# Der Store-Eintrag: Kategorien, Alterseinstufung, Prüfangaben, Preis
+# ---------------------------------------------------------------------------
+
+# Kategorien (2026 über /v1/appCategories geprüft — die Liste ändert sich).
+#
+# Primär **Dienstprogramme**: Die App ist ein Werkzeug für eine Arbeit —
+# welcher Blumenkasten ist fällig, wer hat gegossen, wann ist der nächste
+# Termin. Sekundär **Lifestyle**, die Schublade für Haus, Garten und
+# Nachbarschaft.
+#
+# Bewusst **nicht** „Soziale Netze" (SOCIAL_NETWORKING): Es gibt keinen Chat,
+# keine Kommentare, keinen Beitragsstrom und kein Teilen — nur ein Verzeichnis
+# der angemeldeten Dorfbewohner. Die Kategorie würde etwas versprechen, was
+# die App nicht kann, und die Prüfung auf Richtlinie 1.2 (Moderation von
+# Nutzerinhalten) unnötig scharf stellen.
+KATEGORIE_PRIMAER = "UTILITIES"
+KATEGORIE_SEKUNDAER = "LIFESTYLE"
+
+# Rechteangabe (App Information → Content Rights). **Ja, Inhalte Dritter**:
+# Die Karte zeigt OpenStreetMap-Daten über OpenFreeMap
+# (`Konfiguration.kartenstil`), und der Attributionsknopf von MapLibre steht
+# fest in der Kartenansicht (`MapLibreKarte.swift`). Die Termine können auf
+# Seiten fremder Veranstalter verweisen (`external` in `events.json`).
+# Die Rechte sind vorhanden: ODbL mit sichtbarer Namensnennung.
+INHALTSRECHTE = "USES_THIRD_PARTY_CONTENT"
+
+# Version 1.0: Urheberrechtsvermerk und Freigabeart.
+#
+# **Manuelle Freigabe** ist Absicht. Apple gibt eine bestandene Prüfung sonst
+# sofort frei — auch nachts um drei. Die App nützt aber erst, wenn im Dorf
+# bekannt ist, dass es sie gibt, und wenn die Rössing-IDs verteilt sind. Der
+# Dorfentwicklungskreis drückt den Knopf, wenn der Aushang hängt.
+COPYRIGHT = "2026 Dorfentwicklungskreis Rössing"
+FREIGABE = "MANUAL"
+
+# Prüfangaben (App Review Information).
+KONTAKT_VORNAME = "Levin"
+KONTAKT_NACHNAME = "Keller"
+KONTAKT_TELEFON = "+4915156041082"
+PRUEFKONTO = "apple.review"
+# Das Passwort steht **nicht** im Repo — gleiche Regel wie bei der Beta-Review.
+PRUEFKONTO_UMGEBUNG = "PRUEFKONTO_PASSWORT"
+
+# Verfügbarkeit: **weltweit**, und neue Länder kommen von selbst dazu.
+#
+# Die Absperrung ist die Rössing-ID, nicht der Ländershop: Ohne Konto kommt
+# niemand über den Anmeldebildschirm, egal aus welchem Store die App kommt.
+# Eine Beschränkung auf Deutschland schützt also nichts, kostet aber die
+# Dorfbewohner mit einer nicht-deutschen Apple-ID (Ausland, Zugezogene) den
+# Zugang zur eigenen Dorf-App. Der Basisshop bleibt Deutschland.
+BASIS_LAND = "DEU"
+
+# Der Fragebogen zur Alterseinstufung. Jede Antwort ist am Quelltext belegt;
+# was sich nicht belegen ließ, steht nicht drin.
+#
+# Die Inhaltsfragen (NONE / INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE) sind
+# durchweg NONE: Die App zeigt Blumenkästen, Beete, Termine und Namen.
+#
+# Die Ja/Nein-Fragen im Einzelnen:
+#
+#   userGeneratedContent = **ja**. Die Profilnotiz, der Anzeigename und der
+#     Spitzname sind freie Texte (`ProfilView.swift`), und wer sie auf
+#     „öffentlich" stellt, zeigt sie allen angemeldeten Dorfbewohnern
+#     (`DorfbewohnerView.swift`). Auch die Verwaltung legt Orts- und
+#     Aufgabennamen als Text an. Das ist wenig, aber es ist Nutzerinhalt.
+#     — Nicht mitgezählt: die Erledigungsnotiz. `DorfApi.melden` kennt zwar
+#     ein Feld `notiz`, die Oberfläche schickt aber immer den leeren String
+#     (`OrteModell.melden`, Zeile mit `quelle.melden(aufgabe.id, …, "")`).
+#     Und die Idee aus „Idee vorschlagen" geht nur an den
+#     Dorfentwicklungskreis, kein anderes Konto bekommt sie zu sehen.
+#
+#   unrestrictedWebAccess = **nein**. Die App hat keinen eingebauten Browser:
+#     kein WKWebView, kein SFSafariViewController, nichts dergleichen im
+#     ganzen Quelltext. Was sie öffnet, sind `Link`-Ziele, und die übergibt
+#     iOS an Safari, wo Bildschirmzeit und Beschränkungen greifen. Geöffnet
+#     werden: Impressum und Datenschutz auf rössing.de
+#     (`RechtlichesLeiste.swift`), die Rössing-ID
+#     (`EinstellungenView.swift`), `tel:` und `mailto:` aus dem
+#     Bewohnerverzeichnis (`Profilstand.swift`), die Systemeinstellungen
+#     (`KarteView.swift`) — und die Adresse eines Termins
+#     (`VeranstaltungenView.swift`). Letztere kann auf eine fremde Seite
+#     führen, wenn der Termin als `external` in der `events.json` der
+#     Dorf-Website steht. Eine feste Liste ist das also nicht; ein
+#     Surfbrett aber auch nicht: Der Sprung endet in Safari, nicht in der App.
+#
+#   messagingAndChat = **nein**. Es gibt keinen Chat, keine Kommentare, keine
+#     Nachricht von Nutzer zu Nutzer. Die Texte der Vergabe formuliert der
+#     Server aus festen Bausteinen; auf eine Anfrage antwortet man mit einem
+#     Knopf, nicht mit Worten.
+#
+#   advertising = **nein**. Einzige Fremdbibliothek ist MapLibre
+#     (`ios/project.yml`) — kein Werbe- oder Analysebaustein im Projekt.
+#
+#   socialMedia / socialMediaAgeRestricted = **nein**. Kein Beitragsstrom,
+#     kein Folgen, kein Teilen nach außen.
+#
+#   healthOrWellnessTopics = **nein**. Gießen und Jäten ist Gartenarbeit,
+#     keine Gesundheitsauskunft.
+#
+#   gambling / lootBox = **nein**. Die Rangliste zählt Erledigungen; es gibt
+#     keinen Zufall, keinen Einsatz und keinen Preis. Aus demselben Grund
+#     steht `contests` auf NONE.
+#
+#   parentalControls / ageAssurance = **nein**. Die App hat weder eine
+#     Kindersicherung noch eine Altersprüfung.
+#
+#   kidsAgeBand bleibt leer: Die App ist nicht für die Kinderkategorie
+#     gedacht (`isOrEverWasMadeForKids` steht bei Apple auf false).
+ALTERSEINSTUFUNG = {
+    "violenceCartoonOrFantasy": "NONE",
+    "violenceRealistic": "NONE",
+    "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+    "gunsOrOtherWeapons": "NONE",
+    "profanityOrCrudeHumor": "NONE",
+    "matureOrSuggestiveThemes": "NONE",
+    "horrorOrFearThemes": "NONE",
+    "sexualContentOrNudity": "NONE",
+    "sexualContentGraphicAndNudity": "NONE",
+    "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+    "medicalOrTreatmentInformation": "NONE",
+    "gamblingSimulated": "NONE",
+    "contests": "NONE",
+    "gambling": False,
+    "lootBox": False,
+    "advertising": False,
+    "messagingAndChat": False,
+    "socialMedia": False,
+    "socialMediaAgeRestricted": False,
+    "healthOrWellnessTopics": False,
+    "parentalControls": False,
+    "ageAssurance": False,
+    "userGeneratedContent": True,
+    "unrestrictedWebAccess": False,
+    "ageRatingOverride": "NONE",
+    "koreaAgeRatingOverride": "NONE",
+}
+
+# Die Notiz für die App-Prüfung. Zweisprachig, weil die Prüfung nicht
+# zwingend in Deutschland sitzt und der Text sonst raten lässt.
+PRUEFHINWEISE = """\
+Die App ist die Dorf-App des Dorfes Rössing (Gemeinde Nordstemmen, \
+Niedersachsen). Betrieben wird sie vom Dorfentwicklungskreis Rössing, einer \
+ehrenamtlichen Gruppe im Dorf. Keine Werbung, keine Käufe in der App, kein \
+Tracking.
+
+1. Ohne Anmeldung ist nichts zu sehen. Bitte das beigefügte Prüfkonto \
+benutzen (Benutzername apple.review). Der Anmeldeknopf öffnet dafür den \
+Browser.
+
+2. Die Anmeldung läuft über den eigenen OIDC-Dienst des Dorfes, die \
+„Rössing-ID“ auf id.xn--rssing-wxa.de (id.rössing.de). Diesen Dienst \
+betreibt der Dorfentwicklungskreis selbst. Es gibt KEINE Anmeldung über \
+einen Drittanbieter — kein Google, kein Facebook, kein anderer sozialer \
+Dienst. Richtlinie 4.8 ist deshalb nicht einschlägig.
+
+3. Der Bereich „Verwaltung“ erscheint nur bei Konten mit der Rolle „admin“. \
+Das Prüfkonto hat diese Rolle nicht, der Bereich bleibt dort also \
+unsichtbar. Das ist kein Fehler und nichts Verstecktes, sondern die \
+Rechteverwaltung des Dorfes.
+
+4. Das Konto lässt sich in der App löschen: Einstellungen → Konto löschen. \
+Richtlinie 5.1.1 (v) ist damit erfüllt.
+
+--- English ---
+
+This is the village app of Rössing, a village in Lower Saxony, Germany. It \
+is run by the Dorfentwicklungskreis Rössing, a volunteer group in the \
+village. No ads, no in-app purchases, no tracking.
+
+1. Nothing is visible without signing in. Please use the review account \
+provided (user name apple.review). The sign-in button opens the browser.
+
+2. Sign-in uses the village's own OIDC provider, the "Rössing-ID" at \
+id.xn--rssing-wxa.de, operated by the Dorfentwicklungskreis itself. There is \
+NO third-party login — no Google, no Facebook, no other social login. \
+Guideline 4.8 therefore does not apply.
+
+3. The 'Verwaltung' (administration) area only appears for accounts holding \
+the role 'admin'. The review account does not hold that role, so the area \
+stays hidden for you. Nothing is broken and nothing is concealed — it is the \
+village's own role management.
+
+4. The account can be deleted inside the app: Einstellungen (Settings) → \
+Konto löschen (Delete account). Guideline 5.1.1 (v) is satisfied."""
+
+
+def app_info() -> dict:
+    """Der `appInfo`-Datensatz, an dem Kategorien und Alterseinstufung hängen.
+
+    Apple führt für jede App mehrere davon (einen je Zustand); bearbeitbar
+    ist der, der nicht schon im Store steht.
+    """
+    app = app_datensatz()
+    infos = anfrage("GET", f"/v1/apps/{app['id']}/appInfos?limit=10").get("data", [])
+    if not infos:
+        raise SystemExit("Kein appInfo zur App gefunden — das darf nicht sein.")
+    for eintrag in infos:
+        zustand = eintrag.get("attributes", {}).get("state") \
+            or eintrag.get("attributes", {}).get("appStoreState")
+        if zustand != "READY_FOR_DISTRIBUTION":
+            return eintrag
+    return infos[0]
+
+
+def bearbeitbare_version() -> dict:
+    """Die Version, an der gerade gearbeitet wird (die nicht im Store steht)."""
+    app = app_datensatz()
+    versionen = anfrage(
+        "GET", f"/v1/apps/{app['id']}/appStoreVersions?limit=10"
+    ).get("data", [])
+    if not versionen:
+        raise SystemExit(
+            "Zur App gibt es noch keine Store-Version. Eine Version legt ein "
+            "Mensch in App Store Connect an — siehe store/ios-veroeffentlichung.md."
+        )
+    for eintrag in versionen:
+        zustand = eintrag.get("attributes", {}).get("appVersionState") \
+            or eintrag.get("attributes", {}).get("appStoreState")
+        if zustand != "READY_FOR_DISTRIBUTION":
+            return eintrag
+    return versionen[0]
+
+
+def kategorien() -> None:
+    """Primäre und sekundäre Kategorie am `appInfo` setzen.
+
+    Beides ist jederzeit änderbar und kostet keine neue Prüfung — die
+    Begründung für genau diese zwei steht oben bei den Konstanten.
+    """
+    app = app_datensatz()
+    info = app_info()
+    anfrage("PATCH", f"/v1/appInfos/{info['id']}", {
+        "data": {
+            "id": info["id"],
+            "type": "appInfos",
+            "relationships": {
+                "primaryCategory": {
+                    "data": {"type": "appCategories", "id": KATEGORIE_PRIMAER}},
+                "secondaryCategory": {
+                    "data": {"type": "appCategories", "id": KATEGORIE_SEKUNDAER}},
+            },
+        },
+    })
+    print(f"Kategorien gesetzt: primär {KATEGORIE_PRIMAER}, "
+          f"sekundär {KATEGORIE_SEKUNDAER}.")
+
+    anfrage("PATCH", f"/v1/apps/{app['id']}", {
+        "data": {
+            "id": app["id"],
+            "type": "apps",
+            "attributes": {"contentRightsDeclaration": INHALTSRECHTE},
+        },
+    })
+    print(f"Rechteangabe gesetzt: {INHALTSRECHTE} — wegen der "
+          "OpenStreetMap-Karte und der Seiten fremder Veranstalter.")
+
+
+def alterseinstufung() -> None:
+    """Den Fragebogen zur Alterseinstufung beantworten.
+
+    Die Antworten stehen oben in `ALTERSEINSTUFUNG`, jede mit der Stelle im
+    Quelltext, die sie trägt. Wer hier etwas ändert, ändert eine Erklärung
+    gegenüber Apple — nicht eine Einstellung.
+    """
+    info = app_info()
+    antwort = anfrage("PATCH", f"/v1/ageRatingDeclarations/{info['id']}", {
+        "data": {
+            "id": info["id"],
+            "type": "ageRatingDeclarations",
+            "attributes": ALTERSEINSTUFUNG,
+        },
+    })
+    print("Alterseinstufung beantwortet.")
+    print("  Nutzergenerierte Inhalte: ja (Profilnotiz, Anzeigename, Spitzname)")
+    print("  Unbeschränkter Web-Zugriff: nein (kein eingebauter Browser)")
+    print("  Alles Übrige: keine Gewalt, kein Alkohol, kein Glücksspiel, "
+          "keine Werbung, kein Chat")
+    if not PROBE:
+        eingestuft = anfrage("GET", f"/v1/appInfos/{info['id']}") \
+            .get("data", {}).get("attributes", {})
+        print(f"  Ergebnis laut Apple: {eingestuft.get('appStoreAgeRating') or 'noch offen'}")
+
+
+def pruefangaben() -> None:
+    """Prüfkontakt, Prüfkonto und Notiz für die App-Prüfung setzen.
+
+    Das Passwort kommt aus der Umgebung, nicht aus dem Repo:
+
+        export PRUEFKONTO_PASSWORT='…'
+        python3 store/asc.py pruefangaben
+    """
+    passwort = os.environ.get(PRUEFKONTO_UMGEBUNG, "")
+    if not passwort:
+        raise SystemExit(
+            f"Das Passwort des Prüfkontos fehlt. Es steht nicht im Repo und "
+            f"gehört auch nicht hinein:\n\n"
+            f"  export {PRUEFKONTO_UMGEBUNG}='…'\n"
+            f"  python3 store/asc.py pruefangaben\n\n"
+            f"Das Konto heißt {PRUEFKONTO}; das Passwort liegt im "
+            f"Passwortspeicher.\nEs wurde nichts geändert."
+        )
+
+    version = bearbeitbare_version()
+    eigenschaften = {
+        "contactFirstName": KONTAKT_VORNAME,
+        "contactLastName": KONTAKT_NACHNAME,
+        "contactPhone": KONTAKT_TELEFON,
+        "contactEmail": FEEDBACK_ADRESSE,
+        "demoAccountName": PRUEFKONTO,
+        "demoAccountPassword": passwort,
+        "demoAccountRequired": True,
+        "notes": PRUEFHINWEISE,
+    }
+
+    vorhanden = anfrage(
+        "GET", f"/v1/appStoreVersions/{version['id']}/appStoreReviewDetail"
+    ).get("data")
+
+    if vorhanden:
+        anfrage("PATCH", f"/v1/appStoreReviewDetails/{vorhanden['id']}", {
+            "data": {"id": vorhanden["id"], "type": "appStoreReviewDetails",
+                     "attributes": eigenschaften},
+        })
+        print(f"Prüfangaben zu Version "
+              f"{version['attributes'].get('versionString')} aktualisiert.")
+    else:
+        anfrage("POST", "/v1/appStoreReviewDetails", {
+            "data": {
+                "type": "appStoreReviewDetails",
+                "attributes": eigenschaften,
+                "relationships": {"appStoreVersion": {
+                    "data": {"type": "appStoreVersions", "id": version["id"]}}},
+            },
+        })
+        print(f"Prüfangaben zu Version "
+              f"{version['attributes'].get('versionString')} angelegt.")
+
+    print(f"  Kontakt: {KONTAKT_VORNAME} {KONTAKT_NACHNAME}, "
+          f"{FEEDBACK_ADRESSE}, {KONTAKT_TELEFON}")
+    print(f"  Prüfkonto: {PRUEFKONTO} (Passwort aus {PRUEFKONTO_UMGEBUNG}), "
+          f"wird verlangt: ja")
+    print(f"  Notiz: {len(PRUEFHINWEISE)} Zeichen, deutsch und englisch")
+
+
+def version_angaben() -> None:
+    """Urheberrechtsvermerk und Freigabeart der Version setzen."""
+    version = bearbeitbare_version()
+    anfrage("PATCH", f"/v1/appStoreVersions/{version['id']}", {
+        "data": {
+            "id": version["id"],
+            "type": "appStoreVersions",
+            "attributes": {
+                "copyright": COPYRIGHT,
+                "releaseType": FREIGABE,
+                # Kein Werbebaustein im Projekt (einzige Fremdbibliothek ist
+                # MapLibre), also auch keine Werbekennung.
+                "usesIdfa": False,
+            },
+        },
+    })
+    print(f"Version {version['attributes'].get('versionString')}: "
+          f"Copyright „{COPYRIGHT}“, Freigabe {FREIGABE}, keine Werbekennung.")
+    if FREIGABE == "MANUAL":
+        print("  Manuell heißt: Nach bestandener Prüfung passiert erst einmal "
+              "nichts.\n  Der Dorfentwicklungskreis gibt frei, wenn das Dorf "
+              "Bescheid weiß.")
+
+
+def verfuegbarkeit() -> None:
+    """Kostenlos und weltweit — Preisplan und Länderliste anlegen.
+
+    Beides fehlt bei einer frisch angelegten App und beides blockiert die
+    Einreichung. Der Preisplan braucht einen „Preispunkt" für 0,00 €; die
+    Länderliste bekommt alles, was Apple gerade führt.
+    """
+    app = app_datensatz()
+
+    # --- Preis: kostenlos ---------------------------------------------------
+    # Apple legt zu jeder App von sich aus einen leeren Preisplan an (Basisland
+    # USA, keine Preise). Ein POST ersetzt ihn vollständig — deshalb wird hier
+    # nicht erst gefragt, sondern geschrieben.
+    punkte = anfrage(
+        "GET",
+        f"/v1/apps/{app['id']}/appPricePoints?filter[territory]={BASIS_LAND}&limit=200",
+    ).get("data", [])
+    kostenlos = next(
+        (p for p in punkte
+         if float(p.get("attributes", {}).get("customerPrice", "1")) == 0.0),
+        None,
+    )
+    if kostenlos is None:
+        raise SystemExit(
+            f"Kein Preispunkt für 0,00 in {BASIS_LAND} gefunden — das darf "
+            "nicht sein. Es wurde nichts geändert."
+        )
+
+    anfrage("POST", "/v1/appPriceSchedules", {
+        "data": {
+            "type": "appPriceSchedules",
+            "relationships": {
+                "app": {"data": {"type": "apps", "id": app["id"]}},
+                "baseTerritory": {
+                    "data": {"type": "territories", "id": BASIS_LAND}},
+                # `${…}` ist Apples Schreibweise für „der Datensatz, der
+                # weiter unten unter `included` steht" — ein Preis und sein
+                # Preispunkt entstehen in einer einzigen Anfrage.
+                "manualPrices": {"data": [
+                    {"type": "appPrices", "id": "${kostenlos}"}]},
+            },
+        },
+        "included": [{
+            "type": "appPrices",
+            "id": "${kostenlos}",
+            # Ohne Start- und Enddatum: gilt ab sofort und ohne Ablauf.
+            "relationships": {"appPricePoint": {
+                "data": {"type": "appPricePoints", "id": kostenlos["id"]}}},
+        }],
+    })
+    print(f"Preis: kostenlos, Basisland {BASIS_LAND}.")
+
+    # --- Länder: weltweit ---------------------------------------------------
+    laender = [e["id"] for e in
+               anfrage("GET", "/v1/territories?limit=200").get("data", [])]
+    if not laender:
+        raise SystemExit("Apple gibt keine Länderliste zurück — Abbruch.")
+
+    # Jedes Land steht zweimal in der Anfrage: einmal als Verweis unter
+    # `relationships` und einmal als eigener Datensatz unter `included`. So
+    # will es Apple — die Beziehung allein reicht nicht.
+    anfrage("POST", "/v2/appAvailabilities", {
+        "data": {
+            "type": "appAvailabilities",
+            "attributes": {"availableInNewTerritories": True},
+            "relationships": {
+                "app": {"data": {"type": "apps", "id": app["id"]}},
+                "territoryAvailabilities": {"data": [
+                    {"type": "territoryAvailabilities", "id": "${%s}" % land}
+                    for land in laender
+                ]},
+            },
+        },
+        "included": [
+            {"type": "territoryAvailabilities", "id": "${%s}" % land,
+             "relationships": {"territory": {
+                 "data": {"type": "territories", "id": land}}}}
+            for land in laender
+        ],
+    })
+    print(f"Verfügbarkeit: {len(laender)} Länder — alles, was Apple führt; "
+          "neue Länder kommen von selbst dazu.")
+    print("  Grund: Die Absperrung ist die Rössing-ID, nicht der Ländershop. "
+          "Wer\n  im Ausland lebt und trotzdem zum Dorf gehört, soll die App "
+          "laden können.")
+
+
+def einreichstand() -> None:
+    """Ehrliche Bestandsaufnahme: Was fehlt zur Einreichung noch?
+
+    Fragt nur — ändert nichts. Reihenfolge wie in App Store Connect, damit
+    man die Liste von oben nach unten abarbeiten kann.
+    """
+    app = app_datensatz()
+    info = app_info()
+    version = bearbeitbare_version()
+    offen: list[str] = []
+
+    def pruefe(bedingung: bool, fehlt: str) -> None:
+        if not bedingung:
+            offen.append(fehlt)
+
+    merkmale = app.get("attributes", {})
+    print(f"App {merkmale.get('name')} ({merkmale.get('bundleId')}), "
+          f"Version {version['attributes'].get('versionString')} — "
+          f"{version['attributes'].get('appVersionState')}")
+    print()
+
+    # Kategorien und Rechteangabe. Ohne `include` liefert Apple zu den
+    # Kategorien nur Verweise, keine Kennungen — dann sähe alles leer aus.
+    voll = anfrage("GET", f"/v1/appInfos/{info['id']}"
+                          "?include=primaryCategory,secondaryCategory")
+    beziehungen = voll.get("data", {}).get("relationships", {})
+    primaer = (beziehungen.get("primaryCategory", {}).get("data") or {}).get("id")
+    sekundaer = (beziehungen.get("secondaryCategory", {}).get("data") or {}).get("id")
+    print(f"Kategorie primär:      {primaer or '— fehlt'}")
+    print(f"Kategorie sekundär:    {sekundaer or '— fehlt (freiwillig)'}")
+    pruefe(bool(primaer), "primäre Kategorie (`asc.py kategorien`)")
+    print(f"Rechteangabe:          {merkmale.get('contentRightsDeclaration') or '— fehlt'}")
+    pruefe(bool(merkmale.get("contentRightsDeclaration")),
+           "Rechteangabe (`asc.py kategorien`)")
+
+    # Alterseinstufung
+    einstufung = anfrage("GET", f"/v1/appInfos/{info['id']}/ageRatingDeclaration") \
+        .get("data", {}).get("attributes", {}) or {}
+    unbeantwortet = [name for name, wert in einstufung.items()
+                     if wert is None and name not in
+                     ("kidsAgeBand", "developerAgeRatingInfoUrl")]
+    ergebnis = voll.get("data", {}).get("attributes", {}).get("appStoreAgeRating")
+    print(f"Alterseinstufung:      {ergebnis or '— offen'}"
+          + (f" ({len(unbeantwortet)} Fragen offen)" if unbeantwortet else ""))
+    pruefe(not unbeantwortet, "Alterseinstufung (`asc.py alterseinstufung`)")
+
+    # Texte je Sprache
+    sprachen = anfrage(
+        "GET", f"/v1/appStoreVersions/{version['id']}/appStoreVersionLocalizations?limit=50"
+    ).get("data", [])
+    print(f"Store-Texte:           {len(sprachen)} Sprache(n): "
+          + ", ".join(sorted(s["attributes"]["locale"] for s in sprachen)))
+    pruefe(bool(sprachen), "Store-Texte (`asc.py store-texte`, falls vorhanden)")
+
+    # Screenshots — je Sprache mindestens ein Satz
+    ohne_bilder = []
+    for sprache in sprachen:
+        saetze = anfrage(
+            "GET",
+            f"/v1/appStoreVersionLocalizations/{sprache['id']}/appScreenshotSets?limit=50",
+        ).get("data", [])
+        wieviele = 0
+        for satz in saetze:
+            wieviele += len(anfrage(
+                "GET", f"/v1/appScreenshotSets/{satz['id']}/appScreenshots?limit=10"
+            ).get("data", []))
+        print(f"  Screenshots {sprache['attributes']['locale']}: "
+              f"{wieviele} in {len(saetze)} Satz/Sätzen")
+        if wieviele == 0:
+            ohne_bilder.append(sprache["attributes"]["locale"])
+    pruefe(not ohne_bilder,
+           "Screenshots für " + ", ".join(ohne_bilder) + " (macht ein anderer)")
+
+    # Prüfangaben
+    detail = anfrage(
+        "GET", f"/v1/appStoreVersions/{version['id']}/appStoreReviewDetail"
+    ).get("data")
+    d = (detail or {}).get("attributes", {})
+    print(f"Prüfangaben:           {'da' if detail else '— fehlen'}"
+          + (f", Prüfkonto {d.get('demoAccountName')}" if detail else ""))
+    pruefe(bool(detail), "Prüfangaben (`asc.py pruefangaben`)")
+
+    # Version selbst
+    v = version.get("attributes", {})
+    print(f"Copyright:             {v.get('copyright') or '— fehlt'}")
+    pruefe(bool(v.get("copyright")), "Copyright (`asc.py version-angaben`)")
+    print(f"Freigabe:              {v.get('releaseType')}")
+
+    # Build
+    build = anfrage("GET", f"/v1/appStoreVersions/{version['id']}/build").get("data")
+    if build:
+        voller_build = anfrage(
+            "GET", f"/v1/builds/{build['id']}?include=preReleaseVersion")
+        b = voller_build.get("data", {}).get("attributes", {})
+        vorab = next((i["attributes"].get("version")
+                      for i in voller_build.get("included", [])
+                      if i["type"] == "preReleaseVersions"), "?")
+        print(f"Build:                 Nr. {b.get('version')} "
+              f"({b.get('processingState')}), Marketing-Version {vorab}")
+        # Die Zahl im Binärpaket und die Zahl im Store-Eintrag sollten
+        # dieselbe sein — sonst steht im Store etwas anderes als in der App.
+        if vorab != v.get("versionString"):
+            print(f"  ⚠ Der Build sagt {vorab}, der Store-Eintrag sagt "
+                  f"{v.get('versionString')}.")
+            offen.append(
+                f"Versionsnummern zusammenbringen: Build {vorab} gegen "
+                f"Store-Eintrag {v.get('versionString')}")
+    else:
+        print("Build:                 — der Version ist keiner zugeordnet")
+    pruefe(bool(build), "Build der Version zuordnen")
+
+    # Preis und Länder
+    preis = anfrage("GET", f"/v1/apps/{app['id']}/appPriceSchedule", dulden=(404,))
+    hat_preis = bool(preis.get("data"))
+    print(f"Preisplan:             {'da' if hat_preis else '— fehlt'}")
+    pruefe(hat_preis, "Preis (`asc.py verfuegbarkeit`)")
+
+    verfuegbar = anfrage("GET", f"/v2/appAvailabilities/{app['id']}", dulden=(404,))
+    hat_laender = bool(verfuegbar.get("data"))
+    print(f"Verfügbarkeit:         {'da' if hat_laender else '— fehlt'}")
+    pruefe(hat_laender, "Länder (`asc.py verfuegbarkeit`)")
+
+    # Zwei Pflichtangaben kann dieses Skript nicht nachsehen, weil Apple sie
+    # gar nicht über die API führt. Sie fehlen zu behaupten wäre geraten —
+    # sie zu verschweigen wäre schlimmer. Also stehen sie hier als Auftrag.
+    offen.append(
+        "App Privacy von Hand ausfüllen (keine API: `appDataUsages` & Co. "
+        "gibt es nicht) — Vorlage: store/ios-datenschutz.md")
+    offen.append(
+        "Händlerstatus (EU) in App Store Connect nachsehen — Business → "
+        "App Information; über die API nicht abfragbar")
+
+    print()
+    if offen:
+        print("Es fehlt noch:")
+        for nummer, satz in enumerate(offen, 1):
+            print(f"  {nummer}. {satz}")
+    else:
+        print("Nichts Offenes gefunden — was Apple beim Einreichen zusätzlich "
+              "verlangt,\nsagt erst die Einreichung selbst.")
+    print("\nEingereicht wird hier bewusst nicht: Das ist der einzige Schritt, "
+          "den ein\nMensch tun muss — App Store Connect → „Add for Review“.")
+
+
 BEFEHLE = {
     "team-id": lambda: print(team_id()),
     "bundle-id-anlegen": bundle_id_anlegen,
     "app-zeigen": app_zeigen,
     "testflight-gruppe": testflight_gruppe,
     "beta-info": beta_info,
+    "kategorien": kategorien,
+    "alterseinstufung": alterseinstufung,
+    "pruefangaben": pruefangaben,
+    "version-angaben": version_angaben,
+    "verfuegbarkeit": verfuegbarkeit,
+    "einreichstand": einreichstand,
 }
 
 

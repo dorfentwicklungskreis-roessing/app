@@ -279,12 +279,16 @@ Startseite **und** auf dem Anmeldebildschirm, wie es § 5 DDG verlangt.
 
 ## 6. Offene Punkte
 
-- [ ] **Kontolöschung in der App** (Guideline 5.1.1(v)): Heute gibt es nur
-      „Abmelden" (`StartView.swift`). Für die Produktion braucht es entweder
-      einen Knopf „Konto löschen" oder — was Apple ebenfalls akzeptiert —
-      einen unmittelbar erreichbaren Link auf
-      <https://xn--rssing-wxa.de/app/daten-loeschen/>. Der Link ist der
-      kleinere Eingriff und sollte in `RechtlichesLeiste` daneben.
+- [x] **Kontolöschung in der App** (Guideline 5.1.1(v)) — **erledigt.** Der
+      Weg steht unter *Einstellungen → Konto löschen*
+      (`EinstellungenView.swift`); bestätigt wird, indem man den eigenen
+      Namen abschreibt, und scheitert das Löschen, wird **nicht** abgemeldet
+      (`KontoModell.swift`). Die Erledigungen bleiben stehen — sie zu löschen
+      würde die Zählung aller anderen verfälschen —, das steht so auch im
+      Text vor dem Knopf. Der früher hier vorgeschlagene Link auf
+      <https://xn--rssing-wxa.de/app/daten-loeschen/> ist damit nur noch eine
+      Zugabe, keine Voraussetzung. Die Prüfnotiz in App Store Connect nennt
+      den Weg ausdrücklich (`store/ios-veroeffentlichung.md`, Schritt 11).
 - [ ] Prüfen, sobald die Karte den Standort benutzt (siehe Sonderfall oben).
 - [ ] Loggt der Reverse-Proxy IP-Adressen? Wenn ja: in der Erklärung nennen.
 - [x] **Push ist nachgerüstet** — *Identifiers → Device ID* steht oben
@@ -298,6 +302,12 @@ Startseite **und** auf dem Anmeldebildschirm, wie es § 5 DDG verlangt.
       nach Einwilligung entsteht, dass sie an Apple geht (nicht an Google)
       und wie man sie wieder los wird (Abmelden in der App oder Mitteilungen
       in den iOS-Einstellungen abschalten).
+- [ ] **Die Antworten dieser Datei sind noch nicht in App Store Connect.**
+      Für die Datenschutzangaben gibt es **keine API**: `appDataUsages`,
+      `appDataUsagePublishState` und `appPrivacyDeclarations` antworten alle
+      drei mit „The resource does not exist". Sie müssen von Hand geklickt
+      werden — *App Store Connect → App Privacy* —, und ohne sie nimmt Apple
+      die Einreichung nicht an. Vorlage sind die Abschnitte 2 und 3 oben.
 - [ ] Bei jeder neuen Version prüfen, ob ein neues Feld die Antworten oben
       ändert. Der schnellste Test: Gibt es einen neuen Anfragerumpf in
       `ios/Dorf/Daten/Modelle.swift`?
