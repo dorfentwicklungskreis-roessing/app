@@ -64,8 +64,13 @@ class AdminHintUiTest {
             DorfAppTheme { AdminHintCard(onOpen = { opened += it }) }
         }
 
-        compose.onNodeWithTag("admin-hint-mcp").performScrollTo().performClick()
-        compose.onNodeWithTag("admin-hint-web").performScrollTo().performClick()
+        // No performScrollTo() here: the card is rendered on its own, without a
+        // scrollable parent, so there is nothing to scroll — and asking for it
+        // fails with "Semantic Node has no parent layout with a Scroll
+        // SemanticsAction". The other tests place the card inside StartScreen,
+        // where scrolling is both possible and necessary.
+        compose.onNodeWithTag("admin-hint-mcp").performClick()
+        compose.onNodeWithTag("admin-hint-web").performClick()
 
         assertEquals(listOf(AdminLink.MCP, AdminLink.WEB), opened)
     }
