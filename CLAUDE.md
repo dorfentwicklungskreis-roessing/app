@@ -1,7 +1,8 @@
 # Claude-Konfiguration für die Dorf-App
 
-**Immer auf Deutsch kommunizieren** (Antworten, Kommentare, PRs, Issues).
-GitHub-Magic-Keywords (`fixes`, `closes` …) bleiben Englisch.
+**Immer auf Deutsch kommunizieren** (Antworten, PRs, Issues, Review-Notizen).
+GitHub-Magic-Keywords (`fixes`, `closes` …) bleiben Englisch. Für den
+Quelltext gilt etwas anderes — siehe „Sprache im Quelltext".
 
 ## Projekt
 
@@ -11,6 +12,20 @@ Flux deployt in den K3S-Cluster). Details: siehe `README.md`.
 
 ## Regeln
 
+- **Sprache im Quelltext** (ganzes Repo, alle Plattformen): **Bezeichner und
+  Kommentare englisch, sichtbare Texte deutsch.** Englisch sind also Typen,
+  Eigenschaften, Funktionen, Parameter, Dateinamen, Testnamen, Test-Kennungen
+  (`accessibilityIdentifier`, `testTag`, `data-testid`) und jeder Kommentar.
+  Deutsch ist allein, was jemand in der App, im Browser oder in einer
+  Meldung liest — samt der Ressourcendateien, in denen diese Texte stehen.
+  Der begründende Ton der Kommentare bleibt; es ändert sich die Sprache,
+  nicht die Haltung.
+  **Der Bestand ist noch nicht umgestellt**: Große Teile von `ios/`,
+  `android/` und `backend/` tragen weiter deutsche Bezeichner (`AppUmgebung`,
+  `OrteModell`, `DorfApi.hole` …). Das flächendeckend zu ändern ist ein
+  eigener Zug — nicht nebenbei in einer fachlichen Änderung, sonst wird jeder
+  Zweig unlesbar groß und kollidiert mit den anderen. Neuer Quelltext hält
+  sich an die Regel, angefasster Bestand bleibt, wie er heißt.
 - **Backend**: Nur Standard-Library-HTTP (`net/http`, Go 1.22-Routing),
   `modernc.org/sqlite` (CGO-frei!), keine schweren Frameworks. Vor jedem
   Commit: `gofmt -w . && go vet ./... && go test ./...`.
@@ -34,9 +49,7 @@ Flux deployt in den K3S-Cluster). Details: siehe `README.md`.
   gehört zu den übrigen in `Modelle.swift`. Ein zweiter Transport lässt
   Fristen, Kopfzeilen und Fehlerübersetzung auseinanderlaufen — genau das war
   schon einmal der Fall. Jeder Bereich wohnt unter
-  `ios/Dorf/Bereiche/<Bereich>/` und fasst keinen fremden an. Bezeichner,
-  Kommentare und alle Texte der Oberfläche sind **deutsch**; englisch bleiben
-  allein die DTO-Feldnamen, sie sind der JSON-Vertrag des Backends.
+  `ios/Dorf/Bereiche/<Bereich>/` und fasst keinen fremden an.
   **Keine Fremdbibliothek außer MapLibre** — Netz, JSON, OIDC und Ablage
   macht die Standardbibliothek. Adressen und Kennungen stehen ausschließlich
   in den Build-Einstellungen (`project.yml` → `Info.plist` →

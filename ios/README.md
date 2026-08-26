@@ -40,7 +40,7 @@ Wer eine Datei hinzufügt, ruft danach `make projekt` auf.
 
 `make testen` setzt alle vier Adressen auf den eigenen Rechner um — dieselben
 Werte wie `.github/workflows/ios.yml`. Der letzte grüne CI-Lauf meldet
-**181 Tests in 11 Suiten**.
+**154 Tests in 10 Suiten**.
 
 ### Zwei Fallstricke, die Zeit gekostet haben
 
@@ -108,14 +108,14 @@ viele Orte gerade warten, und bei Hitze einen Hinweis.
 | Bereich | Was er tut |
 |---|---|
 | **Mithelfen** | Orte als Karte oder Liste, Ampel je Aufgabe, Ortsdetail mit Plan, letzter Erledigung und Historie; melden nach Rückfrage, zurücknehmen; „Ich helfe hier mit" trägt als Helfer:in ein |
-| **Dorfkarte** (keine eigene Seite, sondern Teil von „Mithelfen" und der Verwaltung) | MapLibre mit den Orten als Ampel-Nadeln, eigener Standort; im **Auswahlmodus** liefert ein Tipp auf die Fläche die Koordinate für die Verwaltung |
+| **Dorfkarte** (keine eigene Seite, sondern Teil von „Mithelfen") | MapLibre mit den Orten als Ampel-Nadeln, eigener Standort, Tipp auf eine Nadel öffnet den Ort |
 | **Was ist los in Rössing** | Termine aus `events.json` der Website — der einzige Abruf **ohne** Zugangstoken |
 | **Rangliste** | Was das Dorf geschafft hat, wer wie viel, wo man selbst steht; fünf Zeiträume. Ohne Punkte und ohne Abzeichen für Versäumtes |
 | **Anfragen und Hinweise** | Die Vergabe: wer gerade gefragt ist, zusagen und wieder abgeben, Hinweise bestätigen |
 | **Mein Profil** | Eigene Angaben mit Sichtbarkeitsschaltern, die in Worten sagen, wer ein Feld sieht. Telefon, E-Mail und Notiz sind vorbelegt **nicht** öffentlich |
 | **Dorfbewohner** | Wer mitmacht, mit antippbarer Rufnummer und E-Mail nach Freigabe |
 | **Ideen** | „Sag uns, was die App können soll" — derselbe Eingang wie das Formular auf der Website, hier am Konto hängend |
-| **Verwaltung** | Orte und Aufgaben pflegen, am Blumenkasten stehend; Hitzefaktor setzen. Sichtbar nur für Verwaltende — durchgesetzt wird das im Backend |
+| **Verwalten** (Abschnitt der Startseite, kein Bereich) | Nur für Verwaltende: wo die Administration stattfindet — MCP-Connector in claude.ai oder Web-Verwaltung im Browser — und wie man dorthin kommt. Die App selbst legt nichts mehr an |
 | **Einstellungen** | Abmelden, Konto löschen (`DELETE /api/v1/me`), was die App über sich selbst zu sagen hat |
 
 Impressum und Datenschutz stehen auf der Startseite **und** auf dem
@@ -124,8 +124,10 @@ App würde über kurz oder lang abweichen.
 
 ## Regeln
 
-- **Deutsch.** Bezeichner, Kommentare und alle Texte der Oberfläche. Die
-  DTO-Feldnamen bleiben englisch — sie sind der JSON-Vertrag des Backends.
+- **Bezeichner und Kommentare englisch, sichtbare Texte deutsch.** Neuer
+  Quelltext hält sich daran; der Bestand ist noch nicht umgestellt (Modelle,
+  Ansichten und `DorfApi` tragen weiter deutsche Namen). Das wird in einem
+  eigenen Zug nachgeholt — nicht nebenbei in einer fachlichen Änderung.
 - **Keine Fremdbibliotheken** außer MapLibre (Karte). Netz, JSON, Anmeldung
   und Ablage macht die Standardbibliothek. Jede Abhängigkeit müsste über
   Jahre mitgepflegt werden.
@@ -165,7 +167,7 @@ aus (`Konfiguration.entwicklerLoginErlaubt`).
 
 Alles, was die App vom Server holt oder dorthin schickt, geht durch
 `DorfApi` — auch das, was in Anhängen steht (`DorfApi+Vergabe.swift`,
-`+Verwaltung`, `+Konto`, `Push/DorfApi+Geraete.swift`). Die Transport-Helfer
+`+Konto`, `Push/DorfApi+Geraete.swift`). Die Transport-Helfer
 (`hole`, `schicke`, `schickeOhneAntwort`, `fehler`) sind deshalb `internal`;
 `basis`, `sitzung` und `tokenGeber` bleiben `private`.
 
@@ -204,11 +206,7 @@ Die vollständige Liste steht in `OFFEN.md`. Das Wichtigste daraus:
   Aufgabe.** `Benachrichtigungen.gemeinsam.beiTipp` ist vorgesehen und wird
   von niemandem gesetzt; `Ziel` kennt bislang nur den Bereich, nicht den
   einzelnen Ort. Auf Android ist derselbe Weg verdrahtet.
-- **Die Verwaltung kann weniger als die Web-Verwaltung**: keine
-  Träger-Auswahl, keine Sichtbarkeit `nur_mitglieder`, keine Befähigungen,
-  keine nachgetragenen oder zurückgenommenen Erledigungen.
-- **Die Karte lässt sich nicht auf einen Ort lenken**, und ein Kartentipp
-  geht mit VoiceOver nicht — der barrierefreie Weg zur Koordinate ist
-  „Meinen Standort übernehmen".
+- **Die Karte lässt sich nicht auf einen Ort lenken.** Wer einen
+  bestimmten Ort sucht, findet ihn über die Liste.
 - **Keine E2E-Tests für iOS.** Wenn sie kommen, gilt dieselbe Regel wie
   überall: kein Test fasst einen entfernten Server an.
