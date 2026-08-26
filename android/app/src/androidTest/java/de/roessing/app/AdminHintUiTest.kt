@@ -2,6 +2,10 @@ package de.roessing.app
 
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -70,16 +74,13 @@ class AdminHintUiTest {
         val copied = mutableListOf<AdminAddress>()
         val opened = mutableListOf<AdminAddress>()
         compose.setContent {
-            DorfAppTheme { AdminHintCard(onCopy = { copied += it }, onOpen = { opened += it }) }
+            DorfAppTheme {
+                Scrollbar { AdminHintCard(onCopy = { copied += it }, onOpen = { opened += it }) }
+            }
         }
 
-        // No performScrollTo() here: the card is rendered on its own, without a
-        // scrollable parent, so there is nothing to scroll — and asking for it
-        // fails with "Semantic Node has no parent layout with a Scroll
-        // SemanticsAction". The other tests place the card inside StartScreen,
-        // where scrolling is both possible and necessary.
-        compose.onNodeWithTag("admin-hint-mcp").performClick()
-        compose.onNodeWithTag("admin-hint-web").performClick()
+        compose.onNodeWithTag("admin-hint-mcp").performScrollTo().performClick()
+        compose.onNodeWithTag("admin-hint-web").performScrollTo().performClick()
 
         assertEquals(listOf(AdminAddress.MCP), copied)
         assertEquals(listOf(AdminAddress.WEB), opened)
@@ -92,11 +93,11 @@ class AdminHintUiTest {
     @Test
     fun bothAddressesAreSpelledOut() {
         compose.setContent {
-            DorfAppTheme { AdminHintCard(onCopy = {}, onOpen = {}) }
+            DorfAppTheme { Scrollbar { AdminHintCard(onCopy = {}, onOpen = {}) } }
         }
 
-        compose.onNodeWithTag("admin-hint-mcp-url").assertIsDisplayed()
-        compose.onNodeWithTag("admin-hint-web-url").assertIsDisplayed()
+        compose.onNodeWithTag("admin-hint-mcp-url").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("admin-hint-web-url").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -113,4 +114,15 @@ class AdminHintUiTest {
         val clip = requireNotNull(clipboard.primaryClip) { "Nothing on the clipboard" }
         assertEquals(AdminAddress.MCP.url, clip.getItemAt(0).text.toString())
     }
+}
+
+/**
+ * The card on its own is taller than a small emulator screen, so the web row
+ * ends up below the fold: not displayed, not clickable. In the app the card
+ * sits inside a scrollable column — the test has to give it the same, or it
+ * tests a situation that never occurs.
+ */
+@androidx.compose.runtime.Composable
+private fun Scrollbar(content: @androidx.compose.runtime.Composable () -> Unit) {
+    Column(Modifier.verticalScroll(rememberScrollState())) { content() }
 }
