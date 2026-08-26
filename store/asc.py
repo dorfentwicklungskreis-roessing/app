@@ -314,6 +314,13 @@ def app_datensatz() -> dict:
 
 
 def app_zeigen() -> None:
+    """Nachschauen, ob und wie der App-Datensatz da ist.
+
+    Der einzige Weg, das von außen zu prüfen: Der private Schlüssel liegt nur
+    als GitHub-Secret vor, also läuft die Nachfrage über einen Workflow-Lauf.
+    Deshalb gibt dieser Unterbefehl gleich alles aus, was man dabei wissen
+    will — Kennung, Zustand der Store-Version und die letzten Builds.
+    """
     app = app_datensatz()
     a = app.get("attributes", {})
     print(f"App-Id:     {app['id']}")
@@ -321,6 +328,33 @@ def app_zeigen() -> None:
     print(f"Bundle-ID:  {a.get('bundleId')}")
     print(f"SKU:        {a.get('sku')}")
     print(f"Sprache:    {a.get('primaryLocale')}")
+
+    versionen = anfrage(
+        "GET", f"/v1/apps/{app['id']}/appStoreVersions?limit=5"
+    ).get("data", [])
+    if versionen:
+        print("Store-Versionen (neueste zuerst):")
+        for eintrag in versionen:
+            v = eintrag.get("attributes", {})
+            # appStoreState heißt in neueren Fassungen der API appVersionState;
+            # Apple liefert je nach Zeitpunkt das eine oder das andere.
+            zustand = v.get("appVersionState") or v.get("appStoreState") or "?"
+            print(f"  {v.get('versionString', '?')}  {zustand}")
+    else:
+        print("Store-Versionen: noch keine — die App wurde nie eingereicht.")
+
+    builds = anfrage(
+        "GET", f"/v1/apps/{app['id']}/builds?limit=5&sort=-uploadedDate"
+    ).get("data", [])
+    if builds:
+        print("Builds (neueste zuerst):")
+        for eintrag in builds:
+            b = eintrag.get("attributes", {})
+            abgelaufen = " (abgelaufen)" if b.get("expired") else ""
+            print(f"  Nr. {b.get('version', '?')}  {b.get('processingState', '?')}"
+                  f"  {b.get('uploadedDate', '?')}{abgelaufen}")
+    else:
+        print("Builds: noch keiner hochgeladen — TestFlight ist damit leer.")
 
 
 def testflight_gruppe() -> None:
