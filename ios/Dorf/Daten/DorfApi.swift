@@ -105,9 +105,28 @@ nonisolated final class DorfApi: Sendable {
         try await schicke("POST", "api/v1/ideen", rumpf: eingabe)
     }
 
-    // MARK: Innereien
+    // MARK: Innereien — der eine Weg zum Backend
+    //
+    // Diese Helfer sind bewusst **nicht** `private`, sondern `internal`.
+    //
+    // Die Endpunkte der App wachsen bereichsweise und wohnen deshalb in
+    // Anhängen: `DorfApi+Vergabe.swift`, `+Verwaltung`, `+Konto` und
+    // `Push/DorfApi+Geraete.swift`. Ein Anhang in einer *anderen* Datei kommt
+    // an `private` nicht heran — und weil er nicht herankam, hat sich jeder
+    // Bereich einmal seinen eigenen Transport gebaut. Am Ende gab es vier
+    // Fassungen derselben Sache, mit auseinanderlaufenden Fristen,
+    // Kopfzeilen und Fehlertexten; welche davon die richtige war, wusste
+    // niemand mehr.
+    //
+    // Genau so weit geht die Öffnung und **keinen Schritt weiter**: `basis`,
+    // `sitzung` und `tokenGeber` bleiben `private`. Wer einen Endpunkt
+    // ergänzt, benutzt `hole`, `schicke` oder `schickeOhneAntwort` — an die
+    // Sitzung selbst kommt er nicht heran und kann sich daher auch keine
+    // zweite mit anderen Fristen bauen, ohne dass es auffällt.
 
-    private func adresse(_ pfad: String, abfrage: [String: String] = [:]) -> URL {
+    /// Die Adresse eines Pfades unter der Basis. Die Abfrage steht sortiert,
+    /// damit dieselbe Anfrage immer gleich aussieht.
+    func adresse(_ pfad: String, abfrage: [String: String] = [:]) -> URL {
         var url = basis.appending(path: pfad)
         if !abfrage.isEmpty {
             url.append(queryItems: abfrage.sorted { $0.key < $1.key }
@@ -116,30 +135,48 @@ nonisolated final class DorfApi: Sendable {
         return url
     }
 
-    private func hole<T: Decodable>(_ pfad: String, abfrage: [String: String] = [:]) async throws -> T {
-        var anfrage = URLRequest(url: adresse(pfad, abfrage: abfrage))
-        anfrage.httpMethod = "GET"
-        return try await ausfuehren(anfrage)
+    /// Baut die fertige Anfrage: Adresse, Methode, Rumpf, Kopfzeilen und das
+    /// **vor jedem Versand frisch geholte** Token.
+    ///
+    /// Ein eigener Schritt, damit sich ohne Netz prüfen lässt, was
+    /// tatsächlich hinausginge — Pfad, Methode, Rumpf und Autorisierung.
+    func anfrage(_ methode: String, _ pfad: String,
+                 abfrage: [String: String] = [:],
+                 rumpf: (any Encodable)? = nil) async throws -> URLRequest {
+        var versand = URLRequest(url: adresse(pfad, abfrage: abfrage))
+        versand.httpMethod = methode
+        versand.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let rumpf {
+            versand.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            versand.httpBody = try JSONEncoder().encode(rumpf)
+        }
+        if let token = await tokenGeber() {
+            versand.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        return versand
     }
 
-    private func schicke<Rumpf: Encodable, T: Decodable>(
-        _ methode: String, _ pfad: String, rumpf: Rumpf
-    ) async throws -> T {
-        var anfrage = URLRequest(url: adresse(pfad))
-        anfrage.httpMethod = methode
-        anfrage.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        anfrage.httpBody = try JSONEncoder().encode(rumpf)
-        return try await ausfuehren(anfrage)
+    func hole<T: Decodable>(_ pfad: String, abfrage: [String: String] = [:]) async throws -> T {
+        try await ausfuehren(anfrage("GET", pfad, abfrage: abfrage))
     }
 
-    private func schickeOhneAntwort(_ methode: String, _ pfad: String) async throws {
-        var anfrage = URLRequest(url: adresse(pfad))
-        anfrage.httpMethod = methode
-        _ = try await rohAusfuehren(anfrage)
+    /// Schreiben mit Antwort. `rumpf` darf fehlen — manche Endpunkte
+    /// (Zusagen, Rückgabe) brauchen keinen.
+    func schicke<T: Decodable>(_ methode: String, _ pfad: String,
+                               rumpf: (any Encodable)? = nil) async throws -> T {
+        try await ausfuehren(anfrage(methode, pfad, rumpf: rumpf))
     }
 
-    private func ausfuehren<T: Decodable>(_ anfrage: URLRequest) async throws -> T {
-        let daten = try await rohAusfuehren(anfrage)
+    /// Schreiben ohne Antwort. Der Rumpf des Servers wird verworfen, der
+    /// Statuscode aber geprüft.
+    func schickeOhneAntwort(_ methode: String, _ pfad: String,
+                            abfrage: [String: String] = [:],
+                            rumpf: (any Encodable)? = nil) async throws {
+        _ = try await rohAusfuehren(anfrage(methode, pfad, abfrage: abfrage, rumpf: rumpf))
+    }
+
+    func ausfuehren<T: Decodable>(_ versand: URLRequest) async throws -> T {
+        let daten = try await rohAusfuehren(versand)
         // Ein leerer Rumpf ist eine gültige Antwort auf 204 — Aufrufer, die
         // trotzdem etwas erwarten, bekommen hier einen klaren Fehler.
         do {
@@ -149,17 +186,11 @@ nonisolated final class DorfApi: Sendable {
         }
     }
 
-    private func rohAusfuehren(_ vorlage: URLRequest) async throws -> Data {
-        var anfrage = vorlage
-        if let token = await tokenGeber() {
-            anfrage.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        anfrage.setValue("application/json", forHTTPHeaderField: "Accept")
-
+    func rohAusfuehren(_ versand: URLRequest) async throws -> Data {
         let daten: Data
         let antwort: URLResponse
         do {
-            (daten, antwort) = try await sitzung.data(for: anfrage)
+            (daten, antwort) = try await sitzung.data(for: versand)
         } catch {
             throw DorfFehler.netz(error.localizedDescription)
         }
@@ -167,12 +198,20 @@ nonisolated final class DorfApi: Sendable {
             throw DorfFehler.netz("Unerwartete Antwort")
         }
         guard (200 ..< 300).contains(http.statusCode) else {
-            throw fehler(status: http.statusCode, daten: daten, pfad: anfrage.url?.path ?? "")
+            throw Self.fehler(status: http.statusCode, daten: daten,
+                              pfad: versand.url?.path ?? "")
         }
         return daten
     }
 
-    private func fehler(status: Int, daten: Data, pfad: String) -> DorfFehler {
+    /// Statuscode zu Fehler — mit dem Satz des Backends, wo es einen gibt.
+    ///
+    /// Die **einzige** Übersetzung der App: Dort sitzt die Prüfung, dort
+    /// steht die Begründung, und sie wird im Wortlaut weitergereicht. Nur
+    /// wenn das Backend gar nichts sagt, steht hier ein Ersatzsatz.
+    ///
+    /// Als reine Funktion, damit sie sich ohne Netz prüfen lässt.
+    static func fehler(status: Int, daten: Data, pfad: String = "") -> DorfFehler {
         let antwort = try? JSONDecoder().decode(ApiFehlerAntwort.self, from: daten)
         let grund = antwort?.error.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         switch status {

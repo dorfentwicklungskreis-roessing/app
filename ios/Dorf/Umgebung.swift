@@ -35,16 +35,18 @@ final class AppUmgebung {
         })
         self.anmeldung = anmeldung
         self.api = api
-        self.orte = OrteModell(api: api, vergabe: VergabeApi(tokenGeber: { [anmeldung] in
-            await anmeldung.frischesToken()
-        }))
+        self.orte = OrteModell(api: api)
+        // Die Benachrichtigungen brauchen denselben Zugang: Sie melden die
+        // Gerätekennung an und beim Abmelden wieder ab. Gefragt wird damit
+        // noch niemand — das passiert erst beim Eintragen als Helfer:in.
+        Benachrichtigungen.gemeinsam.verdrahten(api: api)
     }
 
     /// Für Vorschauen und Tests: eine Umgebung, die nichts abruft.
     init(anmeldung: Anmeldung, api: DorfApi, ich: Ich?, orte: OrteModell? = nil) {
         self.anmeldung = anmeldung
         self.api = api
-        self.orte = orte ?? OrteModell(api: api, vergabe: VergabeApi(tokenGeber: { nil }))
+        self.orte = orte ?? OrteModell(api: api)
         self.ich = ich
     }
 

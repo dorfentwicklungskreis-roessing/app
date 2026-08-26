@@ -14,9 +14,7 @@ struct Kontoquelle {
 
     static func vom(_ umgebung: AppUmgebung) -> Kontoquelle {
         Kontoquelle(
-            loeschen: { [api = umgebung.api, anmeldung = umgebung.anmeldung] in
-                try await api.kontoLoeschen(token: await anmeldung.frischesToken())
-            },
+            loeschen: { [api = umgebung.api] in try await api.kontoLoeschen() },
             abmelden: { [anmeldung = umgebung.anmeldung] in anmeldung.abmelden() }
         )
     }

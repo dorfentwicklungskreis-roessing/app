@@ -22,7 +22,7 @@ struct VergabeView: View {
         .navigationTitle("Anfragen")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            let vorhanden = modell ?? VergabeModell(api: umgebung.vergabe, meinSub: umgebung.meinSub)
+            let vorhanden = modell ?? VergabeModell(api: umgebung.api, meinSub: umgebung.meinSub)
             modell = vorhanden
             await vorhanden.laden()
         }

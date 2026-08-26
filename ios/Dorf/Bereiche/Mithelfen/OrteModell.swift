@@ -16,15 +16,24 @@ struct OrteQuelle {
     var anmelden: @MainActor (Int64, String?) async throws -> Void = { _, _ in }
     /// „Ich mag nicht mehr."
     var abmelden: @MainActor (Int64, String?) async throws -> Void = { _, _ in }
+    /// Läuft **nach** einer angenommenen Anmeldung zum Mithelfen.
+    ///
+    /// Genau hier — und nirgends sonst — fragt die App nach der Erlaubnis für
+    /// Mitteilungen: Der Systemdialog kommt einmal im Leben einer
+    /// Installation, und an dieser Stelle ist selbsterklärend, wofür („Wir
+    /// sagen dir Bescheid, wenn du dran bist."). Vorbelegt mit „nichts tun",
+    /// damit kein Test das System anfasst.
+    var nachAnmeldung: @MainActor () async -> Void = {}
 
-    static func vom(_ api: DorfApi, vergabe: VergabeApi) -> OrteQuelle {
+    static func vom(_ api: DorfApi) -> OrteQuelle {
         OrteQuelle(
             orte: { try await api.orte() },
             erledigungen: { try await api.erledigungen(aufgabe: $0) },
             melden: { try await api.melden(aufgabe: $0, liter: $1, notiz: $2) },
             zuruecknehmen: { try await api.erledigungZuruecknehmen(id: $0) },
-            anmelden: { try await vergabe.anmelden(ort: $0, art: $1) },
-            abmelden: { try await vergabe.abmelden(ort: $0, art: $1) }
+            anmelden: { try await api.anmelden(ort: $0, art: $1) },
+            abmelden: { try await api.abmelden(ort: $0, art: $1) },
+            nachAnmeldung: { await Benachrichtigungen.gemeinsam.erlaubnisErfragen() }
         )
     }
 }
@@ -64,8 +73,8 @@ final class OrteModell {
 
     init(quelle: OrteQuelle) { self.quelle = quelle }
 
-    convenience init(api: DorfApi, vergabe: VergabeApi) {
-        self.init(quelle: .vom(api, vergabe: vergabe))
+    convenience init(api: DorfApi) {
+        self.init(quelle: .vom(api))
     }
 
     // MARK: Ansichten auf den Stand
@@ -168,6 +177,9 @@ final class OrteModell {
     func anmelden(ort: Int64, art: String? = nil) async {
         await schreibe(ort: ort, dank: "Du hilfst hier jetzt mit. Danke!") {
             try await self.quelle.anmelden(ort, art)
+            // Erst jetzt nach den Mitteilungen fragen — die Frage steht dann
+            // im Zusammenhang und nicht beim Start der App.
+            await self.quelle.nachAnmeldung()
         }
     }
 

@@ -154,6 +154,110 @@ nonisolated struct Aufgabe: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// Eingabe von `POST /api/v1/places/{id}/tasks` und `PUT /api/v1/tasks/{id}`.
+///
+/// Eine Aufgabe ist **entweder** regelmäßig (Intervall und Rot-Schwelle)
+/// **oder** einmalig (`oneOff` mit `dueDate`). Beides zusammen weist das
+/// Backend ab („dueDate gibt es nur bei einmaligen Aufgaben"), und zwar zu
+/// Recht: Sonst wäre nie klar, woraus sich die Ampel ergibt.
+///
+/// Deshalb wird der Fall gar nicht erst gebaut. Die beiden Bauwege
+/// `regelmaessig(…)` und `einmalig(…)` schließen sich aus, und beim Kodieren
+/// geht nur mit, was zur gewählten Art gehört: einmalig **ohne** Intervall,
+/// regelmäßig **ohne** `dueDate`.
+nonisolated struct AufgabeEingabe: Encodable, Hashable, Sendable {
+    /// `giessen` · `jaeten` · `sonstiges`
+    var kind: String
+    var title: String = ""
+    /// Nur beim Gießen; bei jeder anderen Art geht das Feld nicht mit.
+    var liters: Double?
+    var intervalDays: Double = 0
+    var redAfterDays: Double = 0
+    var oneOff: Bool = false
+    /// Datum („2026-08-20") oder RFC3339 — nur bei einmaligen Aufgaben.
+    var dueDate: String = ""
+    var removeWhenDone: Bool = false
+    var active: Bool = true
+
+    static let giessen = "giessen"
+    static let jaeten = "jaeten"
+    static let sonstiges = "sonstiges"
+
+    static let arten = [giessen, jaeten, sonstiges]
+
+    static func bezeichnung(art: String) -> String {
+        switch art {
+        case giessen: return "Gießen"
+        case jaeten: return "Jäten"
+        default: return "Sonstiges"
+        }
+    }
+
+    /// Liter gibt es nur beim Gießen — bei „Jäten, 10 Liter" wüsste niemand,
+    /// was das heißen soll.
+    static func literErlaubt(art: String) -> Bool { art == giessen }
+
+    /// Eine regelmäßige Aufgabe: Intervall (→ gelb) und Rot-Schwelle.
+    static func regelmaessig(
+        kind: String,
+        title: String = "",
+        liters: Double? = nil,
+        intervalDays: Double,
+        redAfterDays: Double,
+        removeWhenDone: Bool = false,
+        active: Bool = true
+    ) -> AufgabeEingabe {
+        AufgabeEingabe(
+            kind: kind, title: title, liters: liters,
+            intervalDays: intervalDays, redAfterDays: redAfterDays,
+            oneOff: false, dueDate: "",
+            removeWhenDone: removeWhenDone, active: active
+        )
+    }
+
+    /// Eine einmalige Aufgabe: ein Termin statt eines Intervalls.
+    static func einmalig(
+        kind: String,
+        title: String = "",
+        liters: Double? = nil,
+        dueDate: String,
+        removeWhenDone: Bool = false,
+        active: Bool = true
+    ) -> AufgabeEingabe {
+        AufgabeEingabe(
+            kind: kind, title: title, liters: liters,
+            intervalDays: 0, redAfterDays: 0,
+            oneOff: true, dueDate: dueDate,
+            removeWhenDone: removeWhenDone, active: active
+        )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case kind, title, liters, intervalDays, redAfterDays, oneOff, dueDate
+        case removeWhenDone, active
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(title, forKey: .title)
+        // Kein `liters` bei Jäten — und keine 0, die das Backend als
+        // „liters muss eine Zahl > 0 sein" abwiese.
+        if AufgabeEingabe.literErlaubt(art: kind), let menge = liters, menge > 0 {
+            try c.encode(menge, forKey: .liters)
+        }
+        try c.encode(oneOff, forKey: .oneOff)
+        if oneOff {
+            try c.encode(dueDate, forKey: .dueDate)
+        } else {
+            try c.encode(intervalDays, forKey: .intervalDays)
+            try c.encode(redAfterDays, forKey: .redAfterDays)
+        }
+        try c.encode(removeWhenDone, forKey: .removeWhenDone)
+        try c.encode(active, forKey: .active)
+    }
+}
+
 // MARK: - Vergabe
 
 /// Ein laufender Vergabe-Vorgang zu genau einer Aufgabe. Die Regeln stehen im
@@ -187,6 +291,116 @@ nonisolated struct Vorgang: Codable, Identifiable, Hashable, Sendable {
 
     var uebernommen: Bool { !claimedBy.isEmpty }
     func vonMir(_ meinSub: String?) -> Bool { !claimedBy.isEmpty && claimedBy == meinSub }
+}
+
+/// Ergänzungen zum Vorgang — gelesen, nicht gerechnet.
+nonisolated extension Vorgang {
+    /// Bis wann die Zusage hält. Die Dauer setzt das Backend (Vorgabe 24 h).
+    var zusageFrist: Date? { claimedUntil.flatMap(RFC3339.datum) }
+
+    /// Die Liste war einmal durch: Jetzt wird offen gesucht.
+    var rundruf: Bool { state == "rundruf" }
+}
+
+/// Eine Zustellung an genau mich: „du bist dran" (Anfrage) oder ein Hinweis.
+///
+/// Die Feldnamen sind der JSON-Vertrag des Backends
+/// (`model.Notification`) und bleiben deshalb englisch. Fehlende Felder
+/// ergeben Vorgabewerte — das Backend darf ergänzen, ohne dass eine ältere
+/// App-Version aufhört zu funktionieren.
+nonisolated struct Benachrichtigung: Codable, Identifiable, Hashable, Sendable {
+    /// Persönliche Anfrage der Warteschlange: „Du bist als Nächste(r) dran."
+    static let anfrage = "anfrage"
+    /// Rundruf an alle Angemeldeten, nachdem die Liste durch war.
+    static let rundruf = "rundruf"
+
+    var id: Int64 = 0
+    var assignmentId: Int64 = 0
+    var taskId: Int64 = 0
+    /// giessen · jaeten · sonstiges
+    var taskKind: String = ""
+    var taskName: String = ""
+    var placeId: Int64 = 0
+    var placeName: String = ""
+    /// anfrage · rundruf · zusage_abgelaufen · zusage_aufgehoben ·
+    /// vorgang_beendet · vorgang_entfallen
+    var kind: String = ""
+    var title: String = ""
+    var text: String = ""
+    var createdAt: String = ""
+    /// Bei einer Anfrage der Vortritt, bei einer gehaltenen Zusage deren Ende.
+    var expiresAt: String?
+    var acknowledgedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, assignmentId, taskId, taskKind, taskName, placeId, placeName
+        case kind, title, text, createdAt, expiresAt, acknowledgedAt
+    }
+
+    init(id: Int64 = 0, assignmentId: Int64 = 0, taskId: Int64 = 0, taskKind: String = "",
+         taskName: String = "", placeId: Int64 = 0, placeName: String = "", kind: String = "",
+         title: String = "", text: String = "", createdAt: String = "",
+         expiresAt: String? = nil, acknowledgedAt: String? = nil) {
+        self.id = id; self.assignmentId = assignmentId; self.taskId = taskId
+        self.taskKind = taskKind; self.taskName = taskName; self.placeId = placeId
+        self.placeName = placeName; self.kind = kind; self.title = title; self.text = text
+        self.createdAt = createdAt; self.expiresAt = expiresAt
+        self.acknowledgedAt = acknowledgedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.wert(.id, 0)
+        assignmentId = c.wert(.assignmentId, 0)
+        taskId = c.wert(.taskId, 0)
+        taskKind = c.wert(.taskKind, "")
+        taskName = c.wert(.taskName, "")
+        placeId = c.wert(.placeId, 0)
+        placeName = c.wert(.placeName, "")
+        kind = c.wert(.kind, "")
+        title = c.wert(.title, "")
+        text = c.wert(.text, "")
+        createdAt = c.wert(.createdAt, "")
+        expiresAt = c.wertOptional(.expiresAt)
+        acknowledgedAt = c.wertOptional(.acknowledgedAt)
+    }
+
+    /// Anfrage und Rundruf wollen eine Antwort; alles andere ist ein Hinweis,
+    /// der mit dem Lesen erledigt ist. Dieselbe Regel wie im Backend
+    /// (`NotificationKind.IsRequest`).
+    var istAnfrage: Bool { kind == Self.anfrage || kind == Self.rundruf }
+
+    var frist: Date? { expiresAt.flatMap(RFC3339.datum) }
+    var erstellt: Date? { RFC3339.datum(createdAt) }
+    var gelesen: Bool { !(acknowledgedAt ?? "").isEmpty }
+
+    /// Ob die Frist verstrichen ist. Bei einer Anfrage heißt das nur: Der
+    /// Vortritt ist weg, gefragt wird jetzt der Nächste. **Zusagen darf man
+    /// weiterhin** — das entscheidet ohnehin das Backend.
+    func abgelaufen(jetzt: Date = Date()) -> Bool {
+        guard let frist else { return false }
+        return jetzt >= frist
+    }
+}
+
+/// Antwort von `GET /api/v1/me/notifications`.
+nonisolated struct BenachrichtigungenAntwort: Codable, Sendable {
+    var notifications: [Benachrichtigung] = []
+
+    enum CodingKeys: String, CodingKey { case notifications }
+
+    init(notifications: [Benachrichtigung] = []) { self.notifications = notifications }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        notifications = c.wert(.notifications, [])
+    }
+}
+
+/// Eingabe von `POST /api/v1/places/{id}/signup`. Leere Aufgabenart heißt:
+/// alles, was an diesem Ort anfällt.
+nonisolated struct AnmeldeEingabe: Codable, Sendable {
+    var taskKind: String = ""
 }
 
 // MARK: - Orte
@@ -253,6 +467,32 @@ nonisolated struct ErledigungenAntwort: Codable, Sendable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         completions = c.wert(.completions, [])
+    }
+}
+
+/// Eingabe von `POST /api/v1/places` und `PUT /api/v1/places/{id}`.
+nonisolated struct OrtEingabe: Codable, Hashable, Sendable {
+    var name: String
+    var description: String = ""
+    /// `blumenkasten` · `beet` · `sonstiges`
+    var kind: String = OrtEingabe.blumenkasten
+    var lat: Double
+    var lon: Double
+    var active: Bool = true
+
+    static let blumenkasten = "blumenkasten"
+    static let beet = "beet"
+    static let sonstiges = "sonstiges"
+
+    /// Die Arten in der Reihenfolge, in der die Oberfläche sie anbietet.
+    static let arten = [blumenkasten, beet, sonstiges]
+
+    static func bezeichnung(art: String) -> String {
+        switch art {
+        case blumenkasten: return "Blumenkasten"
+        case beet: return "Beet"
+        default: return "Sonstiges"
+        }
     }
 }
 
@@ -610,6 +850,87 @@ nonisolated struct ApiFehlerAntwort: Codable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         error = c.wert(.error, "")
         retryAfter = c.wertOptional(.retryAfter)
+    }
+}
+
+// MARK: - Einstellungen des Dorfes
+
+/// Antwort von `GET/PUT /api/v1/settings`.
+///
+/// Das Backend schickt dort auch die Vergabe-Regeln mit; die gehören einem
+/// anderen Bereich und werden hier bewusst nicht gelesen — und beim Schreiben
+/// nicht mitgeschickt, damit ein Zug am Hitzefaktor sie nicht überschreibt.
+nonisolated struct Einstellungen: Decodable, Hashable, Sendable {
+    /// Hitzefaktor: skaliert **nur** die Gieß-Schwellen. 1 = normal,
+    /// 0,5 = Hitzewelle (doppelt so schnell fällig).
+    var wateringFactor: Double = 1
+
+    enum CodingKeys: String, CodingKey { case wateringFactor }
+
+    init(wateringFactor: Double = 1) { self.wateringFactor = wateringFactor }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        wateringFactor = c.wert(.wateringFactor, 1)
+    }
+}
+
+/// Eingabe von `PUT /api/v1/settings` — nur der Hitzefaktor.
+nonisolated struct HitzefaktorEingabe: Encodable, Hashable, Sendable {
+    var wateringFactor: Double
+}
+
+// MARK: - Konto
+
+/// Die Antwort von `DELETE /api/v1/me`.
+///
+/// Sie enthält bewusst zwei Sätze im Klartext, die die App **anzeigt statt
+/// nachzubauen**: was mit den Erledigungen passiert und dass die Rössing-ID
+/// bestehen bleibt. Was das Backend tut, sagt das Backend — sonst laufen
+/// beide Fassungen über die Jahre auseinander.
+nonisolated struct Kontoloeschung: Decodable, Sendable {
+    var geloescht: Bool = false
+    /// „Deine Meldungen bleiben anonym stehen …"
+    var erledigungen: String = ""
+    /// „Deine Rössing-ID bleibt bestehen …"
+    var roessingId: String = ""
+    var roessingIdUrl: String = ""
+
+    enum CodingKeys: String, CodingKey { case geloescht, erledigungen, roessingId, roessingIdUrl }
+
+    init(geloescht: Bool = false, erledigungen: String = "",
+         roessingId: String = "", roessingIdUrl: String = "") {
+        self.geloescht = geloescht; self.erledigungen = erledigungen
+        self.roessingId = roessingId; self.roessingIdUrl = roessingIdUrl
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        geloescht = c.wert(.geloescht, false)
+        erledigungen = c.wert(.erledigungen, "")
+        roessingId = c.wert(.roessingId, "")
+        roessingIdUrl = c.wert(.roessingIdUrl, "")
+    }
+}
+
+// MARK: - Gerät
+
+/// Eingabe von `POST` und `DELETE /api/v1/me/devices` — der Rumpf ist für
+/// beide derselbe: `{"token": "<hex>", "platform": "ios"}`.
+///
+/// `platform` ist das Feld, an dem das Backend den Versandweg festmacht:
+/// „ios" spricht direkt mit Apple (APNs), alles andere geht über Firebase
+/// (`backend/internal/push/weiche.go`).
+nonisolated struct GeraetEingabe: Encodable, Hashable, Sendable {
+    /// Die Plattform, für die diese App Kennungen meldet.
+    static let plattform = "ios"
+
+    var token: String
+    var platform: String = GeraetEingabe.plattform
+
+    init(kennung: String) {
+        self.token = kennung
+        self.platform = GeraetEingabe.plattform
     }
 }
 

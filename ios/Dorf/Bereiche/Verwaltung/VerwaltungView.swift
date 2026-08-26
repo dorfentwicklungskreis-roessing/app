@@ -37,10 +37,10 @@ struct VerwaltungView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             guard umgebung.binAdmin else { return }
-            let liste = orte ?? OrteModell(api: umgebung.api, vergabe: umgebung.vergabe)
+            let liste = orte ?? umgebung.orte
             orte = liste
             let vorhanden = modell ?? VerwaltungModell(quelle: .vom(
-                umgebung.verwaltung,
+                umgebung.api,
                 neuLaden: { await liste.laden() }
             ))
             modell = vorhanden

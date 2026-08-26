@@ -51,7 +51,6 @@ final class Benachrichtigungen {
     var beiTipp: ((PushZiel) -> Void)?
 
     @ObservationIgnored private var api: DorfApi?
-    @ObservationIgnored private var zugangstoken: @Sendable () async -> String? = { nil }
     @ObservationIgnored private let ablage: UserDefaults
 
     /// Für Tests und Vorschauen: eigene Ablage statt der der App.
@@ -63,11 +62,11 @@ final class Benachrichtigungen {
 
     /// Verbindet die Benachrichtigungen mit dem Backend-Zugang.
     ///
-    /// Muss einmal beim Start passieren (siehe `ios/OFFEN-push.md`); ohne das
-    /// wird keine Kennung angemeldet, und die App läuft schlicht ohne Push.
-    func verdrahten(api: DorfApi, zugangstoken: @escaping @Sendable () async -> String?) {
+    /// Passiert einmal beim Start in `AppUmgebung.init`; ohne das wird keine
+    /// Kennung angemeldet, und die App läuft schlicht ohne Push. Das Token
+    /// bringt `DorfApi` selbst mit — es holt vor jeder Anfrage ein frisches.
+    func verdrahten(api: DorfApi) {
         self.api = api
-        self.zugangstoken = zugangstoken
     }
 
     // MARK: Erlaubnis
@@ -160,7 +159,7 @@ final class Benachrichtigungen {
         guard Geraetekennung.istBrauchbar(kennung) else { return }
         guard let api else { return }
         do {
-            try await api.geraetAnmelden(kennung: kennung, zugangstoken: zugangstoken)
+            try await api.geraetAnmelden(kennung: kennung)
             merken(kennung)
         } catch {
             // Kein Netz oder abgelaufene Anmeldung: Der nächste Start
@@ -187,7 +186,7 @@ final class Benachrichtigungen {
         UIApplication.shared.unregisterForRemoteNotifications()
         guard let kennung = gemerkteKennung, let api else { return }
         do {
-            try await api.geraetAbmelden(kennung: kennung, zugangstoken: zugangstoken)
+            try await api.geraetAbmelden(kennung: kennung)
             merken(nil)
         } catch {
             // stehen lassen, beim nächsten Mal erneut versuchen

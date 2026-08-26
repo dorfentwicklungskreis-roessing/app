@@ -66,9 +66,20 @@ struct PushTests {
 
     // MARK: Anfragen an den Dorfserver
 
-    @Test func anmeldungSchicktKennungUndPlattform() throws {
-        let anfrage = try Geraeteanmeldung.anfrage(
-            "POST", kennung: "8a5f1c2d", basis: Self.testBasis, zugangstoken: "tok-123")
+    /// Ein Zugang mit fester Adresse und festem Token — gebaut wird die
+    /// Anfrage vom **gemeinsamen** Transport (`DorfApi.anfrage`), damit hier
+    /// geprüft wird, was tatsächlich hinausginge. Geschickt wird nichts.
+    private static func zugang(token: String?) -> DorfApi {
+        DorfApi(basis: testBasis, tokenGeber: { token })
+    }
+
+    private static func geraeteanfrage(_ methode: String, token: String?) async throws -> URLRequest {
+        try await zugang(token: token).anfrage(
+            methode, DorfApi.geraetePfad, rumpf: GeraetEingabe(kennung: "8a5f1c2d"))
+    }
+
+    @Test func anmeldungSchicktKennungUndPlattform() async throws {
+        let anfrage = try await Self.geraeteanfrage("POST", token: "tok-123")
 
         #expect(anfrage.httpMethod == "POST")
         #expect(anfrage.url?.path == "/api/v1/me/devices")
@@ -83,11 +94,9 @@ struct PushTests {
         #expect(gelesen.count == 2)
     }
 
-    @Test func abmeldungSchicktDenselbenRumpf() throws {
-        let an = try Geraeteanmeldung.anfrage(
-            "POST", kennung: "8a5f1c2d", basis: Self.testBasis, zugangstoken: "tok")
-        let ab = try Geraeteanmeldung.anfrage(
-            "DELETE", kennung: "8a5f1c2d", basis: Self.testBasis, zugangstoken: "tok")
+    @Test func abmeldungSchicktDenselbenRumpf() async throws {
+        let an = try await Self.geraeteanfrage("POST", token: "tok")
+        let ab = try await Self.geraeteanfrage("DELETE", token: "tok")
 
         #expect(ab.httpMethod == "DELETE")
         #expect(ab.url == an.url)
@@ -102,11 +111,10 @@ struct PushTests {
         return try #require(try JSONSerialization.jsonObject(with: roh) as? [String: String])
     }
 
-    @Test func ohneTokenGehtKeineAutorisierungMit() throws {
+    @Test func ohneTokenGehtKeineAutorisierungMit() async throws {
         // Nicht angemeldet: Der Server weist das ab (401), und das ist auch
         // richtig so — eine Kennung ohne Person hätte er nirgends abzulegen.
-        let anfrage = try Geraeteanmeldung.anfrage(
-            "POST", kennung: "8a5f1c2d", basis: Self.testBasis, zugangstoken: nil)
+        let anfrage = try await Self.geraeteanfrage("POST", token: nil)
         #expect(anfrage.value(forHTTPHeaderField: "Authorization") == nil)
     }
 

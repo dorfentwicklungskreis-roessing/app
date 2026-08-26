@@ -33,7 +33,7 @@ struct VerwaltungQuelle {
     var neuLaden: @MainActor () async -> Void
 
     static func vom(
-        _ zugang: DorfApi.Verwaltung,
+        _ zugang: DorfApi,
         neuLaden: @escaping @MainActor () async -> Void
     ) -> VerwaltungQuelle {
         VerwaltungQuelle(
