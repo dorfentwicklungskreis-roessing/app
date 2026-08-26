@@ -114,6 +114,11 @@ enum Karteneinstellungen {
     static let nadelradius = 11.0
     static let nadelrand = 2.5
 
+    /// Der gewählte Punkt im Auswahlmodus. Etwas größer und mit breiterem
+    /// Rand als eine Ampel-Nadel, damit man ihn nicht für einen Ort hält.
+    static let auswahlradius = 13.0
+    static let auswahlrand = 3.0
+
     /// Trefferfläche für den Tipp: ein Finger ist keine Mauszeigerspitze.
     /// 44 Punkte sind Apples Mindestmaß für eine Bedienfläche.
     static let trefferbreite = 44.0
@@ -184,6 +189,37 @@ enum Kartendaten {
     }
 
     static func geoJson(aus orte: [Ort]) -> Data { geoJson(merkmale(aus: orte)) }
+
+    // MARK: Auswahl
+
+    /// Der gewählte Punkt als eigene GeoJSON-Sammlung.
+    ///
+    /// Eigene Quelle, nicht ein weiteres Merkmal in der Ortsliste: Der Punkt,
+    /// den jemand gerade auf der Karte antippt, ist noch kein Ort — er darf
+    /// weder ampelfarben werden noch beim Antippen einen Ort öffnen. Ohne
+    /// Auswahl bleibt die Sammlung leer, und die Ebene zeigt nichts.
+    static func auswahlsammlung(_ punkt: Kartenpunkt?) -> [String: Any] {
+        var merkmale: [[String: Any]] = []
+        if let punkt, punkt.gueltig {
+            merkmale.append([
+                "type": "Feature",
+                "geometry": [
+                    "type": "Point",
+                    // Länge vor Breite — wie bei den Orten auch.
+                    "coordinates": [punkt.laenge, punkt.breite],
+                ] as [String: Any],
+                "properties": [:] as [String: Any],
+            ])
+        }
+        return ["type": "FeatureCollection", "features": merkmale]
+    }
+
+    static func auswahlGeoJson(_ punkt: Kartenpunkt?) -> Data {
+        let leer = Data(#"{"type":"FeatureCollection","features":[]}"#.utf8)
+        guard let daten = try? JSONSerialization.data(withJSONObject: auswahlsammlung(punkt))
+        else { return leer }
+        return daten
+    }
 
     // MARK: Ausschnitt
 

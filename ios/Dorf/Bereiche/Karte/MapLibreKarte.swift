@@ -15,6 +15,11 @@ struct MapLibreKarte: UIViewRepresentable {
     /// anzulegen wirft in MapLibre.
     static let quellenkennung = "orte"
     static let ebenenkennung = "orte-kreise"
+    /// Der gewählte Punkt im Auswahlmodus liegt in einer eigenen Quelle,
+    /// damit er nicht mit den echten Orten verwechselt wird — weder vom Auge
+    /// noch von der Treffersuche beim Tippen.
+    static let auswahlQuellenkennung = "auswahl"
+    static let auswahlEbenenkennung = "auswahl-kreis"
 
     let orte: [Ort]
     /// Die Größe der Karte in Punkten. Sie kommt aus SwiftUI, weil
@@ -29,6 +34,10 @@ struct MapLibreKarte: UIViewRepresentable {
     /// Steigt bei „Erneut versuchen", wenn der Stil nicht geladen werden konnte.
     var stilVersuch: Int
     var auswahl: (Ort) -> Void
+    /// Auswahlmodus: der bereits gewählte Punkt (oder keiner).
+    var gewaehlterPunkt: Kartenpunkt?
+    /// Auswahlmodus: Tipp auf die freie Fläche. `nil` heißt, es gibt keinen.
+    var flaecheGetippt: ((Kartenpunkt) -> Void)?
     /// Meldet der Oberfläche, ob der Stil steht (`nil`) oder woran es hakt.
     var stilzustand: (String?) -> Void
 
@@ -73,9 +82,12 @@ struct MapLibreKarte: UIViewRepresentable {
         let koordinator = context.coordinator
         koordinator.auswahl = auswahl
         koordinator.stilzustand = stilzustand
+        koordinator.flaecheGetippt = flaecheGetippt
         koordinator.orte = orte
         koordinator.groesse = groesse
+        koordinator.gewaehlterPunkt = gewaehlterPunkt
         koordinator.merkmaleSetzen(karte)
+        koordinator.auswahlSetzen(karte)
         koordinator.standortSetzen(karte, zeigen: eigenenStandortZeigen)
         koordinator.hinfahrenWennGewuenscht(karte, zaehler: hinfahren)
         koordinator.stilNeuLadenWennGewuenscht(karte, versuch: stilVersuch)
@@ -95,9 +107,11 @@ struct MapLibreKarte: UIViewRepresentable {
 
     final class Koordinator: NSObject, MLNMapViewDelegate {
         var auswahl: (Ort) -> Void
+        var flaecheGetippt: ((Kartenpunkt) -> Void)?
         var stilzustand: (String?) -> Void
         var orte: [Ort] = []
         var groesse: CGSize = .zero
+        var gewaehlterPunkt: Kartenpunkt?
         var tippErkenner: UITapGestureRecognizer?
 
         /// Der Stil steht und Quelle samt Ebene sind angelegt.
@@ -165,6 +179,41 @@ struct MapLibreKarte: UIViewRepresentable {
             ebene.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
             ebene.circleOpacity = NSExpression(forConstantValue: 0.95)
             stil.addLayer(ebene)
+            auswahlEbeneAnlegen(in: stil)
+        }
+
+        /// Die Ebene des gewählten Punktes kommt **nach** den Ortsnadeln in
+        /// den Stil und liegt damit obenauf: Wer einen Punkt neben einen
+        /// bestehenden Ort setzt, soll seine Wahl auch sehen.
+        private func auswahlEbeneAnlegen(in stil: MLNStyle) {
+            let vorhanden = stil.source(withIdentifier: MapLibreKarte.auswahlQuellenkennung)
+                as? MLNShapeSource
+            let quelle: MLNShapeSource
+            if let vorhanden {
+                quelle = vorhanden
+            } else {
+                quelle = MLNShapeSource(
+                    identifier: MapLibreKarte.auswahlQuellenkennung,
+                    shape: auswahlgestalt(),
+                    options: nil
+                )
+                stil.addSource(quelle)
+            }
+            quelle.shape = auswahlgestalt()
+
+            guard stil.layer(withIdentifier: MapLibreKarte.auswahlEbenenkennung) == nil else { return }
+            let ebene = MLNCircleStyleLayer(
+                identifier: MapLibreKarte.auswahlEbenenkennung,
+                source: quelle
+            )
+            ebene.circleRadius = NSExpression(forConstantValue: Karteneinstellungen.auswahlradius)
+            // Kein Ampelton: Der gewählte Punkt ist noch kein Ort und darf
+            // nicht aussehen, als hätte er einen Zustand.
+            ebene.circleColor = NSExpression(forConstantValue: UIColor.tintColor)
+            ebene.circleStrokeWidth = NSExpression(forConstantValue: Karteneinstellungen.auswahlrand)
+            ebene.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+            ebene.circleOpacity = NSExpression(forConstantValue: 0.9)
+            stil.addLayer(ebene)
         }
 
         /// Die Farbe der Nadel kommt aus der Eigenschaft `ampel` — dieselben
@@ -188,6 +237,11 @@ struct MapLibreKarte: UIViewRepresentable {
             return try? MLNShape(data: daten, encoding: String.Encoding.utf8.rawValue)
         }
 
+        private func auswahlgestalt() -> MLNShape? {
+            let daten = Kartendaten.auswahlGeoJson(gewaehlterPunkt)
+            return try? MLNShape(data: daten, encoding: String.Encoding.utf8.rawValue)
+        }
+
         /// Die Orte haben sich geändert: nur die Quelle neu füttern. Die Ebene
         /// bleibt, die Kamera bleibt, der Stil wird nicht neu geladen.
         func merkmaleSetzen(_ karte: MLNMapView) {
@@ -197,6 +251,15 @@ struct MapLibreKarte: UIViewRepresentable {
             else { return }
             quelle.shape = gestalt()
             vorleseElementeSetzen(karte)
+        }
+
+        /// Die Wahl hat sich geändert: nur die Auswahlquelle neu füttern.
+        func auswahlSetzen(_ karte: MLNMapView) {
+            guard stilSteht,
+                  let quelle = karte.style?
+                  .source(withIdentifier: MapLibreKarte.auswahlQuellenkennung) as? MLNShapeSource
+            else { return }
+            quelle.shape = auswahlgestalt()
         }
 
         func stilNeuLadenWennGewuenscht(_ karte: MLNMapView, versuch: Int) {
@@ -284,8 +347,16 @@ struct MapLibreKarte: UIViewRepresentable {
                 in: flaeche,
                 styleLayerIdentifiers: [MapLibreKarte.ebenenkennung]
             )
-            guard let ort = naechsterOrt(zu: punkt, unter: treffer, karte: karte) else { return }
-            auswahl(ort)
+            if let ort = naechsterOrt(zu: punkt, unter: treffer, karte: karte) {
+                auswahl(ort)
+                return
+            }
+            // Kein Ort getroffen. Im Auswahlmodus ist die freie Fläche die
+            // Antwort: genau dort steht der Blumenkasten.
+            guard let flaecheGetippt else { return }
+            let koordinate = karte.convert(punkt, toCoordinateFrom: karte)
+            guard CLLocationCoordinate2DIsValid(koordinate) else { return }
+            flaecheGetippt(Kartenpunkt(breite: koordinate.latitude, laenge: koordinate.longitude))
         }
 
         /// Liegen mehrere Nadeln in der Trefferfläche, gewinnt die, die dem
@@ -322,6 +393,15 @@ struct MapLibreKarte: UIViewRepresentable {
             ganzeKarte.accessibilityValue = merkmale.isEmpty
                 ? "Keine Orte"
                 : "\(merkmale.count) Orte"
+            if flaecheGetippt != nil {
+                // Ein Tipp auf eine bestimmte Stelle ist mit VoiceOver nicht
+                // zu machen — der barrierefreie Weg zur Koordinate ist der
+                // Knopf „Meinen Standort übernehmen" im Formular.
+                ganzeKarte.accessibilityHint = gewaehlterPunkt == nil
+                    ? "Auswahl: Tippe auf die Karte, wo der Ort liegt. "
+                        + "Oder übernimm im Formular deinen Standort."
+                    : "Auswahl getroffen. Ein weiterer Tipp auf die Karte verschiebt sie."
+            }
             ganzeKarte.accessibilityFrameInContainerSpace = karte.bounds
             elemente.append(ganzeKarte)
 
