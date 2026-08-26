@@ -11,6 +11,7 @@ enum Ziel: Hashable {
     case veranstaltungen
     case ideen
     case anfragen
+    case verwaltung
     case einstellungen
 }
 
@@ -28,6 +29,7 @@ extension View {
             case .veranstaltungen: VeranstaltungenView()
             case .ideen: IdeenView()
             case .anfragen: VergabeView()
+            case .verwaltung: VerwaltungView()
             case .einstellungen: EinstellungenView()
             }
         }

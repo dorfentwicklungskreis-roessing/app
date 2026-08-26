@@ -4,26 +4,19 @@ import SwiftUI
 /// Liste, und dahinter je Ort die Aufgaben mit dem Knopf zum Melden.
 struct MithelfenView: View {
     @Environment(AppUmgebung.self) private var umgebung
-    @State private var modell: OrteModell?
 
     var body: some View {
-        Group {
-            if let modell {
-                MithelfenInhalt(modell: modell, meinSub: umgebung.meinSub)
-            } else {
-                ProgressView().controlSize(.large)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .navigationTitle("Mithelfen")
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            // Das Modell gehört der Seite und wird einmal gebaut — beim
-            // zweiten Erscheinen (Zurück aus dem Detail) wird nur neu geladen.
-            let vorhanden = modell ?? OrteModell(api: umgebung.api, vergabe: umgebung.vergabe)
-            modell = vorhanden
-            await vorhanden.laden()
-        }
+        // Das Modell gehört der **Umgebung**, nicht dieser Seite: Die
+        // Startseite zählt daraus die wartenden Orte und liest den
+        // Hitzefaktor. Ein eigenes Modell hier hieße ein zweiter Abruf und —
+        // schlimmer — zwei Stände: Die Kachel zählte dann etwas anderes, als
+        // die Liste dahinter zeigt.
+        MithelfenInhalt(modell: umgebung.orte, meinSub: umgebung.meinSub)
+            .navigationTitle("Mithelfen")
+            .navigationBarTitleDisplayMode(.inline)
+            // Beim zweiten Erscheinen (Zurück aus dem Detail) wird nur neu
+            // geladen; der letzte Stand bleibt so lange stehen.
+            .task { await umgebung.orte.laden() }
     }
 }
 

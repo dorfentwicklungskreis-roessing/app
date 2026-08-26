@@ -12,8 +12,6 @@ import UserNotifications
 /// @UIApplicationDelegateAdaptor(PushDelegat.self) private var pushDelegat
 /// ```
 ///
-/// Die Zeile selbst steht noch nicht dort — siehe `ios/OFFEN-push.md`.
-///
 /// Hier wird bewusst **nichts entschieden**: Der Delegat reicht weiter, was
 /// das System meldet. Die Regeln stehen in `Benachrichtigungen`.
 final class PushDelegat: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {

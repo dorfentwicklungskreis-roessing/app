@@ -25,6 +25,8 @@ Wer eine Datei hinzufügt, ruft danach `make projekt` auf.
 | `Dorf/Konfiguration.swift` | Adressen und Kennungen, aus Build-Einstellungen (`project.yml`) |
 | `Dorf/Daten/Modelle.swift` | Die DTOs des Backends. Feldnamen 1:1 wie im JSON |
 | `Dorf/Daten/DorfApi.swift` | Der einzige Weg zum Backend (`URLSession`, kein Framework) |
+| `Dorf/Daten/DorfApi+*.swift` | Weitere Endpunkte als Anhänge — derselbe Transport |
+| `Dorf/Push/` | Erlaubnis, Kanäle, Gerätekennung (APNs, ohne Firebase) |
 | `Dorf/Anmeldung/` | OIDC Authorization Code + PKCE, Schlüsselbund, Anmeldebildschirm |
 | `Dorf/Navigation/` | Startseite und Verdrahtung der Bereiche (`Ziel`) |
 | `Dorf/Bereiche/<Bereich>/` | Je Bereich ein Ordner. Ein Bereich fasst keinen fremden an |
@@ -63,9 +65,32 @@ Angefordert wird beim Login zusätzlich der Scope
 `urn:zitadel:iam:org:projects:roles` („projects", Plural). Ohne ihn stellt
 Zitadel ein Token **ganz ohne Rollen** aus — dann ist niemand Verwaltung.
 
+## Genau ein Weg zum Backend
+
+Alles, was die App vom Server holt oder dorthin schickt, geht durch
+`DorfApi` — auch das, was in Anhängen steht (`DorfApi+Vergabe.swift`,
+`+Verwaltung`, `+Konto`, `Push/DorfApi+Geraete.swift`). Die Transport-Helfer
+(`hole`, `schicke`, `schickeOhneAntwort`, `fehler`) sind deshalb `internal`;
+`basis`, `sitzung` und `tokenGeber` bleiben `private`.
+
+Das ist keine Förmlichkeit: Als die Helfer noch `private` waren, hat sich
+jeder Bereich seinen eigenen Transport gebaut, und Fristen, Kopfzeilen und
+Fehlerübersetzung liefen auseinander. Wer einen Endpunkt ergänzt, benutzt
+die Helfer und schreibt das DTO zu den übrigen in `Modelle.swift`.
+
+## Push-Benachrichtigungen
+
+Ohne Firebase: Die App meldet ihre **rohe APNs-Kennung** beim Dorfserver an,
+der spricht direkt mit Apple (`backend/internal/push/apns.go`). Nach der
+Erlaubnis gefragt wird **erst, wenn sich jemand als Helfer:in einträgt** —
+der Systemdialog kommt einmal im Leben einer Installation, und dort ist
+selbsterklärend, wofür. Push ist dabei die Abkürzung, nicht der Weg: Jede
+Anfrage steht auch in der Abrufliste und erscheint beim nächsten Öffnen.
+
 ## Was noch fehlt
 
 - Apple-Signierung: `DEVELOPMENT_TEAM` in `project.yml` ist leer, gebaut wird
   bislang nur für den Simulator.
-- Push (APNs), Vergabe/Helfer-Anfragen und der Bereich „Verwaltung" —
-  bewusst nach der ersten Fassung.
+- Der Tipp auf eine Push-Meldung öffnet die App, führt aber noch nicht zur
+  Aufgabe.
+- Weiteres in `OFFEN.md`.

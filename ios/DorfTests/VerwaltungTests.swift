@@ -258,7 +258,7 @@ struct VerwaltungTests {
     // MARK: - Das Backend entscheidet
 
     @Test func dreiundvierzigNulldreiZeigtDenWortlautDesBackends() {
-        let fehler = DorfApi.Verwaltung.fehler(
+        let fehler = DorfApi.fehler(
             status: 403, daten: Self.fehlerdaten("admin-Rolle erforderlich")
         )
         guard case .keineBerechtigung(let grund) = fehler else {
@@ -270,12 +270,12 @@ struct VerwaltungTests {
     }
 
     @Test func ohneBegruendungStehtWenigstensEinSatzDa() {
-        let fehler = DorfApi.Verwaltung.fehler(status: 403, daten: Data())
+        let fehler = DorfApi.fehler(status: 403, daten: Data())
         #expect(fehler.klartext == "Dafür fehlt die Berechtigung.")
     }
 
     @Test func vierhundertZeigtDenGrundDerPruefung() {
-        let fehler = DorfApi.Verwaltung.fehler(
+        let fehler = DorfApi.fehler(
             status: 400,
             daten: Self.fehlerdaten("dueDate gibt es nur bei einmaligen Aufgaben (oneOff)")
         )
@@ -283,13 +283,13 @@ struct VerwaltungTests {
     }
 
     @Test func weitereStatuscodesWerdenUebersetzt() {
-        #expect(DorfApi.Verwaltung.fehler(status: 401, daten: Data()).klartext
+        #expect(DorfApi.fehler(status: 401, daten: Data()).klartext
             == DorfFehler.nichtAngemeldet.klartext)
-        #expect(DorfApi.Verwaltung.fehler(status: 404, daten: Data()).klartext
+        #expect(DorfApi.fehler(status: 404, daten: Data()).klartext
             == DorfFehler.nichtGefunden.klartext)
-        #expect(DorfApi.Verwaltung.fehler(status: 429, daten: Data()).klartext
+        #expect(DorfApi.fehler(status: 429, daten: Data()).klartext
             == DorfFehler.zuVieleAnfragen.klartext)
-        #expect(DorfApi.Verwaltung.fehler(status: 500, daten: Data()).klartext
+        #expect(DorfApi.fehler(status: 500, daten: Data()).klartext
             == DorfFehler.serverfehler(status: 500).klartext)
     }
 

@@ -12,7 +12,7 @@ struct VergabeQuelle {
     var zusagen: @MainActor (Int64) async throws -> Vorgang
     var zurueckgeben: @MainActor (Int64) async throws -> Vorgang
 
-    static func vom(_ api: VergabeApi) -> VergabeQuelle {
+    static func vom(_ api: DorfApi) -> VergabeQuelle {
         VergabeQuelle(
             benachrichtigungen: { try await api.benachrichtigungen() },
             gelesen: { try await api.gelesen(benachrichtigung: $0) },
@@ -77,7 +77,7 @@ final class VergabeModell {
         self.meinSub = meinSub
     }
 
-    convenience init(api: VergabeApi, meinSub: String? = nil) {
+    convenience init(api: DorfApi, meinSub: String? = nil) {
         self.init(quelle: .vom(api), meinSub: meinSub)
     }
 

@@ -302,7 +302,7 @@ struct VergabeTests {
     @Test func neunundvierzigNeunWirdZuSchonVergeben() {
         let rumpf = Data(#"{"error":"Diese Aufgabe wurde gerade schon von Bernd übernommen."}"#.utf8)
 
-        let fehler = VergabeApi.fehler(status: 409, daten: rumpf)
+        let fehler = DorfApi.fehler(status: 409, daten: rumpf)
 
         guard case .schonVergeben(let grund) = fehler else {
             Issue.record("409 muss „schon vergeben“ heißen, nicht „Serverfehler“.")
@@ -311,7 +311,7 @@ struct VergabeTests {
         #expect(grund == "Diese Aufgabe wurde gerade schon von Bernd übernommen.")
         #expect(fehler.klartext == grund)
         // Ohne Begründung bleibt ein Satz übrig, der niemanden ratlos lässt.
-        #expect(VergabeApi.fehler(status: 409, daten: Data()).klartext
+        #expect(DorfApi.fehler(status: 409, daten: Data()).klartext
             == "Das hat gerade jemand anderes übernommen.")
     }
 

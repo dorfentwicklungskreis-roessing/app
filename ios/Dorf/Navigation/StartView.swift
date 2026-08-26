@@ -60,6 +60,22 @@ struct StartView: View {
                     )
                 }
 
+                // Nur für Verwaltende. Das ist **Höflichkeit, keine
+                // Sicherung**: Durchgesetzt wird die Regel im Backend, das
+                // jede Änderung ohne die Rolle `admin` mit 403 abweist. Die
+                // Kachel auszublenden erspart nur den Weg dorthin — und
+                // `VerwaltungView` sagt es noch einmal, falls jemand über
+                // einen Umweg doch dort landet.
+                if umgebung.binAdmin {
+                    Section("Verwaltung") {
+                        Bereichskachel(
+                            ziel: .verwaltung, symbol: "wrench.and.screwdriver.fill",
+                            titel: "Verwaltung",
+                            untertitel: "Orte und Aufgaben pflegen."
+                        )
+                    }
+                }
+
                 Section {
                     Bereichskachel(
                         ziel: .ideen, symbol: "lightbulb.fill", titel: "Idee vorschlagen",
