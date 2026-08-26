@@ -18,7 +18,7 @@ Apple-Developer-Konto und muss von Hand gemacht werden.
 | Anzeigename auf dem Home-Bildschirm | **Rössing** (`CFBundleDisplayName` in `ios/Dorf/Info.plist`) | |
 | Version | `MARKETING_VERSION 0.1.0` (`ios/project.yml`); die Buildnummer setzt die CI | |
 | Signierzertifikat / Profil | **fehlt noch** — legt der Auslieferungs-Workflow beim ersten Lauf selbst an | ⬜ |
-| Screenshots | **fehlen noch** | ⬜ |
+| Screenshots | hochgeladen an Version `1.0` — 7 Bilder je Sprache (de-DE, en-US) und Größe (6,9″ iPhone, 13″ iPad); erzeugt und wiederholbar über `store/screenshots/` | ✅ |
 | APNs-Schlüssel | **fehlt noch** (Push ist in der App noch nicht gebaut) | ⬜ |
 
 Nachsehen lässt sich der Stand jederzeit — der Befehl fragt App Store Connect
@@ -139,6 +139,12 @@ liegen im Repo, sie müssen nur hinüber:
 | **App Privacy** | `store/ios-datenschutz.md` — je Datenart erhoben/verknüpft/Tracking. **Nur von Hand:** Für die Datenschutzangaben gibt es keine API (Schritt 11) |
 | *Pricing and Availability* | **Free**, weltweit — **gesetzt**, `python3 store/asc.py verfuegbarkeit` (Begründung in Schritt 11) |
 | **App Screenshots** | **fehlen noch** — mindestens einer für 6,9″ iPhone (1290×2796 oder 1320×2868). Apple rechnet daraus die kleineren Größen selbst |
+| *App Information* → **Category** | Primary: **Utilities**, Secondary: **Lifestyle** (frei wählbar, jederzeit änderbar) |
+| *App Information* → **Content Rights** | „Enthält keine Inhalte Dritter" |
+| *Age Rating* → Fragebogen | Antworten stehen in `store/content-rating.md`. **Abweichung für iOS:** „Werden Daten an Dritte weitergegeben?" ist hier **Nein** — es gibt kein Push und damit kein Firebase |
+| **App Privacy** | `store/ios-datenschutz.md` — je Datenart erhoben/verknüpft/Tracking |
+| *Pricing and Availability* | **Free**, weltweit verfügbar |
+| **App Screenshots** | **liegen** — je Sprache sieben Bilder für 6,9″ iPhone (1320×2868, Anzeigetyp `APP_IPHONE_67`) und sieben für 13″ iPad (2064×2752, `APP_IPAD_PRO_3GEN_129`). Aufnehmen und Hochladen: `store/screenshots/README.md` |
 
 Die Zeichengrenzen sind nachgerechnet, nicht geschätzt:
 
@@ -576,6 +582,45 @@ aller drei Bilder mit.
 
 ---
 
+## 9a. Store-Bilder — erledigt
+
+Sieben Bilder je Sprache und Gerätegröße liegen unter
+`store/screenshots/ios/<sprache>/<gerät>/` und stehen an der Store-Version.
+Der ganze Weg — Beispieldaten, lokaler Kartenstil, Prüfstand, Upload — ist in
+**`store/screenshots/README.md`** beschrieben; hier nur das Nötigste.
+
+**Kein Bild entsteht gegen die Produktion.** Backend, Terminfeed und
+Kartenstil laufen lokal, angemeldet wird über den Entwickler-Login
+(`DEV_AUTH=1`, nur im Debug-Build), und auf den Bildern steht kein echter
+Dorfbewohner: Alle Namen (Anna B., Bernd K., Lena …), Rufnummern und
+E-Mail-Adressen sind erfunden.
+
+Neu aufnehmen:
+
+```sh
+store/screenshots/aufnehmen.sh 59AC6B50-FB37-4DF2-9E3B-0B9DD67A8D67 iphone-6_9
+store/screenshots/aufnehmen.sh 82470F74-87D2-45EB-969F-66604BFB123D ipad-13
+```
+
+Hochladen (erst zeigen, dann schicken):
+
+```sh
+python3 store/check_ios_metadata.py
+python3 store/asc.py screenshots-hochladen --probe
+python3 store/asc.py screenshots-hochladen
+```
+
+Der Unterbefehl leert jeden Bildsatz vor dem Füllen — sonst wächst er mit
+jedem Lauf, und Apple nimmt höchstens zehn Bilder je Anzeigetyp. Eingereicht
+wird dabei nichts.
+
+**de-DE und en-US bekommen dieselben Bilder.** Die App ist durchgehend
+deutsch; eine englische Oberfläche gibt es nicht. Das ist zulässig und
+ehrlicher, als eine Übersetzung vorzutäuschen — die englische Beschreibung
+sagt es ausdrücklich („The interface is in German only").
+
+---
+
 ## 10. Und dann?
 
 1. Build hochladen (Schritt 5), intern testen, Fehler beheben, neu
@@ -793,6 +838,16 @@ darüber Hinausgehende macht die CI.
 5. ~~**Passwort des Prüfkontos `apple.review` eintragen**~~ — über
    `python3 store/asc.py pruefangaben` gesetzt; das Passwort kommt dabei aus
    `PRUEFKONTO_PASSWORT` und nicht aus dem Repo (Schritt 11).
+3. ~~Screenshots aufnehmen und hochladen~~ — **erledigt.** Sie stehen an
+   der Store-Version und lassen sich jederzeit neu erzeugen:
+   `store/screenshots/aufnehmen.sh <udid> <gerät>`, danach
+   `python3 store/asc.py screenshots-hochladen` (erst mit `--probe`).
+   Der ganze Weg steht in `store/screenshots/README.md`. Für TestFlight
+   werden sie nicht gebraucht, für die Store-Einreichung schon.
+4. **Store-Texte in App Store Connect eintragen** (Schritt 3, Tabelle). Sie
+   liegen fertig unter `store/metadata/ios/`.
+5. **Passwort des Prüfkontos `apple.review` eintragen** (Schritt 8) — in
+   App Store Connect, nicht ins Repo.
 6. **Auf einem echten iPhone durchgehen.** Hier gibt es keins
    (`CLAUDE.md`); vor einer Einreichung gehört ein Durchlauf auf Hardware
    dazu.
