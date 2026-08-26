@@ -10,7 +10,9 @@ Repo wurde nichts geändert.
 
 Der Betreiber hat währenddessen entschieden: **volle Integration in beide
 Apps, die Webfassung bleibt eigenständig, Anmeldung überall mit der
-Rössing-ID.** Diese Vorlage ist deshalb kein Vergleich mehr, sondern ein Plan.
+Rössing-ID.** Die Übernahme der Bestandskonten macht jemand **von Hand**; ein
+Migrationswerkzeug wird nicht gebaut (AP 5 ist deshalb eine Handanweisung, keine
+Spezifikation). Diese Vorlage ist damit kein Vergleich mehr, sondern ein Plan.
 Die verworfenen Wege stehen trotzdem drin — kurz, mit Begründung, damit sie
 nicht in einem halben Jahr neu diskutiert werden.
 
@@ -389,55 +391,244 @@ Dagegen, ehrlich benannt:
   das vor (Hinweis über der alten Liste statt leerer Seite).
 - Ein zweiter Empfänger im Token (AP 2).
 
-### AP 5 — Die Bestandskonten (MP + Z)
+### AP 5 — Die Bestandskonten: eine Handanweisung (MP + Z)
 
-Der Betreiber hat das Verfahren vorgegeben: neue Zitadel-Konten im Zustand
-*initial* anlegen (`POST /management/v1/users/human` ohne Passwort,
-`USER_STATE_INITIAL`), die Leute setzen beim ersten Anmelden selbst ein
-Passwort.
+Der Betreiber hat entschieden: **kein Werkzeug, kein Skript.** Das ist bei
+einer überschaubaren Zahl Konten richtig — ein Migrationsprogramm zu
+schreiben, zu testen und einmal laufen zu lassen ist teurer als der Vorgang
+selbst. Dieser Abschnitt ist deshalb eine Anweisung für einen Abend, keine
+Spezifikation.
 
-**Der gute Teil: eine Abbildung alter auf neue Kennungen ist nicht nötig.**
-Weil `findOrCreateUser` über die **E-Mail-Adresse** joint (1.4) und die lokale
-`users.id` beim Wiedererkennen unverändert bleibt, hängen Buchungen
-(`bookings.user_id`), Geräte (`items.user_id`), Bilder, Freigabe-Token und
-Vermieter-Status weiter am selben Datensatz. Der Vorgang ist schon einmal
-gelaufen: Wer sich früher per GitHub oder Magic-Link angemeldet hat und heute
-über die Rössing-ID kommt, findet mit gleicher E-Mail sein altes Konto vor.
+#### Die gute Nachricht zuerst
 
-**Der Knackpunkt ist deshalb nicht die Datenbank, sondern die Adresse.**
-Meldet sich jemand bei der Rössing-ID mit einer *anderen* E-Mail an als der,
-unter der er in der Mietplattform steht, legt `findOrCreateUser` einen
-**zweiten, leeren** Datensatz an. Seine Geräte und Buchungen bleiben am
-verwaisten alten hängen — er sieht sie nicht mehr, und die Eigentümer-Mails
-zu seinen Geräten gehen weiter an die alte Adresse. Deshalb:
+**Im Normalfall wird an der Datenbank nichts angefasst.** Der Grund steht in
+1.4: `findOrCreateUser` sucht einen Nutzer über die **E-Mail-Adresse** und
+behält dabei dessen bestehende `users.id`. Wer sich mit der Rössing-ID
+anmeldet und dieselbe Adresse hat wie sein altes Konto, findet seine Geräte,
+seine Buchungen und seinen Vermieter-Status vor, ohne dass jemand etwas
+umgeschrieben hätte.
 
-1. Bestand auslesen: `users` hat `id`, `email` (UNIQUE), `name`, `phone`,
-   `address_street/zip/city`, `lender`, `admin`, `approved_at/by`,
-   `lender_requested_at` (`mietplattform:server/src/db/queries/users.ts:19-33`).
-2. Für **jede** dieser E-Mail-Adressen, die noch keine Rössing-ID hat, ein
-   Zitadel-Konto im Zustand *initial* anlegen — mit **genau dieser** Adresse.
-   Dann trifft der Join beim ersten Login automatisch.
-3. Wer sein Konto nie aktiviert, verliert nichts: Der Datensatz bleibt stehen,
-   seine Geräte bleiben in der Liste, Buchungsanfragen gehen weiter per E-Mail
-   an ihn. Er kommt nur nicht mehr selbst hinein. **Für Eigentümer ist das
-   ein echtes Problem** — Buchungen auf ihren Geräten laufen über
-   Mail-Entscheid-Links, das funktioniert weiter, aber Geräte pflegen können
-   sie nicht mehr. Diese Leute muss man einzeln ansprechen; es sind
-   voraussichtlich wenige.
-4. Laufende Buchungen sind unkritisch: Die Entscheid-Links in den Mails hängen
-   an `booking_tokens`, nicht an einer Sitzung
-   (`mietplattform:server/src/http/bookings.ts`). Ein Umstellungsfenster
-   braucht es nicht.
+Die Handarbeit besteht deshalb aus **einem** Vorgang: für jede E-Mail-Adresse,
+die in der Mietplattform steht, muss es in der Rössing-ID ein Konto mit
+**genau derselben** Adresse geben. Nur wenn das nicht herstellbar ist, wird in
+der Datenbank gearbeitet — und dafür steht unten das Rezept.
 
-**Wie viele Konten es sind, konnte ich nicht feststellen.** Der Bestand liegt
-in der SQLite-Datei auf dem PVC im Cluster; das Repo enthält keine Zahl, und
-die Mietplattform gibt bewusst nirgends eine Nutzerliste heraus (deren
-`CLAUDE.md`, Abschnitt „Was Admins dürfen und was nicht"). Was sich von außen
-sagen lässt: Die Startseite zeigt heute 27 Geräte, und jedes hat einen
-Eigentümer (`items.userId`) — die Untergrenze ist also die Zahl der
-verschiedenen Eigentümer, die Obergrenze unbekannt. Ob das eine Stunde oder
-eine Woche Arbeit ist, hängt an dieser Zahl; sie sollte vor der Zusage einer
-Frist ermittelt werden, im Cluster, mit einem Blick in `users`.
+#### Wo genau steht, wem etwas gehört
+
+Das ist die Stelle, an der ein Mensch eingreift, deshalb genau. Das Schema
+unten stammt aus den Migrationen `001`–`015`, in Reihenfolge angewandt.
+
+Die Person selbst steht in **`users`**. Der Schlüssel ist `users.id` (eine
+zufällige UUID), und `users.email` ist **UNIQUE NOT NULL** — zwei Zeilen mit
+derselben Adresse kann es nicht geben. `github_id` und `google_id` stehen noch
+in der Tabelle, sind aber laut `010-user-cleanup.sql` „ohnehin nie befüllt
+worden".
+
+Auf `users.id` zeigen genau **acht** Stellen:
+
+| Tabelle · Spalte | bedeutet | Fremdschlüssel? |
+| --- | --- | --- |
+| `items.user_id` | wem das Gerät gehört | ja, `REFERENCES users(id)` — aber **NULL erlaubt** |
+| `bookings.user_id` | wer gemietet hat | **nein** — reines `TEXT`, ungeprüft |
+| `booking_tokens.user_id` | wer über diese Buchung entscheiden darf | ja |
+| `images.user_id` | wer das Bild hochgeladen hat | ja |
+| `blocked_periods.user_id` | wer den Zeitraum gesperrt hat | ja, `NOT NULL` |
+| `oauth_grants.user_id` | welchem Client jemand Zugriff gab | ja, `NOT NULL` |
+| `oauth_codes.user_id` | laufender Anmeldevorgang | **nein**, und ohnehin flüchtig |
+| `users.approved_by` | welcher Admin jemanden freigeschaltet hat | **nein** |
+
+Zwei Dinge daran sind für die Handarbeit wichtig:
+
+- **`bookings.user_id` ist nicht abgesichert.** Ein Tippfehler dort wird von
+  SQLite nicht bemerkt und erzeugt eine Buchung, die zu niemandem mehr gehört.
+  Dasselbe gilt für `oauth_codes.user_id` und `users.approved_by`.
+- **`items.user_id` darf NULL sein** (seit `007-retire-owners.sql`). Ein Gerät
+  ohne Eigentümer steht weiter in der Liste, aber niemand bekommt die
+  Buchungsanfrage per Mail — `create_booking` verschickt sie an
+  `getUserById(item.userId).email` und tut ohne Eigentümer schlicht nichts.
+
+Es gibt in der Mietplattform **keine** Kopie der Identität an anderer Stelle:
+kein Zwischenspeicher, keine zweite Datenbank. Der Chat-Container hat eine
+eigene SQLite-Datei, speichert dort aber nur Gesprächsverläufe und rechnet mit
+demselben `sub` aus dem Token — er hält keine Nutzerliste.
+
+#### Wie viele Konten es sind
+
+**Konnte ich nicht feststellen, und es muss vor dem Termin nachgesehen
+werden** — daran hängt, ob „von Hand" trägt. Aus dem Repo ist die Zahl nicht
+ablesbar: Es gibt keine Seed-Liste mit echten Personen, keine Migration, die
+Konten zählt, und die Plattform gibt bewusst nirgends eine Nutzerliste heraus
+(deren `CLAUDE.md`, „Was Admins dürfen und was nicht"). Von außen sichtbar ist
+nur: 27 Geräte auf der Startseite, jedes mit einem Eigentümer — die Zahl der
+verschiedenen Eigentümer ist also die Untergrenze, die Zahl aller Konten
+liegt darüber.
+
+Nachsehen (ungeprüft — der Befehl ist aus `Dockerfile` und `k8s/app.yaml`
+abgeleitet, nicht ausgeführt):
+
+```sh
+kubectl -n mieten-roessing-de exec deploy/mieten -- node -e "
+const db = require('better-sqlite3')('/data/db/mieten.sqlite', { readonly: true });
+console.log(db.prepare('SELECT COUNT(*) AS konten FROM users').get());
+console.log(db.prepare('SELECT COUNT(DISTINCT user_id) AS eigentuemer FROM items WHERE user_id IS NOT NULL').get());
+"
+```
+
+Faustregel für den Abend: Bis etwa 30 Konten ist Handarbeit klar billiger.
+Wird es dreistellig, gehört die Entscheidung noch einmal auf den Tisch.
+
+#### Die Anweisung
+
+**Vorher, einmal:**
+
+1. **Sicherung ziehen.** Die Datei liegt auf dem PVC unter
+   `/data/db/mieten.sqlite`. Sie läuft **nicht** im WAL-Modus — der Server
+   setzt kein `journal_mode`. Wer daneben schreibt, während der Server läuft,
+   riskiert eine gesperrte oder halb geschriebene Datei. Also: erst sichern,
+   und für jede Änderung an der Datei den Server anhalten
+   (`kubectl -n mieten-roessing-de scale deploy/mieten --replicas=0`) und
+   danach wieder starten. Für reines **Lesen** genügt `readonly: true` wie
+   oben, ohne den Server anzuhalten.
+2. **Liste ziehen** — das ist die Arbeitsgrundlage für den Abend:
+
+   ```sql
+   SELECT id, email, name, phone, lender, admin FROM users ORDER BY created_at;
+   ```
+
+   `lender = 1` markiert die Vermieter. Das sind die Leute, bei denen es
+   wehtut, wenn sie nicht hineinkommen (Schritt 6).
+
+**Für jede Zeile der Liste:**
+
+3. **Gibt es in der Rössing-ID schon ein Konto mit dieser E-Mail-Adresse?**
+   Wenn ja: fertig, nichts zu tun. Die Person meldet sich beim nächsten Mal an
+   und findet alles vor.
+4. **Wenn nein: Konto anlegen**, mit **genau dieser** Adresse, im Zustand
+   *initial* (`USER_STATE_INITIAL`, ohne Passwort — die Person vergibt es beim
+   ersten Anmelden selbst). Adresse abtippen ist die häufigste Fehlerquelle des
+   Abends: ein Zeichen daneben, und der Join greift nicht, sondern legt beim
+   ersten Login ein zweites, leeres Konto an. Lieber kopieren als tippen.
+5. **Sonderfall — die Person hat schon eine Rössing-ID unter einer anderen
+   Adresse.** Dann gibt es zwei Wege, und der erste ist fast immer der
+   richtige:
+   - **a)** Die Rössing-ID auf die Adresse aus der Mietplattform umstellen.
+     Keine Datenbankänderung, kein Risiko.
+   - **b)** Die Adresse in der Mietplattform ändern — **ein** `UPDATE`, das
+     nichts anderes berührt, weil alles an der `id` hängt und nicht an der
+     Adresse:
+
+     ```sql
+     UPDATE users SET email = 'neu@example.de' WHERE id = '<alte-uuid>';
+     ```
+
+     Vorsicht: `users.email` ist UNIQUE. Steht die neue Adresse schon in einer
+     anderen Zeile, schlägt das `UPDATE` fehl — dann liegen zwei Konten
+     derselben Person vor, und es geht bei Schritt 7 weiter.
+6. **Vermieter gesondert ansprechen.** Wer `lender = 1` hat und sein Konto
+   nicht aktiviert, verliert nichts, kommt aber nicht mehr an seine Geräte.
+   Diese Leute sind einzeln anzurufen, nicht anzumailen — es sind wenige, und
+   sie sind es, an denen der Verleih hängt.
+
+**Nur im Ausnahmefall — zwei Konten derselben Person zusammenführen:**
+
+7. Das passiert, wenn jemand sich mit einer anderen Adresse angemeldet hat und
+   dabei eine zweite, leere Zeile in `users` entstanden ist. Zusammengeführt
+   wird auf die **alte** Zeile (dort hängen die Daten); die neue wird geleert
+   und gelöscht. Bei angehaltenem Server, in einer Transaktion, mit
+   eingeschalteter Fremdschlüsselprüfung — die `sqlite3`-Kommandozeile hat sie
+   **standardmäßig aus**, anders als der Server:
+
+   ```sql
+   PRAGMA foreign_keys = ON;
+   BEGIN;
+   -- 1. Alle acht Stellen aus der Tabelle oben umbiegen:
+   UPDATE items           SET user_id     = '<alt>' WHERE user_id     = '<neu>';
+   UPDATE bookings        SET user_id     = '<alt>' WHERE user_id     = '<neu>';
+   UPDATE booking_tokens  SET user_id     = '<alt>' WHERE user_id     = '<neu>';
+   UPDATE images          SET user_id     = '<alt>' WHERE user_id     = '<neu>';
+   UPDATE blocked_periods SET user_id     = '<alt>' WHERE user_id     = '<neu>';
+   UPDATE oauth_grants    SET user_id     = '<alt>' WHERE user_id     = '<neu>';
+   UPDATE oauth_codes     SET user_id     = '<alt>' WHERE user_id     = '<neu>';
+   UPDATE users           SET approved_by = '<alt>' WHERE approved_by = '<neu>';
+   -- 2. Erst danach die alte Zeile auf die neue Adresse setzen …
+   DELETE FROM users WHERE id = '<neu>';
+   UPDATE users SET email = '<neue-adresse>' WHERE id = '<alt>';
+   COMMIT;
+   ```
+
+   Die Reihenfolge ist nicht beliebig: Erst müssen alle Verweise weg von
+   `<neu>`, dann darf die Zeile gelöscht werden, und erst dann ist die Adresse
+   frei für den UNIQUE-Index. Dasselbe Vorgehen — Verweise zuerst, Schlüssel
+   zuletzt — steht als Vorlage in `011-randomize-magic-link-ids.sql`, wo genau
+   diese Umschlüsselung schon einmal gemacht wurde.
+
+8. **Zum Schluss prüfen** (lesend, Server darf wieder laufen):
+
+   ```sql
+   -- Buchungen, deren Mieter es nicht mehr gibt (bookings.user_id ist ungeprüft!)
+   SELECT b.id, b.user_id, b.first_name, b.last_name, b.status
+     FROM bookings b LEFT JOIN users u ON u.id = b.user_id
+    WHERE u.id IS NULL;
+
+   -- Geräte ohne Eigentümer: dorthin geht keine Buchungsanfrage mehr
+   SELECT id, name FROM items WHERE user_id IS NULL;
+
+   -- frisch entstandene Karteileichen: Konto ohne Gerät und ohne Buchung
+   SELECT u.id, u.email, u.name FROM users u
+    WHERE NOT EXISTS (SELECT 1 FROM items    i WHERE i.user_id = u.id)
+      AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.user_id = u.id);
+   ```
+
+   Die dritte Abfrage ist die wichtigste und gehört **auch in den Wochen nach
+   der Umstellung** wiederholt: Ein leeres Konto neben einem vollen mit
+   ähnlichem Namen ist das Zeichen dafür, dass jemand mit der falschen Adresse
+   hereingekommen ist.
+
+#### Laufende Buchungen während der Umstellung
+
+**Es braucht kein Umstellungsfenster und keine Sperrfrist.** Der Grund:
+
+- **Entscheidungen laufen über Mail-Links, nicht über Sitzungen.** Ein
+  Approve- oder Reject-Link hängt an einer Zeile in `booking_tokens`
+  (`server/src/http/bookings.ts`), nicht an einem Login. Ein Eigentümer kann
+  also mitten in der Umstellung eine Anfrage bestätigen, auch ohne
+  Rössing-ID.
+- **Der öffentliche Kalender kennt keine Nutzer.** `GET /bookings` liefert nur
+  Zeitraum, Gerät und Status. Er ist von allem hier unberührt.
+- **Eigene Buchungen bleiben sichtbar**, solange `users.id` unverändert
+  bleibt — `/api/my-bookings` filtert auf `payload.sub`, und der ist die
+  lokale `id`, nicht der Zitadel-`sub`.
+
+Die einzige Reihenfolge, die wirklich gilt, ist deshalb kurz:
+
+1. Server anhalten, Sicherung ziehen — **nur** wenn Schritt 5b oder 7 ansteht.
+2. Ändern, prüfen, Server starten.
+3. Bestätigte Buchungen im laufenden Zeitraum vorher durchsehen: Wer gerade
+   ein Gerät bei sich stehen hat, sollte an dem Abend nicht plötzlich seine
+   Abholadresse nicht mehr sehen. Die Abfrage dafür:
+   `SELECT id, device_id, start_date, end_date FROM bookings WHERE status = 'approved' AND end_date >= date('now');`
+
+#### Wenn jemand sein Konto nie aktiviert
+
+Kurz: **Es geht nichts verloren, aber es wird auch nicht von selbst besser.**
+
+- Die Zeile in `users` bleibt stehen. **Niemals löschen** — an ihr hängen
+  Buchungen und Geräte, und `bookings.user_id` hat keinen Fremdschlüssel, der
+  einen davor bewahren würde.
+- **Seine Geräte bleiben buchbar.** Anfragen gehen weiter per E-Mail an
+  `users.email`, und der Entscheid-Link in der Mail funktioniert ohne Login.
+  Der Verleih läuft also weiter — solange er sein Postfach liest.
+- **Was er nicht mehr kann**: Geräte anlegen oder ändern, Zeiträume sperren,
+  die Übersicht seiner Buchungen sehen.
+- **Herrenlos wird eine Buchung dadurch nicht.** Sie zeigt weiter auf ein
+  existierendes Konto. Wirklich herrenlos wird sie nur auf zwei Wegen: wenn
+  jemand die `users`-Zeile löscht, oder wenn sich die Person unter einer
+  **anderen** Adresse neu anmeldet — dann steht sie auf einem zweiten,
+  leeren Konto, sieht ihre alten Buchungen nicht mehr und hält das für einen
+  Fehler der App.
+- **Gesehen wird beides** mit den drei Abfragen aus Schritt 8. Die erste
+  findet echte Waisen, die dritte findet den zweiten Fall — und der ist der
+  wahrscheinlichere.
 
 ### AP 6 — Der Bereich in beiden Apps (DA)
 
@@ -492,8 +683,8 @@ AP 3  MP: JSON-Schnittstelle ──────┤
         └──────────────────────────┴──► AP 6  DA: Bereich in iOS und Android
                                             (erst lesend, dann buchend)
 
-AP 5  MP/Z: Bestandskonten — parallel, blockiert nichts,
-            muss aber vor der Umstellung der Webfassung fertig sein
+AP 5  MP/Z: Bestandskonten — von Hand, blockiert nichts
+            und wird von nichts blockiert (siehe Bemerkung 4)
 ```
 
 Vier Bemerkungen dazu:
@@ -506,8 +697,13 @@ Vier Bemerkungen dazu:
    Nutzen: Sobald die öffentlichen Endpunkte stehen, kann der Bereich in die
    App, ohne dass die Identitätsarbeit fertig ist. Das ist Weg (b) — nicht als
    Ziel, sondern als Zwischenstand, den man ausliefern kann.
-4. **AP 5 vor der Umstellung der Webfassung.** Solange die Weboberfläche noch
-   den alten Weg anbietet, merkt niemand, dass sein Konto nicht aktiviert ist.
+4. **AP 5 hängt an nichts — und ist vermutlich überfällig.** Die Webfassung
+   ist bereits auf die Rössing-ID umgestellt (1.1). Wer ein altes Konto in der
+   Mietplattform hat und keine Rössing-ID, kommt **heute schon** nicht mehr
+   hinein — nicht erst, wenn die Apps kommen. Die Handanweisung aus AP 5 kann
+   also am nächsten Abend abgearbeitet werden und sollte es auch. Ob das viele
+   trifft oder niemanden, weiß bis dahin niemand; die Abfrage dafür steht in
+   AP 5.
 
 ---
 
@@ -621,8 +817,9 @@ umzieht, hat zwei Fehlerquellen gleichzeitig offen, wenn die CI stehenbleibt.
 - **Wie viele Konten es in der Mietplattform gibt** und wie viele davon
   heute schon eine Rössing-ID haben. Das steht nicht im Quelltext, nicht in
   einer Migration, und die Plattform gibt bewusst keine Nutzerliste heraus.
-  Es entscheidet über den Umfang von AP 5 und muss im Cluster nachgesehen
-  werden, in `users` auf dem PVC.
+  Es entscheidet darüber, ob die Handanweisung aus AP 5 einen Abend oder eine
+  Woche kostet, und muss im Cluster nachgesehen werden — der Befehl dafür
+  steht in AP 5, „Wie viele Konten es sind".
 - **Wie das Zitadel-Projekt „Mietplattform" (`377276525071827047`) im Inneren
   konfiguriert ist** — Rollen, weitere Clients, Token-Art. Belegt ist nur, was
   von außen sichtbar ist: Es existiert, es hat einen Web-Client
