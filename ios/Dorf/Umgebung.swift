@@ -15,6 +15,14 @@ final class AppUmgebung {
     let anmeldung: Anmeldung
     let api: DorfApi
 
+    /// Die Orte des Dorfes — **ein** Modell für alle, die sie brauchen.
+    ///
+    /// Die Startseite zeigt daraus nur eine Zahl („3 Orte warten auf dich")
+    /// und den Hitzehinweis, der Bereich „Mithelfen" die ganze Liste. Zwei
+    /// Modelle hießen zwei Abrufe und — schlimmer — zwei Stände: Die Kachel
+    /// zählte dann etwas anderes, als die Liste dahinter zeigt.
+    let orte: OrteModell
+
     /// Wer gerade angemeldet ist. Wird nach der Anmeldung einmal geladen und
     /// danach von den Bereichen mitbenutzt — `isAdmin` entscheidet, ob der
     /// Bereich „Verwaltung" überhaupt auftaucht.
@@ -22,16 +30,19 @@ final class AppUmgebung {
     private(set) var ichFehler: String?
 
     init(anmeldung: Anmeldung = Anmeldung()) {
-        self.anmeldung = anmeldung
-        self.api = DorfApi(tokenGeber: { [anmeldung] in
+        let api = DorfApi(tokenGeber: { [anmeldung] in
             await anmeldung.frischesToken()
         })
+        self.anmeldung = anmeldung
+        self.api = api
+        self.orte = OrteModell(api: api)
     }
 
     /// Für Vorschauen und Tests: eine Umgebung, die nichts abruft.
-    init(anmeldung: Anmeldung, api: DorfApi, ich: Ich?) {
+    init(anmeldung: Anmeldung, api: DorfApi, ich: Ich?, orte: OrteModell? = nil) {
         self.anmeldung = anmeldung
         self.api = api
+        self.orte = orte ?? OrteModell(api: api)
         self.ich = ich
     }
 
