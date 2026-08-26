@@ -51,6 +51,26 @@ internal fun formatTime(iso: String): String =
 internal fun formatDate(iso: String): String =
     runCatching { dayFormat.format(Instant.parse(iso)) }.getOrDefault(iso.take(10))
 
+/** „10 Liter, alle 7 Tage" bzw. „Einmalig — fällig am 20.08.2026". */
+@Composable
+internal fun planText(aufgabe: TaskDto): String = if (aufgabe.oneOff) {
+    val termin = aufgabe.dueDate?.let { formatDate(it) }.orEmpty()
+    if (termin.isBlank()) {
+        stringResource(R.string.task_once)
+    } else {
+        stringResource(R.string.task_once_due, termin)
+    }
+} else {
+    buildString {
+        aufgabe.liters?.let { append("${zahl(it)} Liter, ") }
+        append(stringResource(R.string.task_every_days, zahl(aufgabe.intervalDays)))
+    }
+}
+
+/** 10.0 → „10", 7.5 → „7,5" */
+private fun zahl(v: Double): String =
+    if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString().replace('.', ',')
+
 /** Detailansicht eines Ortes im BottomSheet: Aufgaben, Pläne, Historie, Melden. */
 @Composable
 fun PlaceDetail(

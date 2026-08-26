@@ -86,7 +86,6 @@ fun HomeScreen(
     leaderboardViewModel: LeaderboardViewModel,
     profileViewModel: ProfileViewModel,
     ideenViewModel: IdeenViewModel,
-    verwaltungViewModel: VerwaltungViewModel,
     // Vorgabe: ein leerer Kalender. So bleiben Oberflächen-Tests gültig, die
     // mit den Veranstaltungen nichts zu tun haben.
     veranstaltungenViewModel: VeranstaltungenViewModel = remember {
@@ -100,7 +99,6 @@ fun HomeScreen(
     val leaderboard by leaderboardViewModel.state.collectAsState()
     val profil by profileViewModel.state.collectAsState()
     val ideen by ideenViewModel.state.collectAsState()
-    val verwaltung by verwaltungViewModel.state.collectAsState()
     val veranstaltungen by veranstaltungenViewModel.state.collectAsState()
     var bereich by rememberSaveable { mutableStateOf(Bereich.START) }
     val snackbar = remember { SnackbarHostState() }
@@ -281,32 +279,6 @@ fun HomeScreen(
             }
         }
     }
-    // Jede Änderung an Orten und Aufgaben wirkt sich sofort auf Karte und
-    // Liste aus — deshalb nach jedem Erfolg neu laden.
-    val ortGespeichert = stringResource(R.string.admin_place_saved)
-    val ortGeloescht = stringResource(R.string.admin_place_deleted)
-    val aufgabeGespeichert = stringResource(R.string.admin_task_saved)
-    val aufgabeGeloescht = stringResource(R.string.admin_task_deleted)
-    val aufgabePausiert = stringResource(R.string.admin_task_paused_toast)
-    val aufgabeFortgesetzt = stringResource(R.string.admin_task_resumed_toast)
-    LaunchedEffect(Unit) {
-        verwaltungViewModel.events.collect { event ->
-            when (event) {
-                VerwaltungEvent.OrtGespeichert -> snackbar.showSnackbar(ortGespeichert)
-                VerwaltungEvent.OrtGeloescht -> snackbar.showSnackbar(ortGeloescht)
-                VerwaltungEvent.AufgabeGespeichert -> snackbar.showSnackbar(aufgabeGespeichert)
-                VerwaltungEvent.AufgabeGeloescht -> snackbar.showSnackbar(aufgabeGeloescht)
-                VerwaltungEvent.AufgabePausiert -> snackbar.showSnackbar(aufgabePausiert)
-                VerwaltungEvent.AufgabeFortgesetzt -> snackbar.showSnackbar(aufgabeFortgesetzt)
-                // Der Grund kommt im Klartext vom Backend — er ist genauer
-                // als alles, was die App raten könnte.
-                is VerwaltungEvent.Abgelehnt -> snackbar.showSnackbar(event.grund)
-            }
-            if (event !is VerwaltungEvent.Abgelehnt) {
-                viewModel.refresh()
-            }
-        }
-    }
     val profilGespeichert = stringResource(R.string.profile_saved)
     LaunchedEffect(Unit) {
         profileViewModel.events.collect { event ->
@@ -327,7 +299,6 @@ fun HomeScreen(
                             Bereich.MITHELFEN -> stringResource(R.string.area_care_title)
                             Bereich.VERANSTALTUNGEN -> stringResource(R.string.events_title)
                             Bereich.IDEEN -> stringResource(R.string.ideas_title)
-                            Bereich.VERWALTUNG -> stringResource(R.string.area_admin_title)
                             Bereich.START -> stringResource(R.string.home_title)
                         },
                     )
@@ -462,7 +433,7 @@ fun HomeScreen(
                     name = vorname(profil, state),
                     faelligeOrte = state.faelligeOrte,
                     ladend = state.loading && state.places.isEmpty(),
-                    istVerwaltung = state.me?.isAdmin == true,
+                    isAdmin = state.me?.isAdmin == true,
                     modifier = Modifier.padding(padding),
                     notifications = state.notifications,
                     pendingAssignments = state.pendingAssignments,
@@ -507,17 +478,6 @@ fun HomeScreen(
                     onName = ideenViewModel::setName,
                     onEmail = ideenViewModel::setEmail,
                     onSenden = ideenViewModel::absenden,
-                )
-
-                Bereich.VERWALTUNG -> VerwaltungScreen(
-                    places = state.places,
-                    state = verwaltung,
-                    modifier = Modifier.padding(padding),
-                    onOrtBearbeiten = verwaltungViewModel::ortBearbeiten,
-                    onOrtLoeschen = verwaltungViewModel::ortLoeschen,
-                    onAufgabeBearbeiten = verwaltungViewModel::aufgabeBearbeiten,
-                    onAufgabePausieren = verwaltungViewModel::aufgabePausieren,
-                    onAufgabeLoeschen = verwaltungViewModel::aufgabeLoeschen,
                 )
 
                 Bereich.MITHELFEN -> Column(Modifier.padding(padding)) {
@@ -577,48 +537,6 @@ fun HomeScreen(
                 onRelease = { viewModel.release(it) },
             )
         }
-    }
-
-    // Die Formulare der Verwaltung liegen über dem Bereich — sie gehören zu
-    // dem, was gerade bearbeitet wird, nicht in die Navigation.
-    verwaltung.ortForm?.let { form ->
-        OrtFormularDialog(
-            form = form,
-            places = state.places,
-            userLocation = state.userLocation,
-            onName = verwaltungViewModel::setOrtName,
-            onBeschreibung = verwaltungViewModel::setOrtBeschreibung,
-            onArt = verwaltungViewModel::setOrtArt,
-            onAktiv = verwaltungViewModel::setOrtAktiv,
-            onPosition = verwaltungViewModel::setOrtPosition,
-            onStandort = {
-                // Wer die Standortfreigabe noch nicht erteilt hat, wird hier
-                // gefragt — der Knopf ist der Anlass, nicht der Start der App.
-                if (darfStandort) {
-                    state.userLocation?.let { verwaltungViewModel.standortUebernehmen(it.lat, it.lon) }
-                } else {
-                    standortFrage.launch(DeviceLocation.PERMISSIONS)
-                }
-            },
-            onSpeichern = verwaltungViewModel::ortSpeichern,
-            onAbbrechen = verwaltungViewModel::ortAbbrechen,
-        )
-    }
-    verwaltung.aufgabeForm?.let { form ->
-        AufgabeFormularDialog(
-            form = form,
-            onArt = verwaltungViewModel::setAufgabeArt,
-            onTitel = verwaltungViewModel::setAufgabeTitel,
-            onLiter = verwaltungViewModel::setAufgabeLiter,
-            onEinmalig = verwaltungViewModel::setAufgabeEinmalig,
-            onTermin = verwaltungViewModel::setAufgabeTermin,
-            onIntervall = verwaltungViewModel::setAufgabeIntervall,
-            onRot = verwaltungViewModel::setAufgabeRot,
-            onEntfernen = verwaltungViewModel::setAufgabeEntfernenNachErledigung,
-            onAktiv = verwaltungViewModel::setAufgabeAktiv,
-            onSpeichern = verwaltungViewModel::aufgabeSpeichern,
-            onAbbrechen = verwaltungViewModel::aufgabeAbbrechen,
-        )
     }
 
     // Die Begründung steht vor der Systemfrage: Android zeigt sie genau

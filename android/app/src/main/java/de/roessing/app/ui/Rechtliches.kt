@@ -1,12 +1,9 @@
 package de.roessing.app.ui
 
 import android.content.Context
-import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,7 +43,7 @@ fun Rechtliches(modifier: Modifier = Modifier) {
     RechtlichesLeiste(
         online = netzVerfuegbar(),
         modifier = modifier,
-        onOeffnen = { dokument -> context.oeffneRechtsseite(dokument.url) },
+        onOeffnen = { dokument -> context.openInCustomTab(dokument.url) },
     )
 }
 
@@ -132,17 +129,3 @@ private fun istOnline(context: Context): Boolean = runCatching {
     val koennen = dienst.getNetworkCapabilities(netz) ?: return@runCatching false
     koennen.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
 }.getOrDefault(true)
-
-/**
- * Öffnet die Seite im In-App-Browser (Custom Tab). Bringt das Gerät keinen
- * mit, tut es ein gewöhnlicher Browser; fehlt auch der, passiert nichts —
- * ein Absturz wäre hier die schlechteste Antwort.
- */
-private fun Context.oeffneRechtsseite(url: String) {
-    val ziel = Uri.parse(url)
-    val tab = CustomTabsIntent.Builder().setShowTitle(true).build()
-    tab.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { tab.launchUrl(this, ziel) }.recoverCatching {
-        startActivity(Intent(Intent.ACTION_VIEW, ziel).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
-}
