@@ -118,6 +118,16 @@ auskommentierten Block `APNS_KEY_FILE`. Kurz: Schlüssel als SealedSecret
 ablegen, unter `/secrets/apns` einhängen, die `APNS_*`-Zeilen
 einkommentieren.
 
-Noch nachzutragen (gehört anderen Dateien): `README.md`, Abschnitt
-„Push-Benachrichtigungen", nennt bislang nur Firebase — dort gehört der
-iOS-Weg dazu; und `ios/README.md` führt Push unter „Was noch fehlt".
+Noch nachzutragen (gehört anderen Dateien):
+
+- `ios/OFFEN.md`, Abschnitt „Bewusst noch nicht gebaut": Der Punkt
+  **„Push (APNs). Es gibt keine Gerätekennung, keine Kanäle, keine
+  Erlaubnisfrage"** stimmt nicht mehr und kann durch die drei offenen Zeilen
+  oben ersetzt werden.
+- `README.md`, Abschnitt „Push-Benachrichtigungen", nennt bislang nur
+  Firebase — dort gehört der iOS-Weg dazu.
+- `ios/README.md` führt Push unter „Was noch fehlt".
+- `backend/SICHERHEIT.md`, Punkt 3 („Push ist da — und damit ist Google
+  beteiligt"), beschreibt nur den Firebase-Weg. Für iOS ist Google **nicht**
+  beteiligt, dafür Apple; `store/ios-datenschutz.md` ist bereits
+  nachgezogen.
