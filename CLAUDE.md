@@ -5,9 +5,9 @@ GitHub-Magic-Keywords (`fixes`, `closes` …) bleiben Englisch.
 
 ## Projekt
 
-Monorepo: `android/` (Kotlin/Compose), `backend/` (Go, SQLite WAL, REST + MCP
-+ Web-Admin), `deploy/` (Kustomize, Flux deployt in den K3S-Cluster).
-Details: siehe `README.md`.
+Monorepo: `android/` (Kotlin/Compose), `ios/` (Swift 6/SwiftUI),
+`backend/` (Go, SQLite WAL, REST + MCP + Web-Admin), `deploy/` (Kustomize,
+Flux deployt in den K3S-Cluster). Details: siehe `README.md`.
 
 ## Regeln
 
@@ -26,6 +26,22 @@ Details: siehe `README.md`.
 - **Android**: Version Catalog (`gradle/libs.versions.toml`) pflegen, keine
   neuen DI-Frameworks — manuelle DI über `AppContainer`. UI-Strings nach
   `res/values/strings.xml` (deutsch). Unit-Tests für ViewModels Pflicht.
+- **iOS**: Das Xcode-Projekt wird aus `ios/project.yml` **erzeugt**
+  (`make projekt`, XcodeGen) und nie committet — eine `.pbxproj` ist nicht
+  lesbar zu prüfen und kollidiert bei jedem zweiten Merge. Zum Backend führt
+  **genau ein Weg**: `DorfApi`; neue Endpunkte kommen als
+  `DorfApi+<Thema>.swift` dazu und benutzen dessen Transport-Helfer, das DTO
+  gehört zu den übrigen in `Modelle.swift`. Ein zweiter Transport lässt
+  Fristen, Kopfzeilen und Fehlerübersetzung auseinanderlaufen — genau das war
+  schon einmal der Fall. Jeder Bereich wohnt unter
+  `ios/Dorf/Bereiche/<Bereich>/` und fasst keinen fremden an. Bezeichner,
+  Kommentare und alle Texte der Oberfläche sind **deutsch**; englisch bleiben
+  allein die DTO-Feldnamen, sie sind der JSON-Vertrag des Backends.
+  **Keine Fremdbibliothek außer MapLibre** — Netz, JSON, OIDC und Ablage
+  macht die Standardbibliothek. Adressen und Kennungen stehen ausschließlich
+  in den Build-Einstellungen (`project.yml` → `Info.plist` →
+  `Konfiguration.swift`), nie im Quelltext, damit CI und Tests sie
+  übersteuern können.
 - **Tests laufen ausschließlich lokal.** Kein Test — auch kein E2E — darf
   einen entfernten Server anfassen, erst recht nicht die Produktion. Zitadel
   gehört zur CI-Umgebung (`backend/e2e/docker-compose.yml`), Terminfeed und
@@ -33,7 +49,8 @@ Details: siehe `README.md`.
   braucht: den Dienst in der CI mitstarten, nicht nach draußen zeigen.
   `.github/workflows/lokale-tests.yml` prüft das bei jeder Änderung. Ausgenommen
   ist allein die **Auslieferung** (Play-Upload, Firebase-Verteilung,
-  GHCR-Push). E2E ohne Mocks bleibt Vorgabe — lokal heißt nicht gemockt.
+  TestFlight-Upload, GHCR-Push) — eine ausgelieferte App muss auf die
+  Produktion zeigen. E2E ohne Mocks bleibt Vorgabe — lokal heißt nicht gemockt.
   Für iOS-Tests (`ios/DorfTests/`) prüft die Wache zusätzlich **strukturell**,
   nicht nur nach Adressen: `Konfiguration.*`, ein `DorfApi(` ohne `basis:`
   sowie `URLSession.shared`/`URLSession.dorfSitzung` sind dort verboten — über
@@ -76,6 +93,10 @@ Parallelstrukturen zu bestehenden Vereinen aufbauen.**
   `urn:zitadel:iam:org:project:roles` im JWT-Access-Token. Träger-Rollen
   stehen dort bewusst NICHT — siehe oben.
 - Client-IDs: Android-App `385941807986376899` (nativ, PKCE),
+  iOS-App `387943892076527811` („Dorf-App iOS", nativ, PKCE, Rücksprung
+  `de.roessing.app:/oauth2redirect`) — **muss in `AUTH_AUDIENCE` stehen**
+  (`deploy/overlays/production/deployment.yaml`), sonst weist das Backend
+  jedes Token dieser App ab,
   Web-Verwaltung `385942875872952515` (User-Agent, PKCE ohne Secret; der
   Code-Tausch passiert serverseitig, Redirect-URI ist `{PUBLIC_URL}/admin/`),
   Claude-MCP-Connector `385946294599876803` (Web, PKCE, kein Secret; wird via DCR-Endpoint /oauth/register an claude.ai ausgegeben).
