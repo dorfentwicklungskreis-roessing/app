@@ -26,6 +26,22 @@ Flux deployt in den K3S-Cluster). Details: siehe `README.md`.
   eigener Zug — nicht nebenbei in einer fachlichen Änderung, sonst wird jeder
   Zweig unlesbar groß und kollidiert mit den anderen. Neuer Quelltext hält
   sich an die Regel, angefasster Bestand bleibt, wie er heißt.
+- **Android und iOS bleiben auf demselben Stand.** Die beiden Apps sind
+  **ein** Produkt in zwei Fassungen, nicht zwei Produkte. Was die eine kann,
+  kann die andere; was aus der einen verschwindet, verschwindet aus der
+  anderen. Eine fachliche Änderung ist **nicht fertig**, wenn sie nur in einer
+  App steht — dann gibt es zwei Dörfer, und wer das falsche Telefon hat, sieht
+  etwas anderes als der Nachbar. Wer eine Fassung ändert, ändert die andere
+  mit oder schreibt ausdrücklich hin, warum nicht, und legt die Nacharbeit an.
+  Das gilt auch fürs **Ausliefern**: Ein Stand ist erst draußen, wenn er in
+  **beiden** Kanälen liegt — Play-Track `internal` und TestFlight. Eine
+  Verbesserung, die nur eine Hälfte des Dorfes erreicht, ist eine halbe
+  Verbesserung, und der Unterschied fällt genau dann auf, wenn zwei Leute
+  nebeneinanderstehen und vergleichen.
+  Ausgenommen ist allein, was die Plattform selbst vorgibt: Push heißt auf
+  Android FCM und auf iOS APNs, die Anmeldung sieht anders aus, die
+  Bedienelemente gehören zum jeweiligen System. **Der Funktionsumfang ist
+  davon nicht betroffen.**
 - **Backend**: Nur Standard-Library-HTTP (`net/http`, Go 1.22-Routing),
   `modernc.org/sqlite` (CGO-frei!), keine schweren Frameworks. Vor jedem
   Commit: `gofmt -w . && go vet ./... && go test ./...`.
