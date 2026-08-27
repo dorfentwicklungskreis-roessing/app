@@ -19,6 +19,18 @@ import retrofit2.http.Query
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+/**
+ * Sieht jede gescheiterte Anfrage. Als Schnittstelle, damit die Datenschicht
+ * den Melder nicht kennen muss — und der Melder ohne Netz prüfbar bleibt.
+ */
+interface AnfragenBeobachter {
+    /** Der Server hat geantwortet, aber nicht mit Erfolg. */
+    fun antwort(methode: String, pfad: String, code: Int)
+
+    /** Die Anfrage kam gar nicht erst durch. */
+    fun fehlschlag(methode: String, pfad: String, grund: String)
+}
+
 interface DorfApi {
     @GET("api/v1/me")
     suspend fun me(): MeDto
@@ -74,6 +86,16 @@ interface DorfApi {
     @POST("api/v1/ideen")
     suspend fun idee(@Body input: IdeeInput): IdeeDto
 
+    // --- Fehlerberichte ------------------------------------------------------
+
+    /**
+     * Schickt einen Fehlerbericht. Auch dieser Eingang ist bewusst ohne
+     * Anmeldung erreichbar — wenn die Anmeldung klemmt, ist genau das der
+     * Bericht, der fehlt. Ein Token geht mit, wenn es eines gibt.
+     */
+    @POST("api/v1/error-reports")
+    suspend fun errorReport(@Body input: ErrorReportInput): ErrorReportDto
+
     // --- Gerät für Push-Benachrichtigungen ----------------------------------
 
     @POST("api/v1/me/devices")
@@ -107,7 +129,8 @@ interface DorfApi {
         fun autorisiert(request: Request, token: TokenResult): Request = when (token) {
             is TokenResult.Token ->
                 request.newBuilder().header("Authorization", "Bearer ${token.value}").build()
-            // Ein paar Endpunkte (Ideen) nehmen die Anfrage auch ohne an.
+            // Ein paar Endpunkte (Ideen, Fehlerberichte) nehmen die Anfrage
+            // auch ohne an.
             TokenResult.LoggedOut -> request
             TokenResult.Unreachable ->
                 throw IOException("Die Anmeldung ließ sich gerade nicht erneuern")
@@ -116,11 +139,37 @@ interface DorfApi {
         /**
          * Baut den API-Client. tokenProvider liefert die Tokenlage und wird
          * pro Request aufgerufen.
+         *
+         * [beobachter] bekommt jede gescheiterte Anfrage zu sehen — an genau
+         * einer Stelle, damit kein Bereich daran denken muss. Was davon
+         * wirklich eine Störung ist und was eine Regel, die greift,
+         * entscheidet der Melder (siehe `errors/ErrorReporter.kt`).
          */
-        fun create(baseUrl: String, tokenProvider: suspend () -> TokenResult): DorfApi {
+        fun create(
+            baseUrl: String,
+            beobachter: AnfragenBeobachter? = null,
+            tokenProvider: suspend () -> TokenResult,
+        ): DorfApi {
             val client = OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(20, TimeUnit.SECONDS)
+                .addInterceptor { chain ->
+                    // Muss vor dem Token-Interceptor stehen, damit er auch
+                    // dessen Aussetzer sieht.
+                    val anfrage = chain.request()
+                    val pfad = anfrage.url.encodedPath
+                    val methode = anfrage.method
+                    try {
+                        val antwort = chain.proceed(anfrage)
+                        if (!antwort.isSuccessful) {
+                            beobachter?.antwort(methode, pfad, antwort.code)
+                        }
+                        antwort
+                    } catch (e: java.io.IOException) {
+                        beobachter?.fehlschlag(methode, pfad, e.message.orEmpty())
+                        throw e
+                    }
+                }
                 .addInterceptor { chain ->
                     // OkHttp-Interceptoren sind synchron; der Tokenabruf ist
                     // lokal (Cache/Refresh) und läuft auf dem IO-Dispatcher.

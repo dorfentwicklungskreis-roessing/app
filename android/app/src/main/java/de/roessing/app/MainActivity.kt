@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.roessing.app.auth.LoginResult
 import de.roessing.app.auth.SessionState
+import de.roessing.app.ui.ErrorReportBannerHost
 import de.roessing.app.ui.HomeScreen
 import de.roessing.app.ui.IdeenViewModel
 import de.roessing.app.ui.LeaderboardViewModel
@@ -72,6 +73,26 @@ class MainActivity : ComponentActivity() {
 private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = {}) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val container = context.appContainer
+    // Der Hinweis auf einen Fehler sitzt an der Wurzel, nicht in einem
+    // Bereich: Etwas kann überall schiefgehen — auch schon hier auf dem
+    // Anmeldeschirm —, und niemand soll erst den richtigen Schirm suchen
+    // müssen, um davon zu erfahren.
+    Box(Modifier.fillMaxSize()) {
+        Angemeldet(container, pushZiel, onPushZielVerbraucht)
+        ErrorReportBannerHost(
+            container.errorReporter,
+            Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+@Composable
+private fun Angemeldet(
+    container: AppContainer,
+    pushZiel: PushZiel?,
+    onPushZielVerbraucht: () -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val session by container.authManager.session.collectAsState()
     val scope = rememberCoroutineScope()
     // null = kein Fehler. Ein Abbruch (Zurück-Taste) ist bewusst kein Fehler.
