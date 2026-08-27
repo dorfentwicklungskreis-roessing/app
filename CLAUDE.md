@@ -26,8 +26,9 @@ Flux deployt in den K3S-Cluster). Details: siehe `README.md`.
   eigener Zug — nicht nebenbei in einer fachlichen Änderung, sonst wird jeder
   Zweig unlesbar groß und kollidiert mit den anderen. Neuer Quelltext hält
   sich an die Regel, angefasster Bestand bleibt, wie er heißt.
-- **Android und iOS bleiben auf demselben Stand.** Die beiden Apps sind
-  **ein** Produkt in zwei Fassungen, nicht zwei Produkte. Was die eine kann,
+- **Alle Oberflächen bleiben auf demselben Stand** — Android, iOS **und die
+  Web-Verwaltung** (`backend/internal/admin`). Sie sind **ein** Produkt in
+  mehreren Fassungen, nicht mehrere Produkte. Was die eine kann,
   kann die andere; was aus der einen verschwindet, verschwindet aus der
   anderen. Eine fachliche Änderung ist **nicht fertig**, wenn sie nur in einer
   App steht — dann gibt es zwei Dörfer, und wer das falsche Telefon hat, sieht
@@ -40,8 +41,15 @@ Flux deployt in den K3S-Cluster). Details: siehe `README.md`.
   nebeneinanderstehen und vergleichen.
   Ausgenommen ist allein, was die Plattform selbst vorgibt: Push heißt auf
   Android FCM und auf iOS APNs, die Anmeldung sieht anders aus, die
-  Bedienelemente gehören zum jeweiligen System. **Der Funktionsumfang ist
+  Bedienelemente gehören zum jeweiligen System, und die Web-Verwaltung ist
+  server-gerendert ohne clientseitigen Zustand. **Der Funktionsumfang ist
   davon nicht betroffen.**
+  Die Web-Verwaltung hat einen kleineren Zuschnitt — sie ist die Oberfläche
+  der Verwaltung, nicht die des Dorfes. Was aber **beide Seiten betrifft**,
+  muss dort mitgehen: eine geänderte Regel (Fristen, Grenzen, Rechte), ein
+  neuer Weg, den ein Mensch braucht, ein geänderter Text, der etwas anderes
+  behauptet. Wer eine Regel im Backend ändert, sucht **alle drei** Oberflächen
+  ab, bevor er fertig ist.
 - **Backend**: Nur Standard-Library-HTTP (`net/http`, Go 1.22-Routing),
   `modernc.org/sqlite` (CGO-frei!), keine schweren Frameworks. Vor jedem
   Commit: `gofmt -w . && go vet ./... && go test ./...`.
