@@ -7,8 +7,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 )
 
 // Rate-Limiting: ein schlichter Token-Bucket je Aufrufer. Begrenzt werden
@@ -33,6 +31,13 @@ type RateLimitConfig struct {
 	// Enabled schaltet den Limiter ab, wenn es auf false zeigt (Tests).
 	Enabled *bool
 	// Now ist die Zeitquelle (Tests).
+	//
+	// Deliberately time.Now and not clock.Now: a token bucket measures a
+	// rate, it does not read a calendar. It also has to survive the clock
+	// jumping backwards — a bucket refills by the seconds that passed, so a
+	// ten-day jump back would drain it by ten days' worth of tokens and lock
+	// the caller out until the clock caught up again. Rate limiting has
+	// nothing to say about which day the village thinks it is.
 	Now func() time.Time
 }
 
@@ -97,7 +102,7 @@ func NewRateLimiter(cfg RateLimitConfig) *RateLimiter {
 		proSek = float64(DefaultPerMinute) / 60
 	}
 	if cfg.Now == nil {
-		cfg.Now = clock.Now
+		cfg.Now = time.Now
 	}
 	return &RateLimiter{
 		burst:  float64(cfg.Burst),

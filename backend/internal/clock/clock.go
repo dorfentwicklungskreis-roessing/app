@@ -22,9 +22,21 @@
 // time travel at all. Components keep their injectable clock fields for unit
 // tests; those fields simply default to clock.Now instead of time.Now.
 //
-// The knobs that move the offset live in internal/devclock and are only
+// The knobs that move the offset live in internal/devmode and are only
 // mounted when AUTH_MODE=insecure-dev. In production nothing can reach them,
 // so the offset stays zero.
+//
+// Three places deliberately stay on time.Now, and each says so where it
+// happens. The rule is: a calendar follows this clock, a stopwatch and
+// somebody else's clock do not.
+//
+//   - api.logRequests measures how long a request took. A travelled clock
+//     would report a request that lasted ten days.
+//   - httpx.RateLimiter refills its bucket by the seconds that went by. A
+//     jump backwards would drain it and lock the caller out until the clock
+//     caught up.
+//   - push (APNs, FCM) mints JWTs whose iat/exp Apple and Google check
+//     against their own clocks; a travelled backend would mint junk.
 package clock
 
 import (

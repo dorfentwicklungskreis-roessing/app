@@ -39,7 +39,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
@@ -160,7 +159,11 @@ func NeuAPNs(cfg APNsConfig) (*APNsZusteller, error) {
 	}
 	jetzt := cfg.Now
 	if jetzt == nil {
-		jetzt = clock.Now
+		// Deliberately time.Now and not clock.Now: iat/exp of these
+		// JWTs are checked by Apple and Google against THEIR clocks. A
+		// backend travelling through time for a test would mint tokens
+		// that are simply invalid out there.
+		jetzt = time.Now
 	}
 	return &APNsZusteller{
 		geraete: cfg.Geraete, basis: basis, topic: topic,

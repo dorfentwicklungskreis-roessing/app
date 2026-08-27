@@ -241,6 +241,25 @@ func TestTestEndpunkteNurImDevModus(t *testing.T) {
 		if code, _ := hole(t, basis+"/dev/clock"); code != http.StatusOK {
 			t.Fatalf("GET /dev/clock: Status %d, erwartet 200", code)
 		}
+
+		// Die Zeitreise durch den ganzen Mittelbau: vorspulen, zurück, und
+		// danach muss der Server weiter antworten. Das ist keine Förmlichkeit
+		// — die Rate-Begrenzung füllt ihren Eimer nach vergangenen Sekunden,
+		// und eine Uhr, die zehn Tage zurückspringt, hätte den Aufrufer
+		// zehn Tage lang ausgesperrt, wenn sie an dieser Uhr hinge.
+		if code, body := sende(t, basis+"/dev/clock/advance", `{"duration":"240h"}`); code != http.StatusOK {
+			t.Fatalf("POST /dev/clock/advance: Status %d — %s", code, body)
+		}
+		if code, body := sende(t, basis+"/dev/clock/reset", ""); code != http.StatusOK {
+			t.Fatalf("POST /dev/clock/reset: Status %d — %s", code, body)
+		}
+		code, body := sende(t, basis+"/dev/assignment/run", "")
+		if code != http.StatusOK {
+			t.Fatalf("POST /dev/assignment/run nach der Rückreise: Status %d — %s", code, body)
+		}
+		if !strings.Contains(body, `"offsetSeconds":0`) {
+			t.Fatalf("nach dem Zurücksetzen läuft der Server nicht auf der Systemuhr: %s", body)
+		}
 	})
 
 	t.Run("oidc: nicht registriert", func(t *testing.T) {
@@ -306,6 +325,17 @@ func hole(t *testing.T, url string) (int, string) {
 	resp, err := http.Get(url)
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(body)
+}
+
+func sende(t *testing.T, url, koerper string) (int, string) {
+	t.Helper()
+	resp, err := http.Post(url, "application/json", strings.NewReader(koerper))
+	if err != nil {
+		t.Fatalf("POST %s: %v", url, err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
