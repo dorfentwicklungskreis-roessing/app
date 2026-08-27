@@ -229,6 +229,29 @@ struct AnmeldungTests {
         #expect(anfrage.value(forHTTPHeaderField: "Authorization") == "Bearer abc")
     }
 
+    @Test func ohneVerbindungSagtDieStartseiteWoranEsLiegt() async {
+        let (anmeldung, _) = Self.aufbau(Self.abgelaufen(), [.netzausfall])
+        let api = DorfApi(basis: URL(string: "http://127.0.0.1:8099")!,
+                          tokenGeber: { await anmeldung.frischesToken() })
+        let orte = OrteModell(quelle: OrteQuelle(
+            orte: { throw DorfFehler.netz("nicht erreichbar") },
+            erledigungen: { _ in [] },
+            melden: { _, _, _ in throw DorfFehler.netz("nicht erreichbar") },
+            zuruecknehmen: { _ in }
+        ))
+        let umgebung = AppUmgebung(anmeldung: anmeldung, api: api, ich: nil, orte: orte)
+
+        #expect(umgebung.stoerungshinweis == nil, "Vor dem ersten Abruf steht da nichts")
+        await orte.laden()
+
+        // Es steht da, dass die Verbindung fehlt — und ausdrücklich nicht,
+        // dass man sich neu anmelden soll.
+        #expect(umgebung.stoerungshinweis == DorfFehler.netz("").klartext)
+        #expect(umgebung.stoerungshinweis != DorfFehler.nichtAngemeldet.klartext)
+        // Und die Anmeldung steht noch.
+        #expect(anmeldung.sitzung == .angemeldet(entwicklerModus: false))
+    }
+
     @Test func ohneAnmeldungGehtDieAnfrageOhneKopfzeileHinaus() async throws {
         // Die Ideen nimmt das Backend auch ohne Anmeldung an.
         let api = DorfApi(basis: URL(string: "http://127.0.0.1:8099")!,

@@ -21,6 +21,24 @@ struct StartView: View {
                     .accessibilityIdentifier("start-gruss")
                 }
 
+                // Wenn gerade nichts geht, steht hier warum. Ohne das sähe
+                // die Seite aus wie eine, in der nichts los ist — und wer
+                // eben noch angemeldet war, sucht den Fehler bei sich.
+                if let stoerung = umgebung.stoerungshinweis {
+                    Section {
+                        Label(stoerung, systemImage: "wifi.slash")
+                            .font(.subheadline)
+                            .accessibilityIdentifier("start-stoerungshinweis")
+                        Button("Erneut versuchen") {
+                            Task { await umgebung.erneutVersuchen() }
+                        }
+                        .accessibilityIdentifier("start-erneut")
+                    } footer: {
+                        Text("Du bleibst angemeldet — sobald die Verbindung wieder steht, "
+                            + "geht es weiter, wo du warst.")
+                    }
+                }
+
                 if let hitze = Startseitentexte.hitzehinweis(giessfaktor: umgebung.orte.giessfaktor) {
                     Section {
                         Label(hitze, systemImage: "thermometer.sun.fill")
