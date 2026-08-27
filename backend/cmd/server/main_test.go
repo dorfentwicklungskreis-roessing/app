@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -215,4 +217,97 @@ func warteAufGesund(url string, frist time.Duration) error {
 		time.Sleep(200 * time.Millisecond)
 	}
 	return letzter
+}
+
+// --- Test-Endpunkte ----------------------------------------------------------
+
+// TestTestEndpunkteNurImDevModus: Die Knöpfe, mit denen ein Test die Uhr
+// stellt und die Vergabe anstößt, dürfen es in der Produktion nicht geben —
+// und zwar gar nicht, nicht bloß abgewiesen. Ein Pfad, der nur bewacht ist,
+// ist eine vergessene Prüfung davon entfernt, die Uhr des laufenden Dorfes zu
+// verstellen.
+//
+// Deshalb wird hier der echte Server zweimal gestartet: einmal im Dev-Modus
+// (die Pfade antworten) und einmal im Produktionspfad gegen einen lokalen
+// Aussteller (die Pfade sind 404).
+func TestTestEndpunkteNurImDevModus(t *testing.T) {
+	bin := baueServer(t)
+
+	t.Run("insecure-dev: erreichbar", func(t *testing.T) {
+		basis := starteUndWarte(t, bin, map[string]string{
+			"AUTH_MODE": "insecure-dev",
+			"SEED":      "1",
+		})
+		if code, _ := hole(t, basis+"/dev/clock"); code != http.StatusOK {
+			t.Fatalf("GET /dev/clock: Status %d, erwartet 200", code)
+		}
+	})
+
+	t.Run("oidc: nicht registriert", func(t *testing.T) {
+		aussteller := lokalerAussteller(t)
+		basis := starteUndWarte(t, bin, map[string]string{
+			"AUTH_ISSUER":   aussteller,
+			"AUTH_AUDIENCE": "dorf-app-test",
+		})
+		for _, pfad := range []string{"/dev/clock", "/dev/clock/set", "/dev/clock/advance",
+			"/dev/clock/reset", "/dev/assignment/run"} {
+			if code, _ := hole(t, basis+pfad); code != http.StatusNotFound {
+				t.Errorf("GET %s: Status %d, erwartet 404 — der Pfad existiert im Produktionsmodus", pfad, code)
+			}
+		}
+	})
+}
+
+// lokalerAussteller stellt gerade so viel OIDC-Discovery bereit, dass der
+// Server im Produktionspfad hochkommt. Bewusst lokal: Ein Test fasst keinen
+// entfernten Anmeldedienst an.
+func lokalerAussteller(t *testing.T) string {
+	t.Helper()
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q}`,
+			srv.URL, srv.URL+"/authorize", srv.URL+"/token", srv.URL+"/keys")
+	})
+	mux.HandleFunc("/keys", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"keys":[]}`))
+	})
+	return srv.URL
+}
+
+// starteUndWarte startet den Server und gibt seine Basis-URL zurück, sobald
+// er gesund antwortet.
+func starteUndWarte(t *testing.T, bin string, env map[string]string) string {
+	t.Helper()
+	port := freierPort(t)
+	alle := map[string]string{
+		"LISTEN_ADDR": fmt.Sprintf(":%d", port),
+		"DB_PATH":     filepath.Join(t.TempDir(), "probe.sqlite"),
+		"PUBLIC_URL":  fmt.Sprintf("http://localhost:%d", port),
+		"BACKUP":      "off",
+	}
+	for k, v := range env {
+		alle[k] = v
+	}
+	srv := starte(t, bin, alle)
+	t.Cleanup(func() { beende(t, srv) })
+	basis := fmt.Sprintf("http://localhost:%d", port)
+	if err := warteAufGesund(basis+"/healthz", 20*time.Second); err != nil {
+		t.Fatalf("Server kam nicht hoch: %v", err)
+	}
+	return basis
+}
+
+func hole(t *testing.T, url string) (int, string) {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(body)
 }
