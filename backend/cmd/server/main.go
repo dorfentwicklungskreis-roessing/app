@@ -153,9 +153,11 @@ func main() {
 	defer stop()
 	vergabeCfg, vergabeAn := assignmentConfig(ctx, zusteller, mitglieder)
 
-	// OptionalAuth versorgt nur den öffentlichen Ideen-Eingang: Wer aus der
-	// angemeldeten App einreicht, bekommt die Idee dem Konto zugeordnet;
-	// wer über die Website kommt, reicht anonym ein.
+	// OptionalAuth versorgt die beiden offenen Eingänge: den Ideen-Eingang —
+	// wer aus der angemeldeten App einreicht, bekommt die Idee dem Konto
+	// zugeordnet, wer über die Website kommt, reicht anonym ein — und die
+	// Fehlerberichte, die auch dann noch hinausgehen müssen, wenn die
+	// Anmeldung selbst klemmt.
 	srv := &api.Server{DB: database, Zusteller: zusteller, OptionalAuth: auth.Optional(verifier),
 		Mitglieder: mitglieder}
 	handler := srv.Handler(auth.Middleware(verifier), func(mux *http.ServeMux) {

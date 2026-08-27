@@ -15,7 +15,7 @@ Ort in der Play Console: **App-Inhalte → Datensicherheit**.
 
 | Frage | Antwort |
 |---|---|
-| Erhebt oder teilt die App Nutzerdaten? | **Ja, erheben. Ja, teilen** — seit `0.1.7` geht die Gerätekennung samt Meldungstext an Google (Firebase Cloud Messaging), siehe Abschnitt 2. |
+| Erhebt oder teilt die App Nutzerdaten? | **Ja, erheben. Ja, teilen** — seit `0.1.7` geht die Gerätekennung samt Meldungstext an Google (Firebase Cloud Messaging), siehe Abschnitt 2. Seit `0.1.11` kommen **Fehlerberichte** dazu: erhoben, aber **nicht** geteilt — sie gehen nur an den Dorfserver. |
 | Werden Daten bei der Übertragung verschlüsselt? | **Ja** — ausschließlich HTTPS (`https://app.xn--rssing-wxa.de`, `https://id.xn--rssing-wxa.de`, `https://tiles.openfreemap.org`) |
 | Können Nutzer die Löschung ihrer Daten beantragen? | **Ja** — siehe Abschnitt 4 |
 | Unabhängige Sicherheitsprüfung | **Nein** |
@@ -213,6 +213,47 @@ Benachrichtigungen keine Kennung dort ankommt.
 In der Play Console darf *Geräte-ID* deshalb als **optional** angekreuzt
 werden.
 
+### App-Info und Leistung → Absturzprotokolle (seit 0.1.11)
+
+- **Erhoben:** ja · **Geteilt:** nein
+- **Pflicht oder optional:** **optional** — nichts geht von selbst hinaus. Die
+  App zeigt den Fehler an, und erst ein Fingertipp auf „Bericht schicken“
+  schickt ihn ab. Wer den Hinweis wegtippt, hat nichts gemeldet.
+- **Zwecke:** App-Funktionalität, Fehlerbehebung („Diagnostics“)
+- **Nur kurzzeitig verarbeitet:** nein — der Bericht bleibt in der Tabelle
+  `error_reports` stehen, bis die Verwaltung ihn löscht
+- **Was genau:** die Art der Störung (`crash`/`network`/`server`/
+  `unexpected`), die **Meldung, die auf dem Bildschirm stand**, technische
+  Angaben (HTTP-Status und Pfad; bei einem Absturz die Aufrufliste, höchstens
+  4000 Zeichen), der Bereich der App in Alltagssprache, Plattform, App- und
+  Systemversion, die **Gerätebezeichnung** („Google Pixel 6“) und der
+  Zeitpunkt. **Kein** Anfrage- oder Antwortrumpf, kein Protokoll, kein
+  Bildschirmfoto, kein Standort, **keine Gerätekennung** (weder die
+  FCM-Kennung noch eine Hardware-Kennung).
+- **Kein Fremddienst:** kein Crashlytics, kein Sentry, kein Analytics-SDK. Der
+  Bericht geht ausschließlich an den Dorfserver, den der
+  Dorfentwicklungskreis selbst betreibt — deshalb *geteilt: nein*.
+- **Beleg:** `android/app/src/main/java/de/roessing/app/errors/`,
+  `data/ErrorReports.kt`, `ui/ErrorReportBanner.kt`,
+  `POST /api/v1/error-reports` in `backend/internal/api/error_reports.go`,
+  Tabelle `error_reports` in `backend/internal/db/error_reports.go`,
+  `backend/SICHERHEIT.md`, Abschnitt „Fehlerberichte aus den Apps“
+
+### App-Aktivitäten → Sonstige nutzergenerierte Inhalte (Ergänzung 0.1.11)
+
+Zu den Ideen (oben) kommt die **freiwillige Ergänzung** an einem
+Fehlerbericht: ein frei getippter Satz („Was hast du gerade gemacht?“, bis
+2000 Zeichen). Er ist freiwillig — ein Fingertipp ohne Text hilft genauso —,
+nicht öffentlich und nur für die Verwaltung sichtbar.
+
+### Personenbezogene Daten → Name und Nutzer-IDs (Ergänzung 0.1.11)
+
+Ist beim Absenden eines Fehlerberichts jemand angemeldet, werden **Kennung
+(`sub`) und Name aus der Rössing-ID** am Bericht gespeichert — damit der
+Dorfentwicklungskreis nachfragen kann. Beides kommt aus dem Token, nicht aus
+der App. Ohne Anmeldung ist der Bericht anonym; genau das ist der Fall, auf
+den es ankommt, wenn das Anmelden selbst klemmt.
+
 ### Nachrichten (Chat, E-Mail, SMS)
 
 - **Erhoben:** **nein**
@@ -237,7 +278,7 @@ werden.
 | Gesundheits-/Fitnessdaten | nein | — |
 | Kontakte, Kalender, SMS, Anrufliste | nein | keine entsprechenden Berechtigungen |
 | Fotos, Videos, Audio, Dateien | nein | keine Medienauswahl in der App |
-| Absturzberichte, Diagnosen, Leistungsdaten | nein | kein Crashlytics, kein Analytics-SDK. Seit `0.1.7` ist `firebase-messaging` eingebunden — **nur** für Benachrichtigungen; die Analyse-Bibliothek fehlt bewusst (im Log: „Unable to log event: analytics library is missing") |
+| Absturzberichte, Diagnosen, Leistungsdaten | **ja, seit 0.1.11 — optional** | Weiterhin kein Crashlytics und kein Analytics-SDK: `firebase-messaging` ist **nur** für Benachrichtigungen eingebunden, die Analyse-Bibliothek fehlt bewusst. Neu ist der **von Hand abgeschickte Fehlerbericht** — siehe Abschnitt 2. Nichts davon geht ohne Knopfdruck hinaus, und nichts geht an einen Dritten. Leistungsdaten werden weiterhin nicht erhoben. |
 | Werbe-ID | nein | keine `play-services-ads-identifier`-Abhängigkeit |
 | Geräte-IDs | **ja, seit 0.1.7** | Kennung der App-Installation für Benachrichtigungen — siehe Abschnitt 2 |
 | Kaufhistorie, Suchverlauf, installierte Apps | nein | — |
@@ -314,5 +355,8 @@ Was heute schon geht:
       die Anmeldung hinter die Erlaubnis legen oder in der Console „Pflicht"
       ankreuzen
 - [ ] Loggt der Reverse-Proxy IP-Adressen? Wenn ja: in der Erklärung nennen
+- [ ] **Fehlerberichte in der Play Console eintragen** (0.1.11): *App info and
+      performance → Crash logs* und *Diagnostics* als **optional erhoben, nicht
+      geteilt**, Zweck *App functionality*; *Analytics* bleibt ausdrücklich aus
 - [ ] Bei jeder neuen Version prüfen, ob ein neues Feld (z.B. Notiz, Foto,
       Standort) die Antworten oben ändert

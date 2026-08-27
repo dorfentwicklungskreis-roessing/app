@@ -175,6 +175,33 @@ nicht in `ios/Dorf/Info.plist`.
 
 ---
 
+### Diagnostics → Crash Data und Other Diagnostic Data (seit 0.1.11)
+
+- **Erhoben:** ja · **Mit Identität verknüpft:** ja, sofern angemeldet ·
+  **Tracking:** nein
+- **Zwecke:** *App Functionality* (Fehlerbehebung im laufenden Test)
+- **Was genau:** die Art der Störung, die **Meldung, die auf dem Bildschirm
+  stand**, technische Angaben (HTTP-Status und Pfad; bei einem Absturz der
+  Ausnahmetext samt Aufrufliste, höchstens 4000 Zeichen), der Bereich der App
+  in Alltagssprache, App- und Systemversion, die **Gerätebezeichnung**
+  („iPhone14,3“) und der Zeitpunkt. Dazu eine **freiwillige** Ergänzung der
+  Person und — nur bei Anmeldung — Kennung und Name aus der Rössing-ID.
+- **Nichts geht von selbst hinaus.** Die App zeigt den Fehler an; erst ein
+  Fingertipp auf „Bericht schicken“ schickt ihn ab. Das Blatt
+  „Dazuschreiben“ führt vor dem Absenden Zeile für Zeile auf, was hinausgeht.
+- **Kein Fremddienst:** kein Crashlytics, kein Sentry, kein `MetricKit`. Der
+  Bericht geht ausschließlich an den Dorfserver, den der
+  Dorfentwicklungskreis selbst betreibt.
+- **Nicht dabei:** Protokolle, Bildschirmfotos, Standort, die APNs-Kennung,
+  Werbekennungen, Kontaktdaten aus dem Profil.
+- **Beleg:** `ios/Dorf/ErrorReports/` (`ErrorReporter`, `CrashWatch`,
+  `ErrorIncident`), `DorfApi+ErrorReports.swift`
+  (`POST /api/v1/error-reports`), Tabelle `error_reports` in
+  `backend/internal/db/`, dazu `backend/SICHERHEIT.md`, Abschnitt
+  „Fehlerberichte aus den Apps“.
+
+---
+
 ## 3. Ausdrücklich NICHT erhoben („Data Not Collected")
 
 | Apple-Datenart | Antwort | Begründung mit Fundstelle |
@@ -189,7 +216,8 @@ nicht in `ios/Dorf/Info.plist`.
 | Browsing History, Search History | nein | Die App hat weder einen Browser noch eine Suche, die irgendwohin gemeldet würde. |
 | Identifiers → Advertising Identifier (IDFA) | nein | Keine Werbekennung, kein `ASIdentifierManager`, kein `identifierForVendor` — `grep -rn "ASIdentifier\|identifierForVendor"` über `ios/` findet nichts. Die APNs-Kennung ist eine **Device ID** und oben angegeben; sie taugt zu keiner Werbemessung und wird an niemanden außer Apple gegeben. |
 | Usage Data (Product Interaction, Advertising Data, Other) | nein | Kein Analyse-SDK, keine eigene Nutzungsmessung. Einziges Paket: MapLibre (`ios/project.yml`). |
-| Diagnostics (Crash Data, Performance Data, Other) | nein | Kein Crashlytics, kein Sentry, kein `MetricKit`. Absturzberichte gibt es nur, soweit ein Nutzer sie **Apple gegenüber** freigibt — das ist Apples Erhebung, nicht unsere, und wird im Formular nicht angegeben. |
+| Diagnostics → Crash Data, Other | **ja, seit 0.1.11 — nur auf Knopfdruck** | Siehe Abschnitt 2. Weiterhin kein Crashlytics, kein Sentry, kein `MetricKit`. Apples eigene Absturzberichte bleiben Apples Erhebung und werden hier nicht angegeben. |
+| Diagnostics → Performance Data | nein | Keine Messung von Laufzeiten, Bildraten oder Energie; es gibt kein Analyse-SDK. |
 | Other Data | nein | — |
 
 ### Sonderfall Standort — warum „nicht erhoben" stimmt
@@ -289,6 +317,9 @@ Startseite **und** auf dem Anmeldebildschirm, wie es § 5 DDG verlangt.
       <https://xn--rssing-wxa.de/app/daten-loeschen/> ist damit nur noch eine
       Zugabe, keine Voraussetzung. Die Prüfnotiz in App Store Connect nennt
       den Weg ausdrücklich (`store/ios-veroeffentlichung.md`, Schritt 11).
+- [ ] **Fehlerberichte in App Store Connect eintragen** (0.1.11):
+      *Diagnostics → Crash Data* und *Other Diagnostic Data* als erhoben,
+      *App Functionality*, mit Identität verknüpft, **kein** Tracking.
 - [ ] Prüfen, sobald die Karte den Standort benutzt (siehe Sonderfall oben).
 - [ ] Loggt der Reverse-Proxy IP-Adressen? Wenn ja: in der Erklärung nennen.
 - [x] **Push ist nachgerüstet** — *Identifiers → Device ID* steht oben

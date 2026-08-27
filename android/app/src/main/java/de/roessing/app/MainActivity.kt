@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.roessing.app.auth.LoginResult
 import de.roessing.app.auth.SessionState
+import de.roessing.app.ui.ErrorReportBannerHost
 import de.roessing.app.ui.HomeScreen
 import de.roessing.app.ui.IdeenViewModel
 import de.roessing.app.ui.LeaderboardViewModel
@@ -72,6 +74,35 @@ class MainActivity : ComponentActivity() {
 private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = {}) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val container = context.appContainer
+    // Der Hinweis auf einen Fehler sitzt an der Wurzel, nicht in einem
+    // Bereich: Etwas kann überall schiefgehen — auch schon hier auf dem
+    // Anmeldeschirm —, und niemand soll erst den richtigen Schirm suchen
+    // müssen, um davon zu erfahren. Er sagt auch, dass die Anmeldung hält,
+    // und bietet „Erneut versuchen" an — beides stand früher nur auf der
+    // Startseite und war blind für alles, was woanders schiefgeht.
+    //
+    // Das erneute Laden meldet der angemeldete Teil hier herauf: Sein
+    // ViewModel lädt schon beim Anlegen, es darf also nicht an der Wurzel
+    // entstehen, wo noch niemand angemeldet ist.
+    var erneutVersuchen by remember { mutableStateOf<(() -> Unit)?>(null) }
+    Box(Modifier.fillMaxSize()) {
+        Angemeldet(container, pushZiel, onPushZielVerbraucht) { erneutVersuchen = it }
+        ErrorReportBannerHost(
+            container.errorReporter,
+            Modifier.align(Alignment.BottomCenter),
+            onRetry = erneutVersuchen,
+        )
+    }
+}
+
+@Composable
+private fun Angemeldet(
+    container: AppContainer,
+    pushZiel: PushZiel?,
+    onPushZielVerbraucht: () -> Unit,
+    onErneutBereit: (() -> Unit) -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val session by container.authManager.session.collectAsState()
     val scope = rememberCoroutineScope()
     // null = kein Fehler. Ein Abbruch (Zurück-Taste) ist bewusst kein Fehler.
@@ -110,6 +141,8 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
         is SessionState.LoggedIn -> {
             val factory = viewModelFactory(container)
             val vm: PlacesViewModel = viewModel(factory = factory)
+            // Ab jetzt gibt es etwas, das ein erneuter Versuch tun kann.
+            LaunchedEffect(vm) { onErneutBereit { vm.refresh() } }
             val rangVm: LeaderboardViewModel = viewModel(factory = factory)
             val profilVm: ProfileViewModel = viewModel(factory = factory)
             val ideenVm: IdeenViewModel = viewModel(factory = factory)

@@ -129,9 +129,6 @@ fun HomeScreen(
 
     val savedMsg = stringResource(R.string.watered_success)
     val failMsg = stringResource(R.string.error_network)
-    // Beim Ausfall eines Abrufs steht ausdrücklich dabei, dass die Anmeldung
-    // hält — sonst liest sich „keine Verbindung" wie „du bist raus".
-    val offlineMsg = stringResource(R.string.error_offline_signed_in)
     val deniedMsg = stringResource(R.string.location_denied)
     val zusageMsg = stringResource(R.string.assignment_claimed_toast)
     val rueckgabeMsg = stringResource(R.string.assignment_released_toast)
@@ -243,9 +240,10 @@ fun HomeScreen(
             onPushZielVerbraucht()
         }
     }
-    LaunchedEffect(state.offline) {
-        if (state.offline) snackbar.showSnackbar(offlineMsg)
-    }
+    // Früher stand hier eine Schnackbar „keine Verbindung". Sie sagte
+    // dasselbe wie der Hinweis an der Wurzel (siehe ErrorReportBanner) — nur
+    // vier Sekunden lang und ohne die Möglichkeit, einen Bericht zu
+    // schicken. Zwei Stimmen für einen Fehler waren eine zu viel.
     LaunchedEffect(abgelehnt) {
         // Einmal freundlich erklären, dann nie wieder nörgeln.
         if (abgelehnt) snackbar.showSnackbar(deniedMsg)

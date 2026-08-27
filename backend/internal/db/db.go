@@ -202,7 +202,10 @@ CREATE INDEX IF NOT EXISTS idx_devices_person ON push_devices(user_sub);
 		return err
 	}
 	// Weitere Bereiche bringen ihre Tabellen selbst mit (rein additiv).
-	return d.migrateIdeen()
+	if err := d.migrateIdeen(); err != nil {
+		return err
+	}
+	return d.migrateErrorReports()
 }
 
 // istDoppelteSpalte erkennt den Fehler, mit dem SQLite ein bereits

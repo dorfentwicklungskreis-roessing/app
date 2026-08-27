@@ -256,6 +256,10 @@ func kurz(s string, max int) string {
 // Startseite, weil dort sonst niemand merkt, dass etwas hereingekommen ist.
 type bereichsDaten struct {
 	NeueIdeen int
+	// NeueFehlerberichte sind die noch nicht angesehenen Berichte aus den
+	// Apps. Sie gehören aus demselben Grund auf die Startseite wie die
+	// Ideen: Sonst merkt niemand, dass jemandem gerade etwas kaputtging.
+	NeueFehlerberichte int
 	// OffeneAntraege sind die unentschiedenen Befähigungs-Anträge über alle
 	// Träger hinweg — der Zähler auf der Träger-Kachel.
 	OffeneAntraege int
@@ -266,5 +270,13 @@ func (a *App) bereichsDaten() bereichsDaten {
 	if err != nil {
 		return bereichsDaten{}
 	}
-	return bereichsDaten{NeueIdeen: anzahl[model.IdeeNeu], OffeneAntraege: a.offeneAntraege()}
+	berichte, err := a.db.CountErrorReports()
+	if err != nil {
+		berichte = nil
+	}
+	return bereichsDaten{
+		NeueIdeen:          anzahl[model.IdeeNeu],
+		NeueFehlerberichte: berichte[model.ErrorReportNew],
+		OffeneAntraege:     a.offeneAntraege(),
+	}
 }

@@ -201,4 +201,34 @@
     <string name="events_offline_stale">Gerade keine Verbindung — die Liste ist möglicherweise nicht mehr aktuell.</string>
     <string name="events_retry">Erneut versuchen</string>
     <string name="events_loading">Termine werden geholt …</string>
+    <!-- Fehlerberichte: Wenn etwas nicht klappt, sieht die Person das — und
+         kann mit einem Fingertipp einen Bericht schicken. -->
+    <string name="error_report_offline">Keine Verbindung zum Server. Es werden ggf. alte Daten angezeigt.</string>
+    <string name="error_report_server">Der Server antwortet gerade nicht (%1$d).</string>
+    <string name="error_report_not_found">Das gibt es nicht (mehr).</string>
+    <string name="error_report_crash">Die App hat sich beim letzten Mal unerwartet beendet.</string>
+    <string name="error_report_retry">Erneut versuchen</string>
+    <string name="error_report_send">Bericht schicken</string>
+    <string name="error_report_sending">Wird geschickt …</string>
+    <string name="error_report_add">Dazuschreiben</string>
+    <string name="error_report_dismiss">Hinweis schließen</string>
+    <string name="error_report_close">Schließen</string>
+    <string name="error_report_thanks">Danke, der Bericht ist angekommen.</string>
+    <string name="error_report_send_failed">Das Abschicken hat nicht geklappt. Besteht eine Verbindung?</string>
+    <string name="error_report_dialog_title">Bericht schicken</string>
+    <string name="error_report_what_happened">Was passiert ist</string>
+    <string name="error_report_comment_label">Was hast du gerade gemacht? — freiwillig</string>
+    <string name="error_report_comment_hint">Zum Beispiel: Ich wollte gerade das Gießen melden.</string>
+    <string name="error_report_comment_help">Ein Fingertipp auf „Abschicken“ hilft auch ohne Text.</string>
+    <string name="error_report_contents">Das wird geschickt</string>
+    <string name="error_report_privacy">Mehr nicht: kein Protokoll, kein Bildschirmfoto, kein Standort und keine Gerätekennung. Dass du es warst, sieht der Dorfentwicklungskreis nur, solange du angemeldet bist.</string>
+    <string name="error_report_submit">Abschicken</string>
+    <string name="error_report_cancel">Nicht schicken</string>
+    <string name="error_report_line_what">Was passiert ist</string>
+    <string name="error_report_line_area">Bereich</string>
+    <string name="error_report_line_technical">Technisch</string>
+    <string name="error_report_line_yours">Dein Text</string>
+    <string name="error_report_line_app">App</string>
+    <string name="error_report_line_device">Gerät</string>
+    <string name="error_report_line_when">Wann</string>
 </resources>

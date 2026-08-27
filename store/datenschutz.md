@@ -86,8 +86,25 @@ E-Mail-Adresse für Rückfragen (aus dem Profil vorbelegt, änder- und leerbar).
 Die Einreichung ist nur für die Verwaltung sichtbar, wird nicht veröffentlicht
 und erscheint anderen Nutzern nirgends in der App.
 
-**Kein Tracking.** Keine Werbung, keine Analyse- oder Absturz-SDKs, keine
-Werbe-ID, kein Profiling. Das Firebase-SDK ist ausschließlich für die
+**Fehlerberichte — nur auf Knopfdruck.** Geht in der App etwas schief, sagt sie
+das und bietet an, einen Bericht zu schicken. **Von selbst geht nichts hinaus.**
+Wird der Knopf gedrückt, speichert der Dorfserver: die Art der Störung, die
+Meldung, die auf dem Bildschirm stand, technische Angaben (HTTP-Status und Pfad
+der Anfrage; bei einem Absturz Ausnahmetext und Aufrufliste), den Bereich der
+App, Plattform, App- und Systemversion, die Gerätebezeichnung (z.B.
+„Google Pixel 6“, „iPhone14,3“) und den Zeitpunkt — dazu, wenn jemand mag, einen
+freiwillig getippten Satz. Wer angemeldet ist, dessen Nutzerkennung und Name
+kommen mit, damit der Dorfentwicklungskreis nachfragen kann; ohne Anmeldung ist
+der Bericht anonym. **Nicht** dabei sind Protokolle, Bildschirmfotos, der
+Standort, die Gerätekennung für Benachrichtigungen und Kontaktdaten aus dem
+Profil. Vor dem Absenden lässt sich unter „Dazuschreiben“ Zeile für Zeile
+nachlesen, was hinausgeht. Die Berichte sind nur für die Verwaltung sichtbar und
+werden nicht veröffentlicht.
+
+**Kein Tracking.** Keine Werbung, keine Analyse-SDKs, keine Werbe-ID, kein
+Profiling — und **kein Absturz-SDK**: Es gibt weder Crashlytics noch Sentry.
+Die oben beschriebenen Fehlerberichte gehen ausschließlich an den Dorfserver
+und nur, wenn jemand sie abschickt. Das Firebase-SDK ist ausschließlich für die
 Benachrichtigungen eingebunden.
 
 ## Empfänger
@@ -120,8 +137,9 @@ gegossen hat — das ist der Sinn der gemeinsamen Übersicht.
 
 Auf **Einwilligung** (Art. 6 Abs. 1 lit. a DSGVO) beruhen dagegen: der Eintrag
 als Helfer:in samt der daraus entstehenden Anfragen, die Benachrichtigungen
-aufs Handy, die freiwilligen Profilfelder samt ihrer Sichtbarkeit und die
-Einreichung einer Idee. Jede dieser Einwilligungen lässt sich einzeln
+aufs Handy, die freiwilligen Profilfelder samt ihrer Sichtbarkeit, die
+Einreichung einer Idee und das Abschicken eines Fehlerberichts. Jede dieser
+Einwilligungen lässt sich einzeln
 zurücknehmen — durch Austragen, durch Entziehen der Benachrichtigungserlaubnis
 in den Android-Einstellungen bzw. durch Leeren des Feldes.
 
@@ -136,6 +154,9 @@ in den Android-Einstellungen bzw. durch Leeren des Feldes.
   fehlt (Entzug in den Android-Einstellungen, spätestens beim nächsten Öffnen
   der App), beim Abmelden aus der App — und auch dann, wenn Google sie als
   ungültig meldet.
+- Fehlerberichte bleiben stehen, bis der Fehler behoben oder verworfen ist;
+  danach löscht die Verwaltung sie. Auf Wunsch auch früher — formlos beim
+  Dorfentwicklungskreis.
 - Die von Play verlangte öffentliche Seite zur Löschung von Konto und Daten
   steht unter <https://xn--rssing-wxa.de/app/daten-loeschen/>.
 

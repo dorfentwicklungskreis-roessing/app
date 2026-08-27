@@ -1,0 +1,113 @@
+{{/* Ein einzelner Fehlerbericht: was die Person gelesen hat, was sie
+     ergänzt hat und was die App technisch dazu wusste. Gespeichert wird per
+     Post/Redirect/Get, gelöscht über eine eigene Bestätigungsseite. */}}
+{{define "seite"}}
+<div class="mb-4">
+  <a class="link link-hover text-sm" href="/admin/fehlerberichte/">← Zurück zu den Fehlerberichten</a>
+</div>
+
+<div class="grid gap-4 lg:grid-cols-3">
+  <div class="card bg-base-100 shadow-sm lg:col-span-2">
+    <div class="card-body">
+      <h1 class="card-title" id="seitentitel">
+        <span class="badge {{.Data.Report.KindBadge}}">{{.Data.Report.KindText}}</span>
+        Fehlerbericht
+      </h1>
+
+      <h2 class="mt-2 text-base font-semibold">Das stand auf dem Bildschirm</h2>
+      <p class="whitespace-pre-line" id="bericht-meldung">{{.Data.Report.Message}}</p>
+
+      <h2 class="mt-4 text-base font-semibold">Dazugeschrieben</h2>
+      {{if .Data.Report.Comment}}
+        <p class="whitespace-pre-line" id="bericht-ergaenzung">{{.Data.Report.Comment}}</p>
+      {{else}}
+        <p class="text-base-content/50" id="bericht-ergaenzung">
+          Nichts — es wurde nur der Knopf gedrückt. Das ist der Normalfall und hilft genauso.
+        </p>
+      {{end}}
+
+      <h2 class="mt-4 text-base font-semibold">Technische Angaben</h2>
+      {{if .Data.Report.Detail}}
+        <pre class="overflow-x-auto rounded-box bg-base-200 p-3 text-sm" id="bericht-technik">{{.Data.Report.Detail}}</pre>
+      {{else}}
+        <p class="text-base-content/50" id="bericht-technik">Keine.</p>
+      {{end}}
+
+      <div class="divider my-2"></div>
+
+      <dl class="grid grid-cols-3 gap-2 text-sm">
+        <dt class="font-semibold">Passiert am</dt>
+        <dd class="col-span-2">{{datumZeit .Data.Report.OccurredAt}}</dd>
+
+        <dt class="font-semibold">Eingegangen</dt>
+        <dd class="col-span-2">{{datumZeit .Data.Report.CreatedAt}}</dd>
+
+        <dt class="font-semibold">Bereich</dt>
+        <dd class="col-span-2" id="bericht-bereich">
+          {{if .Data.Report.Area}}{{.Data.Report.Area}}{{else}}<span class="text-base-content/50">nicht angegeben</span>{{end}}
+        </dd>
+
+        <dt class="font-semibold">Gerät</dt>
+        <dd class="col-span-2" id="bericht-geraet">
+          {{.Data.Report.Platform}}
+          {{if .Data.Report.DeviceModel}}· {{.Data.Report.DeviceModel}}{{end}}
+          {{if .Data.Report.OSVersion}}· {{.Data.Report.OSVersion}}{{end}}
+        </dd>
+
+        <dt class="font-semibold">App-Version</dt>
+        <dd class="col-span-2">
+          {{if .Data.Report.AppVersion}}{{.Data.Report.AppVersion}}{{else}}<span class="text-base-content/50">nicht angegeben</span>{{end}}
+        </dd>
+
+        <dt class="font-semibold">Wer</dt>
+        <dd class="col-span-2" id="bericht-person">
+          {{if .Data.Report.Anonym}}
+            <span class="text-base-content/50">nicht angemeldet</span>
+            <span class="badge badge-sm badge-outline">anonym</span>
+          {{else}}
+            {{if .Data.Report.UserName}}{{.Data.Report.UserName}}{{else}}<span class="text-base-content/50">ohne Namen</span>{{end}}
+            <span class="badge badge-sm badge-outline">angemeldet</span>
+          {{end}}
+        </dd>
+      </dl>
+
+      <p class="mt-2 text-sm text-base-content/60">
+        Mehr weiß der Bericht nicht: kein Protokoll, kein Bildschirmfoto, kein
+        Standort und keine Gerätekennung. Wer gemeldet hat, kommt aus der
+        Anmeldung — nicht aus dem, was die App behauptet.
+      </p>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title text-base">Einordnen</h2>
+      {{if .Data.Fehler}}
+        <div role="alert" class="alert alert-error" id="formularfehler"><span>{{.Data.Fehler}}</span></div>
+      {{end}}
+      <form method="post" action="/admin/fehlerberichte/{{.Data.Report.ID}}">
+        <fieldset class="fieldset">
+          <label class="fieldset-legend" for="feld-status">Stand</label>
+          <select name="status" id="feld-status" class="select w-full">
+            {{range .Data.Staende}}
+              <option value="{{.Wert}}" {{if .Gewaehlt}}selected{{end}}>{{.Titel}}</option>
+            {{end}}
+          </select>
+
+          <label class="fieldset-legend" for="feld-notiz">Interne Notiz</label>
+          <textarea name="notiz" id="feld-notiz" rows="6" maxlength="2000"
+                    class="textarea w-full">{{.Data.Report.Note}}</textarea>
+          <p class="label">Nur für die Verwaltung — steht nirgends öffentlich.</p>
+        </fieldset>
+        <div class="card-actions mt-3 justify-end">
+          <button type="submit" class="btn btn-primary btn-sm" id="bericht-speichern">Speichern</button>
+        </div>
+      </form>
+
+      <div class="divider my-1"></div>
+      <a class="btn btn-error btn-sm btn-outline" id="bericht-loeschen"
+         href="/admin/fehlerberichte/{{.Data.Report.ID}}/loeschen">Bericht löschen</a>
+    </div>
+  </div>
+</div>
+{{end}}
