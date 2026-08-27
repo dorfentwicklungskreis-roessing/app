@@ -115,8 +115,12 @@ jobs:
         run: |
           # PUBLIC_URL muss lokal bleiben: das Backend lehnt AUTH_MODE=insecure-dev
           # zusammen mit einer öffentlichen https-URL ab (und die ist Vorbelegung).
-          # VERGABE_TAKT kurz: Die Vergabe-Tests warten sonst je Schritt bis
-          # zu einer Minute auf den nächsten Durchlauf.
+          # VERGABE=off: Der Hintergrund-Takt wird nicht mehr gebraucht. Die
+          # Vergabe-Tests stellen die Uhr des Backends auf den Fälligkeitstag
+          # und stoßen den Durchlauf selbst an (POST /dev/assignment/run,
+          # nur im Dev-Modus vorhanden). Ohne Takt kann zwischen zwei
+          # Schritten eines Tests nichts mehr von selbst passieren — damit
+          # hängt kein Ergebnis mehr daran, wie beschäftigt der Runner ist.
           # IDEEN_*: Der Ideen-Eingang ist im Betrieb streng begrenzt (5 pro
           # Stunde). Im E2E reicht der Test mehrfach hintereinander ein; die
           # Grenze selbst hat einen eigenen Test in backend/internal/api.
@@ -124,7 +128,7 @@ jobs:
           # geprüft, aber die MCP-Metadaten tragen den Wert — und dort hat die
           # Produktionsadresse in einem Testlauf nichts verloren.
           DB_PATH=/tmp/e2e.sqlite AUTH_MODE=insecure-dev SEED=1 LISTEN_ADDR=:8099 \
-          PUBLIC_URL=http://localhost:8099 VERGABE_TAKT=5s \
+          PUBLIC_URL=http://localhost:8099 VERGABE=off \
           AUTH_ISSUER=http://10.0.2.2:8123 \
           IDEEN_BURST=50 IDEEN_PRO_STUNDE=50 \
             go run ./cmd/server &

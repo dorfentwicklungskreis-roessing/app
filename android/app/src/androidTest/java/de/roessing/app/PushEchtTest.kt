@@ -26,9 +26,11 @@ import org.junit.runner.RunWith
 
 /**
  * Echter Push im Emulator — nur auf Zuruf (`-e push true`) und nur gegen ein
- * Backend mit hinterlegtem Dienstkonto-Schlüssel:
+ * Backend mit hinterlegtem Dienstkonto-Schlüssel. `AUTH_MODE=insecure-dev`
+ * ist Pflicht: Der Test macht die Aufgabe über die Uhr des Backends fällig,
+ * und die Test-Knöpfe unter `/dev` gibt es nur in diesem Modus.
  *
- *     FCM_CREDENTIALS_FILE=… go run ./cmd/server
+ *     AUTH_MODE=insecure-dev FCM_CREDENTIALS_FILE=… go run ./cmd/server
  *     adb shell am instrument -e class de.roessing.app.PushEchtTest \
  *       -e push true -e e2e true …
  *
