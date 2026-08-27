@@ -52,11 +52,11 @@ nonisolated enum DorfFehler: Error, Sendable {
 nonisolated final class DorfApi: Sendable {
     private let basis: URL
     private let sitzung: URLSession
-    private let tokenGeber: @Sendable () async -> String?
+    private let tokenGeber: @Sendable () async -> Tokenlage
 
     init(basis: URL = Konfiguration.apiBasis,
          sitzung: URLSession = .dorfSitzung,
-         tokenGeber: @escaping @Sendable () async -> String?) {
+         tokenGeber: @escaping @Sendable () async -> Tokenlage) {
         self.basis = basis
         self.sitzung = sitzung
         self.tokenGeber = tokenGeber
@@ -150,8 +150,20 @@ nonisolated final class DorfApi: Sendable {
             versand.setValue("application/json", forHTTPHeaderField: "Content-Type")
             versand.httpBody = try JSONEncoder().encode(rumpf)
         }
-        if let token = await tokenGeber() {
+        switch await tokenGeber() {
+        case .token(let token):
             versand.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        case .abgemeldet:
+            // Ohne Anmeldung geht die Anfrage ohne Kopfzeile hinaus — ein paar
+            // Endpunkte (Ideen) nehmen sie auch so an.
+            break
+        case .nichtErreichbar:
+            // Die Anmeldung besteht, sie ließ sich nur gerade nicht erneuern.
+            // Ohne Kopfzeile käme ein 401 zurück, und die App behauptete
+            // „Die Anmeldung ist abgelaufen. Bitte neu anmelden." — falsch,
+            // und der Satz kostet die Person eine Anmeldung, die noch gilt.
+            // Es ist ein Netzproblem, und so heißt es hier auch.
+            throw DorfFehler.netz("Die Anmeldung ließ sich gerade nicht erneuern.")
         }
         return versand
     }

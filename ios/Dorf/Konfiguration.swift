@@ -33,11 +33,6 @@ nonisolated enum Konfiguration {
         #endif
     }
 
-    /// Das Schema, unter dem der Browser zurück in die App springt
-    /// (`de.roessing.app` aus `de.roessing.app:/oauth2redirect`).
-    static var ruecksprungSchema: String {
-        String(oidcRuecksprung.prefix(while: { $0 != ":" }))
-    }
 
     private static func text(_ schluessel: String, vorgabe: String) -> String {
         guard let roh = Bundle.main.object(forInfoDictionaryKey: schluessel) as? String,

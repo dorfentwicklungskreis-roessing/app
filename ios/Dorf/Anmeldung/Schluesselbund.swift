@@ -65,3 +65,21 @@ enum Schluesselbund {
         SecItemDelete(suche as CFDictionary)
     }
 }
+
+/// Wo der Tokensatz zwischen zwei Starts liegt.
+///
+/// A small bundle of closures instead of a protocol: `Anmeldung` needs
+/// exactly three calls, and a test hands in its own three — otherwise every
+/// run would write into the real keychain of the machine it runs on.
+struct Tokenablage {
+    var lesen: () -> Tokensatz?
+    var sichern: (Tokensatz) -> Void
+    var loeschen: () -> Void
+
+    /// Der echte Schlüsselbund — die Vorbelegung der App.
+    static let schluesselbund = Tokenablage(
+        lesen: { Schluesselbund.lesen() },
+        sichern: { Schluesselbund.sichern($0) },
+        loeschen: { Schluesselbund.loeschen() }
+    )
+}

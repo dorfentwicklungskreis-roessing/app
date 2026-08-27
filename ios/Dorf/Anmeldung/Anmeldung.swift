@@ -32,6 +32,20 @@ enum Anmeldeergebnis: Equatable, Sendable {
     case fehlgeschlagen(kuerzel: String)
 }
 
+/// Was die App gerade als Zugangstoken anbieten kann.
+///
+/// Der Unterschied zwischen den beiden letzten Fällen ist der ganze Punkt:
+/// „Der Server sagt nein" ist eine Entscheidung, „ich konnte den Server nicht
+/// fragen" ein Umstand. Nur das Erste beendet eine Anmeldung. Solange beides
+/// gleich hieß (`nil`), kostete jedes Funkloch die Anmeldung.
+enum Tokenlage: Equatable, Sendable {
+    case token(String)
+    /// Niemand ist angemeldet.
+    case abgemeldet
+    /// Jemand ist angemeldet, aber das Token ließ sich gerade nicht erneuern.
+    case nichtErreichbar
+}
+
 /// Die Endpunkte der Rössing-ID, wie sie die Discovery meldet.
 struct OidcEndpunkte: Codable, Sendable {
     let authorization_endpoint: URL
@@ -60,7 +74,36 @@ final class Anmeldung: NSObject, ObservableObject {
     private var endpunkte: OidcEndpunkte?
     private var laufendeAnmeldung: ASWebAuthenticationSession?
 
-    override init() {
+    /// Die gerade laufende Erneuerung, falls es eine gibt.
+    ///
+    /// Vor **jeder** Anfrage wird ein Token verlangt, und beim Kaltstart
+    /// verlangen mehrere Abrufe es im selben Augenblick (Profil, Orte,
+    /// Gerätekennung). Ohne diese Stelle schickte jeder von ihnen seine
+    /// eigene Erneuerung mit demselben Erneuerungstoken los — und Zitadel
+    /// gibt bei jeder Erneuerung ein neues aus und weist das alte von da an
+    /// ab. Der erste Abruf gewänne, alle übrigen bekämen `invalid_grant`,
+    /// und das hat bis hierher abgemeldet. Genau das war nach einer
+    /// Aktualisierung zu sehen. Jetzt warten alle auf dieselbe Erneuerung.
+    private var laufendeErneuerung: Task<Tokensatz, Error>?
+
+    private let sitzungsNetz: URLSession
+    private let aussteller: URL
+    private let clientId: String
+    private let ruecksprung: String
+    private let ablage: Tokenablage
+
+    /// Die Vorbelegungen sind die der App; ein Test reicht seine eigenen
+    /// herein und fasst damit weder das Netz noch den echten Schlüsselbund an.
+    init(sitzung: URLSession = .dorfSitzung,
+         aussteller: URL = Konfiguration.oidcAussteller,
+         clientId: String = Konfiguration.oidcClientId,
+         ruecksprung: String = Konfiguration.oidcRuecksprung,
+         ablage: Tokenablage = .schluesselbund) {
+        self.sitzungsNetz = sitzung
+        self.aussteller = aussteller
+        self.clientId = clientId
+        self.ruecksprung = ruecksprung
+        self.ablage = ablage
         super.init()
         wiederherstellen()
     }
@@ -74,7 +117,7 @@ final class Anmeldung: NSObject, ObservableObject {
             sitzung = .angemeldet(entwicklerModus: true)
             return
         }
-        if let satz = Schluesselbund.lesen() {
+        if let satz = ablage.lesen() {
             tokensatz = satz
             letztesIdToken = satz.idToken
             // Auch ein abgelaufenes Zugangstoken zählt als angemeldet, solange
@@ -88,32 +131,65 @@ final class Anmeldung: NSObject, ObservableObject {
         sitzung = .abgemeldet
     }
 
-    /// Liefert ein gültiges Zugangstoken (erneuert bei Bedarf) oder `nil`.
+    /// Liefert die Tokenlage: ein gültiges Zugangstoken (erneuert bei Bedarf),
+    /// „niemand angemeldet" oder „gerade nicht erreichbar".
     /// Wird vor **jeder** API-Anfrage aufgerufen.
-    func frischesToken() async -> String? {
-        if let entwicklerToken { return entwicklerToken }
-        guard let satz = tokensatz else { return nil }
-        if satz.gueltig() { return satz.zugangstoken }
-        guard let erneuerung = satz.erneuerungstoken else {
+    func frischesToken() async -> Tokenlage {
+        if let entwicklerToken { return .token(entwicklerToken) }
+        guard let satz = tokensatz else { return .abgemeldet }
+        if satz.gueltig() { return .token(satz.zugangstoken) }
+        guard let erneuerungstoken = satz.erneuerungstoken else {
+            // Ohne Erneuerungstoken gibt es nichts mehr zu erneuern — das ist
+            // wirklich das Ende der Sitzung und kein Umstand.
             abmelden()
-            return nil
+            return .abgemeldet
         }
         do {
-            let neu = try await erneuern(mit: erneuerung)
-            uebernehmen(neu)
-            return neu.zugangstoken
-        } catch {
-            // Erneuerung endgültig gescheitert (z.B. Token widerrufen):
-            // abmelden ist ehrlicher, als weiter 401 zu sammeln.
+            return .token(try await erneuerungAbwarten(mit: erneuerungstoken).zugangstoken)
+        } catch Anmeldefehler.abgewiesen(let kuerzel) where Self.istSitzungsende(kuerzel) {
+            // Die Rössing-ID hat die Sitzung beendet: Token widerrufen, Konto
+            // gesperrt, Passwort geändert. Hier ist Abmelden die Wahrheit.
             abmelden()
-            return nil
+            return .abgemeldet
+        } catch {
+            // Alles andere heißt nur: gerade nicht gefragt werden können.
+            // Die Anmeldung bleibt stehen, der nächste Abruf versucht es neu.
+            return .nichtErreichbar
         }
+    }
+
+    /// Ob eine abgewiesene Erneuerung das Ende der Sitzung bedeutet.
+    ///
+    /// RFC 6749 lässt den Token-Endpunkt eine abgelehnte Zuteilung mit 400 und
+    /// einem Kürzel beantworten. `invalid_grant` ist das einzige, das „diese
+    /// Sitzung ist vorbei" heißt — widerrufenes Erneuerungstoken, gesperrtes
+    /// Konto, geändertes Passwort. `invalid_client`, `invalid_request` und
+    /// Verwandtes sind Fehler in **unserer** Einrichtung; wer daraufhin
+    /// abmeldet, wirft eine gültige Anmeldung wegen eines eigenen Fehlers weg,
+    /// und die neue Anmeldung scheiterte an derselben Stelle wieder.
+    ///
+    /// Als reine Funktion, damit sie sich ohne Netz prüfen lässt.
+    static func istSitzungsende(_ kuerzel: String) -> Bool {
+        kuerzel == "invalid_grant"
+    }
+
+    /// Erneuert — oder hängt sich an die Erneuerung, die schon läuft.
+    private func erneuerungAbwarten(mit erneuerungstoken: String) async throws -> Tokensatz {
+        if let laufendeErneuerung { return try await laufendeErneuerung.value }
+        // Die Aufgabe wird **vor** dem ersten `await` hinterlegt: Erst dadurch
+        // findet der nächste Aufrufer sie vor, statt eine zweite loszuschicken.
+        let aufgabe = Task { try await self.erneuern(mit: erneuerungstoken) }
+        laufendeErneuerung = aufgabe
+        defer { laufendeErneuerung = nil }
+        let neu = try await aufgabe.value
+        uebernehmen(neu)
+        return neu
     }
 
     private func uebernehmen(_ satz: Tokensatz) {
         tokensatz = satz
         letztesIdToken = satz.idToken ?? letztesIdToken
-        Schluesselbund.sichern(satz)
+        ablage.sichern(satz)
         sitzung = .angemeldet(entwicklerModus: false)
     }
 
@@ -121,7 +197,7 @@ final class Anmeldung: NSObject, ObservableObject {
         tokensatz = nil
         entwicklerToken = nil
         letztesIdToken = nil
-        Schluesselbund.loeschen()
+        ablage.loeschen()
         UserDefaults.standard.removeObject(forKey: "entwicklerToken")
         sitzung = .abgemeldet
     }
@@ -138,6 +214,12 @@ final class Anmeldung: NSObject, ObservableObject {
 
     // MARK: Anmeldefluss
 
+    /// Das Schema, unter dem der Browser zurück in die App springt
+    /// (`de.roessing.app` aus `de.roessing.app:/oauth2redirect`).
+    private var ruecksprungSchema: String {
+        String(ruecksprung.prefix(while: { $0 != ":" }))
+    }
+
     func anmelden() async -> Anmeldeergebnis {
         do {
             let ziele = try await endpunkteHolen()
@@ -147,9 +229,9 @@ final class Anmeldung: NSObject, ObservableObject {
 
             var bau = URLComponents(url: ziele.authorization_endpoint, resolvingAgainstBaseURL: false)!
             bau.queryItems = [
-                .init(name: "client_id", value: Konfiguration.oidcClientId),
+                .init(name: "client_id", value: clientId),
                 .init(name: "response_type", value: "code"),
-                .init(name: "redirect_uri", value: Konfiguration.oidcRuecksprung),
+                .init(name: "redirect_uri", value: ruecksprung),
                 .init(name: "scope", value: ANMELDE_SCOPES.joined(separator: " ")),
                 .init(name: "state", value: zustand),
                 .init(name: "code_challenge", value: herausforderung),
@@ -189,28 +271,36 @@ final class Anmeldung: NSObject, ObservableObject {
         }
     }
 
+    /// Warum ein Anmelde- oder Erneuerungsschritt nicht durchkam.
+    ///
+    /// Die Trennung ist die Sache selbst: `abgewiesen` heißt, die Rössing-ID
+    /// hat geantwortet und Nein gesagt. `nichtErreichbar` heißt, sie hat gar
+    /// nicht geantwortet — kein Netz, Zeitüberschreitung, 5xx, unlesbare
+    /// Antwort. Nur das Erste darf eine Anmeldung kosten.
     private enum Anmeldefehler: Error, Equatable {
         case abgebrochen
-        case discovery
-        case tokenTausch(String)
+        /// Ihr OAuth-Kürzel: `invalid_grant`, `invalid_client`, `access_denied` …
+        case abgewiesen(String)
+        case nichtErreichbar(String)
 
         var kuerzel: String {
             switch self {
             case .abgebrochen: return "abgebrochen"
-            case .discovery: return "discovery"
-            case .tokenTausch(let k): return k
+            case .abgewiesen(let k): return k
+            case .nichtErreichbar(let k): return k
             }
         }
     }
 
     private func endpunkteHolen() async throws -> OidcEndpunkte {
         if let endpunkte { return endpunkte }
-        let adresse = Konfiguration.oidcAussteller
-            .appending(path: ".well-known/openid-configuration")
-        guard let (daten, antwort) = try? await URLSession.dorfSitzung.data(from: adresse),
+        let adresse = aussteller.appending(path: ".well-known/openid-configuration")
+        guard let (daten, antwort) = try? await sitzungsNetz.data(from: adresse),
               let http = antwort as? HTTPURLResponse, http.statusCode == 200,
               let gelesen = try? JSONDecoder().decode(OidcEndpunkte.self, from: daten)
-        else { throw Anmeldefehler.discovery }
+        // Die Discovery ist ein Netzabruf wie jeder andere: Scheitert sie,
+        // konnten wir nicht fragen — das ist kein Nein der Rössing-ID.
+        else { throw Anmeldefehler.nichtErreichbar("discovery") }
         endpunkte = gelesen
         return gelesen
     }
@@ -219,7 +309,7 @@ final class Anmeldung: NSObject, ObservableObject {
         try await withCheckedThrowingContinuation { fortsetzung in
             let sitzung = ASWebAuthenticationSession(
                 url: adresse,
-                callbackURLScheme: Konfiguration.ruecksprungSchema
+                callbackURLScheme: ruecksprungSchema
             ) { rueckweg, fehler in
                 if let rueckweg {
                     fortsetzung.resume(returning: rueckweg)
@@ -241,8 +331,8 @@ final class Anmeldung: NSObject, ObservableObject {
         try await tokenAnfrage(ziel: ziel, felder: [
             "grant_type": "authorization_code",
             "code": code,
-            "redirect_uri": Konfiguration.oidcRuecksprung,
-            "client_id": Konfiguration.oidcClientId,
+            "redirect_uri": ruecksprung,
+            "client_id": clientId,
             "code_verifier": pruefer,
         ])
     }
@@ -252,7 +342,7 @@ final class Anmeldung: NSObject, ObservableObject {
         var neu = try await tokenAnfrage(ziel: ziele.token_endpoint, felder: [
             "grant_type": "refresh_token",
             "refresh_token": erneuerungstoken,
-            "client_id": Konfiguration.oidcClientId,
+            "client_id": clientId,
         ])
         // Zitadel schickt bei der Erneuerung nicht zwingend ein neues
         // Erneuerungstoken mit — dann gilt das alte weiter.
@@ -267,6 +357,11 @@ final class Anmeldung: NSObject, ObservableObject {
         let expires_in: Double?
     }
 
+    /// Die Fehlerantwort des Token-Endpunkts nach RFC 6749.
+    private struct TokenFehlerAntwort: Decodable {
+        let error: String?
+    }
+
     private func tokenAnfrage(ziel: URL, felder: [String: String]) async throws -> Tokensatz {
         var anfrage = URLRequest(url: ziel)
         anfrage.httpMethod = "POST"
@@ -276,21 +371,31 @@ final class Anmeldung: NSObject, ObservableObject {
             .joined(separator: "&")
             .data(using: .utf8)
 
-        guard let (daten, antwort) = try? await URLSession.dorfSitzung.data(for: anfrage),
+        guard let (daten, antwort) = try? await sitzungsNetz.data(for: anfrage),
               let http = antwort as? HTTPURLResponse
-        else { throw Anmeldefehler.tokenTausch("netz") }
-        guard http.statusCode == 200,
-              let gelesen = try? JSONDecoder().decode(TokenAntwort.self, from: daten)
-        else {
-            let kuerzel = (try? JSONDecoder().decode([String: String].self, from: daten))?["error"]
-            throw Anmeldefehler.tokenTausch(kuerzel ?? "http_\(http.statusCode)")
+        else { throw Anmeldefehler.nichtErreichbar("netz") }
+
+        if http.statusCode == 200 {
+            guard let gelesen = try? JSONDecoder().decode(TokenAntwort.self, from: daten) else {
+                throw Anmeldefehler.nichtErreichbar("antwort_unlesbar")
+            }
+            return Tokensatz(
+                zugangstoken: gelesen.access_token,
+                erneuerungstoken: gelesen.refresh_token,
+                idToken: gelesen.id_token,
+                laeuftAbAm: Date().addingTimeInterval(gelesen.expires_in ?? 3600)
+            )
         }
-        return Tokensatz(
-            zugangstoken: gelesen.access_token,
-            erneuerungstoken: gelesen.refresh_token,
-            idToken: gelesen.id_token,
-            laeuftAbAm: Date().addingTimeInterval(gelesen.expires_in ?? 3600)
-        )
+
+        // Eine Entscheidung ist nur, was auch wie eine aussieht: 4xx **mit**
+        // dem Kürzel, das RFC 6749 dafür vorschreibt. Ein 5xx, ein 429 oder
+        // eine Antwort ohne Kürzel ist der Zustand des Servers, nicht sein
+        // Urteil über diese Sitzung — und darf sie deshalb nicht beenden.
+        let kuerzel = (try? JSONDecoder().decode(TokenFehlerAntwort.self, from: daten))?.error
+        if (400 ..< 500).contains(http.statusCode), let kuerzel, !kuerzel.isEmpty {
+            throw Anmeldefehler.abgewiesen(kuerzel)
+        }
+        throw Anmeldefehler.nichtErreichbar(kuerzel ?? "http_\(http.statusCode)")
     }
 
     // MARK: PKCE
