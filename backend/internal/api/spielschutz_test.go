@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
@@ -171,7 +172,9 @@ func TestCooldownMessageUsesVillageTime(t *testing.T) {
 }
 
 // TestBackdatingWindow: telefonisch gemeldete Erledigungen müssen sich
-// nachtragen lassen — bis zu 14 Tage zurück, nie in die Zukunft.
+// nachtragen lassen — die Verwaltung bis zu 14 Tage zurück, nie in die
+// Zukunft. Für alle anderen sind drei Tage die Grenze (model.MaxBackdate);
+// wer weiter zurück darf, kann die Rangliste nachträglich umschreiben.
 func TestBackdatingWindow(t *testing.T) {
 	ts, _ := newTestServer(t)
 	placeID, _ := createPlaceWithTask(t, ts)
@@ -202,6 +205,39 @@ func TestBackdatingWindow(t *testing.T) {
 		if resp.StatusCode != f.status {
 			t.Errorf("%s (%s): Status %d, erwartet %d", name, wann, resp.StatusCode, f.status)
 		}
+	}
+}
+
+// TestBackdatingLimit: die Grenze hängt an der Rolle. Drei Tage für alle,
+// vierzehn für die Verwaltung — sie trägt fremde Meldungen nach und tut das
+// sichtbar unter ihrem Namen.
+func TestBackdatingLimit(t *testing.T) {
+	admin := auth.User{Sub: "a", Roles: map[string]bool{"admin": true}}
+	helferin := auth.User{Sub: "h"}
+	if got := backdateLimit(admin); got != model.MaxBackdateAdmin {
+		t.Errorf("Verwaltung: %v, erwartet %v", got, model.MaxBackdateAdmin)
+	}
+	if got := backdateLimit(helferin); got != model.MaxBackdate {
+		t.Errorf("ohne Rolle: %v, erwartet %v", got, model.MaxBackdate)
+	}
+	if model.MaxBackdate != 3*24*time.Hour {
+		t.Errorf("MaxBackdate ist %v, erwartet drei Tage", model.MaxBackdate)
+	}
+}
+
+// TestBackdatingBleibtDerVerwaltungVorbehalten: Ohne die Rolle wird ein
+// abweichender Zeitpunkt gar nicht erst angenommen — auch keiner, der
+// innerhalb der drei Tage läge. Ein frei wählbarer Zeitpunkt ist ein
+// Werkzeug, um eine Meldung dorthin zu legen, wo sie für die Rangliste
+// zählt; das bleibt der Verwaltung vorbehalten.
+func TestBackdatingBleibtDerVerwaltungVorbehalten(t *testing.T) {
+	ts, _ := newTestServer(t)
+	_, taskID := createPlaceWithTask(t, ts)
+	wann := time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
+	resp := doReq(t, "POST", ts.URL+fmt.Sprintf("/api/v1/tasks/%d/completions", taskID), memberToken,
+		map[string]any{"doneAt": wann})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Status %d, erwartet 403 — ohne Rolle darf niemand einen Zeitpunkt wählen", resp.StatusCode)
 	}
 }
 

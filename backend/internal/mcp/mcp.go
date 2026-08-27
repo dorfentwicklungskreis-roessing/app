@@ -16,6 +16,7 @@ import (
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
@@ -58,7 +59,7 @@ func (s *Server) now() time.Time {
 	if s.Now != nil {
 		return s.Now()
 	}
-	return time.Now()
+	return clock.Now()
 }
 
 // Register hängt den MCP-Endpoint samt OAuth-Metadata an den Mux.
@@ -314,7 +315,8 @@ func (s *Server) registerTools() {
 				"liters": num("Tatsächlich gegossene Liter (optional)"),
 				"note":   str("Optionale Notiz"),
 				"force":  boolean("Spielschutz übergehen (Sperrfrist nach der letzten Meldung)"),
-				"doneAt": str("Zeitpunkt der Erledigung (RFC3339), höchstens 14 Tage zurück"),
+				"doneAt": str("Zeitpunkt der Erledigung (RFC3339), höchstens 14 Tage zurück " +
+					"(Verwaltung; sonst 3 Tage)"),
 			}),
 			Handler: s.toolCreateCompletion,
 		},

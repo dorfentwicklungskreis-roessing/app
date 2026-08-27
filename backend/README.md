@@ -5,6 +5,44 @@ Der Überblick über Aufbau, Betrieb und Entwicklung steht im
 [SICHERHEIT.md](SICHERHEIT.md). Diese Datei beschreibt Endpunkte, deren
 Verhalten sich nicht von selbst versteht.
 
+## `/dev/…` — die Test-Knöpfe (nur `AUTH_MODE=insecure-dev`)
+
+Diese Pfade gibt es **nur**, solange das Backend mit `AUTH_MODE=insecure-dev`
+läuft — dieselbe Bedingung, hinter der auch der Entwickler-Login sitzt. In der
+Produktion sind sie **nicht registriert**, nicht bloß abgewiesen: Ein Pfad, der
+nur bewacht ist, ist eine vergessene Prüfung davon entfernt, die Uhr des
+laufenden Dorfes zu verstellen. Geprüft wird das in
+`cmd/server/main_test.go: TestTestEndpunkteNurImDevModus`, indem der echte
+Server einmal im Dev-Modus und einmal im Produktionspfad startet.
+
+| Route | was sie tut |
+| --- | --- |
+| `GET /dev/clock` | welche Zeit das Backend gerade annimmt (`now`, `offset`) |
+| `POST /dev/clock/set` | `{"time":"2026-09-06T10:00:00+02:00"}` — Uhr auf diesen Zeitpunkt stellen |
+| `POST /dev/clock/advance` | `{"duration":"240h"}` — Uhr um eine Go-Dauer weiterstellen |
+| `POST /dev/clock/reset` | zurück auf die Systemuhr |
+| `POST /dev/assignment/run` | **einen** Vergabe-Durchlauf, synchron; die Antwort nennt die Zahl der erzeugten Benachrichtigungen |
+
+Sie existieren, damit kein Test wartet. Die Vergabe rechnet in Tagen und
+Stunden; ein Test, der auf sie wartet, behauptet nicht mehr „für eine fällige
+Aufgabe wird der Helfer gefragt", sondern „…binnen 150 Sekunden Wanduhrzeit" —
+und das hängt nur davon ab, wie beschäftigt der Rechner ist. Stattdessen:
+**Uhr auf den Fälligkeitstag stellen, einen Durchlauf anstoßen, nachsehen.**
+
+Zwei Dinge sind zu beachten:
+
+- **Die Uhr gehört dem ganzen Prozess** (`internal/clock`). Wer sie verstellt,
+  stellt sie zurück, sonst erbt der nächste Test ein Dorf in der Zukunft. Im
+  Android-E2E erledigt das ein `@After` (siehe `DevBackend.kt`).
+- **Die Uhrzeit ist kein Detail.** Zwischen 21 und 7 Uhr Ortszeit stellt die
+  Vergabe nichts zu (Ruhezeit). Eine Zeitreise, die nachts landet, eröffnet den
+  Vorgang, verschiebt die Anfrage aber auf den Morgen — deshalb reist der Test
+  auf den Vormittag.
+
+Der Durchlauf ist derselbe, den auch der Hintergrund-Zeitgeber fährt (dieselbe
+`vergabe.Config`), er arbeitet synchron und ist beliebig oft wiederholbar: Er
+tut nur etwas, wenn wirklich etwas ansteht.
+
 ## `DELETE /api/v1/me` — das eigene Konto löschen
 
 Angemeldet wie alle `/api/v1`-Routen (JWT, `internal/api/api.go`). Der Rumpf

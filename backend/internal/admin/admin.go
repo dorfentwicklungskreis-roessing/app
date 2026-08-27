@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
@@ -98,7 +99,7 @@ func newApp(cfg Config) *App {
 		mitglieder:    cfg.Mitglieder,
 	}
 	if a.now == nil {
-		a.now = time.Now
+		a.now = clock.Now
 	}
 	return a
 }

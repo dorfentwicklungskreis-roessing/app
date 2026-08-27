@@ -270,8 +270,14 @@ keine der beiden Apps noch einmal.
   gesperrt), damit die App den Knopf gar nicht erst anbietet. Prüfen und
   Eintragen laufen in einer Transaktion, damit ein Doppeltipp nicht zwei
   Meldungen erzeugt. Admins dürfen mit `force: true` übergehen (wird als
-  `forced` vermerkt) und mit `doneAt` bis zu 14 Tage zurückdatieren;
-  Zeitpunkte in der Zukunft werden abgelehnt. Die Sperre gilt je Aufgabe,
+  `forced` vermerkt) und mit `doneAt` zurückdatieren — **bis zu 14 Tage**
+  (`model.MaxBackdateAdmin`), weil die Verwaltung fremde Meldungen nachträgt
+  und das sichtbar unter ihrem Namen tut. Die allgemeine Grenze liegt bei
+  **drei Tagen** (`model.MaxBackdate`): Sie deckt den ehrlichen Fall ab (am
+  Samstag gegossen, erst heute daran gedacht), ohne ein zwei Wochen breites
+  Fenster zu öffnen, in dem sich ein Zeitpunkt suchen ließe, an dem die
+  Meldung für die Rangliste zählt. Zeitpunkte in der Zukunft werden
+  abgelehnt. Die Sperre gilt je Aufgabe,
   nicht je Person — sonst könnten mehrere Leute denselben Kasten nacheinander
   „gießen". Dieselbe Prüfung gilt für REST, MCP und die Web-Verwaltung; dort
   zeigt die Ortsseite „Bereits erledigt — wieder ab …" und die
@@ -306,6 +312,19 @@ cd android
 
 Der „Entwickler-Login" erscheint nur in Debug-Builds mit `-PdevAuth=true`
 und funktioniert nur gegen ein Backend mit `AUTH_MODE=insecure-dev`.
+
+Im selben Modus — und nur dort — gibt es die **Test-Knöpfe unter `/dev`**:
+Uhr stellen, vorspulen, zurücksetzen und einen Vergabe-Durchlauf anstoßen.
+Damit muss kein Test mehr auf den Hintergrund-Takt warten. Beschrieben sind
+sie in [backend/README.md](backend/README.md); in der Produktion sind sie
+nicht registriert.
+
+```sh
+curl -s localhost:8080/dev/clock
+curl -s -X POST localhost:8080/dev/clock/advance -d '{"duration":"240h"}'
+curl -s -X POST localhost:8080/dev/assignment/run
+curl -s -X POST localhost:8080/dev/clock/reset
+```
 
 ### iOS
 
@@ -450,7 +469,7 @@ auf die Produktion.
 | `LISTEN_ADDR` | Standard `:8080` |
 | `DB_PATH` | Standard `/data/dorfapp.sqlite` |
 | `AUTH_ISSUER` | Rössing-ID, Standard `https://id.xn--rssing-wxa.de` |
-| `AUTH_MODE` | `oidc` (Standard) oder `insecure-dev` (nur lokal/E2E) |
+| `AUTH_MODE` | `oidc` (Standard) oder `insecure-dev` (nur lokal/E2E). Nur in diesem Modus gibt es zusätzlich die Test-Knöpfe unter `/dev` (Uhr stellen, Vergabe anstoßen) — siehe [backend/README.md](backend/README.md). In der Produktion sind sie nicht registriert |
 | `PUBLIC_URL` | öffentliche Basis-URL; daraus entsteht die OIDC-Redirect-URI `{PUBLIC_URL}/admin/`. Ohne Angabe die Produktions-URL — mit `AUTH_MODE=insecure-dev` stattdessen `http://localhost:<Port aus LISTEN_ADDR>` |
 | `ADMIN_CLIENT_ID` | Client-ID der Verwaltung (leer = nur Startseite) |
 | `SESSION_KEY` | Schlüssel für die signierten Session-Cookies; leer = zufällig beim Start (Sessions überleben dann keinen Neustart) |

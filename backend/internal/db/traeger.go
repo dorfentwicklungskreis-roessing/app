@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
@@ -123,7 +124,7 @@ func (d *DB) TraegerSicherstellen(schluessel, name string) (*model.Traeger, erro
 	neu := model.Traeger{
 		Schluessel: schluessel, Name: name,
 		Status: model.TraegerZugelassen, Sichtbarkeit: model.TraegerOffen,
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: clock.Now().UTC(),
 	}
 	if err := d.InsertTraeger(&neu); err != nil {
 		return nil, err

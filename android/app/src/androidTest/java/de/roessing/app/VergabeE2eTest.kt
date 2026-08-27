@@ -31,8 +31,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -42,9 +44,17 @@ import org.junit.runner.RunWith
 import de.roessing.app.ui.theme.DorfAppTheme
 
 /**
- * Die Vergabe gegen ein echtes Backend (AUTH_MODE=insecure-dev, VERGABE_TAKT
- * kurz gestellt): eintragen, gefragt werden, zusagen — einmal über die
- * Schnittstelle und einmal durch die Oberfläche der App.
+ * Die Vergabe gegen ein echtes Backend (AUTH_MODE=insecure-dev): eintragen,
+ * gefragt werden, zusagen — einmal über die Schnittstelle und einmal durch
+ * die Oberfläche der App.
+ *
+ * Der Test wartet auf nichts. Statt zu hoffen, dass der Hintergrund-Takt
+ * vorbeikommt, stellt er die Uhr des Backends auf den Tag, an dem die
+ * Aufgabe fällig ist, und stößt genau einen Vergabe-Durchlauf an (siehe
+ * [DevBackend]). Danach liegt die Anfrage vor — oder sie liegt nicht vor,
+ * und dann ist wirklich etwas kaputt. Vorher stand hier eine Schleife, die
+ * bis zu 150 Sekunden schlief; grün oder rot entschied damit, wie beschäftigt
+ * der Emulator gerade war.
  *
  * Läuft nur mit `-e e2e true`; ohne laufendes Backend hat der Test nichts zu
  * prüfen.
@@ -54,12 +64,26 @@ class VergabeE2eTest {
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
 
+    private val dev = DevBackend()
+
     @Before
     fun nurImE2eModus() {
         assumeTrue(
             "E2E-Modus nicht aktiv (Instrumentation-Arg e2e fehlt)",
             InstrumentationRegistry.getArguments().getString("e2e") == "true",
         )
+    }
+
+    /**
+     * Die Uhr gehört dem ganzen Backend — wer sie verstellt, stellt sie
+     * zurück. Im @After, damit das auch nach einem gescheiterten Test
+     * passiert und der nächste nicht in einem Dorf in der Zukunft aufwacht.
+     */
+    @After
+    fun uhrZurueck() {
+        if (InstrumentationRegistry.getArguments().getString("e2e") == "true") {
+            dev.resetClock()
+        }
     }
 
     private val basis = BuildConfig.API_BASE_URL.trimEnd('/')
@@ -85,16 +109,19 @@ class VergabeE2eTest {
     }
 
     /**
-     * Ein eigener Ort mit überfälliger Gieß-Aufgabe. Eigener deshalb, weil die
-     * Vergabe an ihm sofort losläuft und die Tests sich sonst gegenseitig die
-     * Aufgaben wegnehmen.
+     * Ein eigener Ort mit Gieß-Aufgabe. Eigener deshalb, weil die Vergabe an
+     * ihm losläuft, sobald er fällig wird, und die Tests sich sonst
+     * gegenseitig die Aufgaben wegnehmen.
      *
-     * Überfällig wird die Aufgabe über eine nachgetragene Erledigung von vor
-     * zehn Tagen: Eine frisch angelegte Aufgabe ist zunächst grün (sie rechnet
-     * ab ihrer Anlage), und die Vergabe rührt nur an, was wirklich ansteht.
-     * Nachtragen darf das die Verwaltung — der E2E-Nutzer hat die Rolle.
+     * Fällig ist die Aufgabe hier noch nicht: Eine frisch angelegte rechnet ab
+     * ihrer Anlage und ist zunächst grün. Fällig wird sie später durch die
+     * Zeitreise ([makeDueAndAssign]) — nicht mehr, wie früher, durch eine zehn
+     * Tage zurückdatierte Erledigung. Rückwirkend melden darf inzwischen nur
+     * noch die Verwaltung und nur drei Tage weit (siehe model.MaxBackdate);
+     * die Ausgangslage eines Tests über eine Ausnahme für Verwaltende zu
+     * bauen, wäre ohnehin der falsche Weg gewesen.
      */
-    private fun eigenerFaelligerOrt(name: String): Pair<Long, Long> {
+    private fun eigenerOrtMitAufgabe(name: String): Pair<Long, Long> {
         val ort = post(
             "/api/v1/places",
             """{"name":"$name ${System.currentTimeMillis()}","kind":"blumenkasten","lat":52.2105,"lon":9.8695}""",
@@ -103,36 +130,41 @@ class VergabeE2eTest {
             "/api/v1/places/${ort.getLong("id")}/tasks",
             """{"kind":"giessen","liters":5,"intervalDays":7,"redAfterDays":14}""",
         )
-        val vorZehnTagen = java.time.Instant.now().minus(java.time.Duration.ofDays(10))
-        post(
-            "/api/v1/tasks/${aufgabe.getLong("id")}/completions",
-            """{"liters":5,"doneAt":"${java.time.format.DateTimeFormatter.ISO_INSTANT.format(vorZehnTagen)}","force":true}""",
-        )
         return ort.getLong("id") to aufgabe.getLong("id")
     }
 
     /**
-     * Wartet, bis für die Aufgabe eine Anfrage vorliegt.
+     * Macht die Aufgabe fällig und lässt die Vergabe genau einmal laufen.
      *
-     * Großzügig bemessen: Der Takt der Vergabe steht in der Vorgabe auf einer
-     * Minute (`VERGABE_TAKT`), und getaktet wird erst nach der Anmeldung.
+     * Zehn Tage weiter als das Soll-Intervall von sieben Tagen — die Aufgabe
+     * ist dann überfällig, die Ampel steht auf Gelb. Der Durchlauf kehrt erst
+     * zurück, wenn die Benachrichtigungen geschrieben sind; danach ist nichts
+     * mehr abzuwarten.
+     *
+     * Muss NACH dem Eintragen kommen: Die Vergabe fragt nur, wer schon
+     * eingetragen ist.
      */
-    private fun warteAufAnfrage(token: String, taskId: Long, sekunden: Int = 150): NotificationDto {
+    private fun makeDueAndAssign() {
+        dev.travelForward(days = 10)
+        dev.runAssignment()
+    }
+
+    /** Die Anfrage zu dieser Aufgabe — sie liegt jetzt vor oder gar nicht. */
+    private fun requestFor(token: String, taskId: Long): NotificationDto =
+        requestOrNull(token, taskId)
+            ?: error("Nach dem Vergabe-Durchlauf liegt keine Anfrage für Aufgabe $taskId vor")
+
+    private fun requestOrNull(token: String, taskId: Long): NotificationDto? {
         val vergabe = ApiVergabeRepository(api(token))
-        repeat(sekunden * 2) {
-            val treffer = runBlocking { vergabe.notifications() }
-                .firstOrNull { it.taskId == taskId && it.istAnfrage }
-            if (treffer != null) return treffer
-            SystemClock.sleep(500)
-        }
-        error("Nach $sekunden s kam keine Anfrage für Aufgabe $taskId")
+        return runBlocking { vergabe.notifications() }
+            .firstOrNull { it.taskId == taskId && it.istAnfrage }
     }
 
     // --- Über die Schnittstelle ------------------------------------------------
 
     @Test
     fun eintragenAnfrageZusageUndRueckgabe() = runBlocking {
-        val (placeId, taskId) = eigenerFaelligerOrt("Vergabe-E2E")
+        val (placeId, taskId) = eigenerOrtMitAufgabe("Vergabe-E2E")
         val anna = ApiVergabeRepository(api(annaToken))
         val orte = ApiPlacesRepository(api(annaToken))
 
@@ -141,7 +173,14 @@ class VergabeE2eTest {
         assertTrue("signedUp fehlt nach dem Eintragen", meine.signedUp)
         assertEquals(1, meine.signupCount)
 
-        val anfrage = warteAufAnfrage(annaToken, taskId)
+        // Solange nichts fällig ist, wird auch niemand gefragt. Bewusst nur
+        // auf DIESE Aufgabe geschaut: Was andere Tests im selben Backend
+        // hinterlassen haben, geht diesen Test nichts an.
+        dev.runAssignment()
+        assertNull("Es wurde gefragt, obwohl die Aufgabe noch grün ist", requestOrNull(annaToken, taskId))
+
+        makeDueAndAssign()
+        val anfrage = requestFor(annaToken, taskId)
         assertTrue("Die Anfrage hat keinen Text", anfrage.title.isNotBlank() && anfrage.text.isNotBlank())
         assertNotNull("Einer Anfrage fehlt die Frist", anfrage.expiresAt)
 
@@ -160,31 +199,28 @@ class VergabeE2eTest {
     }
 
     /**
-     * Wartet auf den Vergabe-Vorgang der Aufgabe. Wer zuerst gefragt wird,
-     * entscheidet die faire Reihenfolge — für diesen Test ist nur wichtig,
-     * dass der Vorgang läuft. Zusagen darf ohnehin jede:r Eingetragene.
+     * Der Vergabe-Vorgang der Aufgabe. Wer zuerst gefragt wird, entscheidet
+     * die faire Reihenfolge — für diesen Test ist nur wichtig, dass der
+     * Vorgang läuft. Zusagen darf ohnehin jede:r Eingetragene.
      */
-    private fun warteAufVorgang(taskId: Long, sekunden: Int = 150): Long {
+    private fun assignmentFor(taskId: Long): Long {
         val orte = ApiPlacesRepository(api(annaToken))
-        repeat(sekunden * 2) {
-            val vorgang = runBlocking { orte.places() }.places
-                .flatMap { it.tasks }.firstOrNull { it.id == taskId }?.assignment
-            if (vorgang != null) return vorgang.id
-            SystemClock.sleep(500)
-        }
-        error("Nach $sekunden s lief kein Vorgang für Aufgabe $taskId")
+        return runBlocking { orte.places() }.places
+            .flatMap { it.tasks }.firstOrNull { it.id == taskId }?.assignment?.id
+            ?: error("Nach dem Vergabe-Durchlauf läuft kein Vorgang für Aufgabe $taskId")
     }
 
     // Zwei Leute, ein Vorgang: Der zweite bekommt 409 mit deutschem Text.
     @Test
     fun wennJemandAnderesSchnellerWar() = runBlocking {
-        val (placeId, taskId) = eigenerFaelligerOrt("Wettlauf-E2E")
+        val (placeId, taskId) = eigenerOrtMitAufgabe("Wettlauf-E2E")
         val anna = ApiVergabeRepository(api(annaToken))
         val bernd = ApiVergabeRepository(api(berndToken))
         anna.signup(placeId, null)
         bernd.signup(placeId, null)
 
-        val vorgangId = warteAufVorgang(taskId)
+        makeDueAndAssign()
+        val vorgangId = assignmentFor(taskId)
         anna.claim(vorgangId)
 
         var abgewiesen = false
@@ -217,6 +253,12 @@ class VergabeE2eTest {
             "push-neu",
         ).apply { mkdirs() }
 
+    /**
+     * Bildschirmfoto. Der kurze Schlaf bleibt bewusst stehen: Er wartet keine
+     * Fachlichkeit ab, sondern die Übergangs-Animation und das Zeichnen —
+     * `waitForIdle` ist damit fertig, bevor das Bild fertig ist. Ein Foto,
+     * das eine halb eingeblendete Seite zeigt, ist kein Nachweis.
+     */
     private fun foto(name: String, wartenMs: Long = 800) {
         compose.waitForIdle()
         SystemClock.sleep(wartenMs)
@@ -226,7 +268,7 @@ class VergabeE2eTest {
 
     @Test
     fun durchDieApp() {
-        val (placeId, taskId) = eigenerFaelligerOrt("App-E2E")
+        val (placeId, taskId) = eigenerOrtMitAufgabe("App-E2E")
         val api = api(annaToken)
         compose.setContent {
             DorfAppTheme {
@@ -245,7 +287,10 @@ class VergabeE2eTest {
         compose.onNodeWithTag("bereich-mithelfen").performScrollTo().performClick()
         compose.onNodeWithTag("tab-list").performClick()
         // Die Liste lädt aus dem Netz; danach zum eigenen Ort scrollen (in
-        // einer langen Liste ist er zunächst gar nicht gebaut).
+        // einer langen Liste ist er zunächst gar nicht gebaut). Der Schlaf
+        // wartet auf das Füllen und Zeichnen der Liste, nicht auf das
+        // Backend — die Karte trägt ihren testTag erst, wenn sie gebaut ist,
+        // und vorher lässt sich auf nichts warten.
         compose.waitUntil(20_000) { compose.onAllNodesWithTagSicher("place-list") }
         SystemClock.sleep(1_500)
         compose.onNodeWithTag("place-list").performScrollToNode(hasTestTag("place-card-$placeId"))
@@ -256,8 +301,10 @@ class VergabeE2eTest {
         compose.waitForIdle()
         foto("e2e-03-eingetragen")
 
-        // 2) Auf die Anfrage warten — der Takt der Vergabe erledigt das.
-        val anfrage = warteAufAnfrage(annaToken, taskId)
+        // 2) Die Aufgabe fällig machen und einmal vergeben lassen. Danach
+        //    liegt die Anfrage im Backend — abzuwarten ist nichts.
+        makeDueAndAssign()
+        val anfrage = requestFor(annaToken, taskId)
 
         // 3) Zurück auf die Startseite: dort steht die Anfrage.
         //    Das Blatt schließt die Zurück-Taste, den Bereich der Pfeil oben.
@@ -271,16 +318,20 @@ class VergabeE2eTest {
         }
         compose.onNodeWithTag("zurueck").performClick()
         compose.waitForIdle()
-        // Der Knopf oben holt den Stand frisch — die Anfrage kam gerade eben.
-        // Notfalls mehrmals: Zwischen Abholen und Anzeigen liegt ein Netzweg.
+        // Der Knopf oben holt den Stand frisch. Die Anfrage steht im Backend
+        // fest, gewartet wird also nur noch auf den Netzweg und das Zeichnen
+        // — und zwar so lange, wie es dauert, statt fester Sekunden. Notfalls
+        // noch einmal tippen: Ein Tipp kann ins Leere gehen, wenn die Liste
+        // gerade neu aufgebaut wird.
         var sichtbar = false
-        repeat(12) {
+        for (versuch in 1..6) {
             compose.onNodeWithTag("refresh").performClick()
-            compose.waitForIdle()
-            SystemClock.sleep(2_000)
+            runCatching {
+                compose.waitUntil(5_000) { compose.onAllNodesWithTagSicher("claim-${anfrage.assignmentId}") }
+            }
             if (compose.onAllNodesWithTagSicher("claim-${anfrage.assignmentId}")) {
                 sichtbar = true
-                return@repeat
+                break
             }
         }
         assertTrue("Die Anfrage steht nicht auf der Startseite", sichtbar)
@@ -290,12 +341,15 @@ class VergabeE2eTest {
         //    gehört (auf der Startseite können mehrere Anfragen stehen).
         compose.onNodeWithTag("bereich-mithelfen").performScrollTo().performClick()
         compose.onNodeWithTag("tab-list").performClick()
+        // Wie oben: Zeit fürs Bauen der Liste, nicht fürs Backend.
         SystemClock.sleep(1_000)
         compose.onNodeWithTag("place-list").performScrollToNode(hasTestTag("place-card-$placeId"))
         compose.onNodeWithTag("place-card-$placeId").performClick()
         compose.waitUntil(60_000) { compose.onAllNodesWithTagSicher("claim-task-$taskId") }
         compose.onNodeWithTag("claim-task-$taskId").performScrollTo().performClick()
         compose.waitForIdle()
+        // Die Zusage geht übers Netz und die Seite baut sich neu — das Foto
+        // soll den Zustand danach zeigen.
         SystemClock.sleep(2_000)
         foto("e2e-05-zugesagt")
 
@@ -310,13 +364,8 @@ class VergabeE2eTest {
 
         // Die Zusage steht auch im Backend — die Oberfläche hat sie wirklich
         // abgeschickt und nicht nur angezeigt.
-        var claimedBy = ""
-        repeat(20) {
-            claimedBy = runBlocking { ApiPlacesRepository(api).places() }
-                .places.first { it.id == placeId }.tasks.first().assignment?.claimedBy.orEmpty()
-            if (claimedBy.isNotEmpty()) return@repeat
-            SystemClock.sleep(500)
-        }
+        val claimedBy = runBlocking { ApiPlacesRepository(api).places() }
+            .places.first { it.id == placeId }.tasks.first().assignment?.claimedBy.orEmpty()
         assertEquals("anna-e2e", claimedBy)
     }
 }

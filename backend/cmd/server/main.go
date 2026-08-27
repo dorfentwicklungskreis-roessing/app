@@ -5,7 +5,11 @@
 //	LISTEN_ADDR   Standard ":8080"
 //	DB_PATH       Standard "/data/dorfapp.sqlite"
 //	AUTH_ISSUER   z.B. https://id.xn--rssing-wxa.de — Pflicht in Produktion
-//	AUTH_MODE     "oidc" (Standard) oder "insecure-dev" (nur lokal/E2E!)
+//	AUTH_MODE     "oidc" (Standard) oder "insecure-dev" (nur lokal/E2E!).
+//	              Nur in diesem Modus gibt es zusätzlich die Test-Knöpfe
+//	              unter /dev (Uhr stellen, Vergabe anstoßen) — siehe
+//	              internal/devmode. In der Produktion sind sie nicht
+//	              registriert, nicht bloß abgewiesen.
 //	AUTH_AUDIENCE kommaseparierte Liste erlaubter Empfänger (Client-IDs der
 //	              Anwendungen, die dieses Backend nutzen dürfen). Im OIDC-Modus
 //	              Pflicht: ohne sie gälte hier jedes Token desselben Ausstellers.
@@ -48,7 +52,9 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/backup"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/devmode"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/httpx"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mcp"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
@@ -140,6 +146,13 @@ func main() {
 	// verwaltet“ — siehe internal/mitglied.
 	mitglieder := mitgliederEinrichten(authMode, issuer)
 
+	// Der Signal-Context steht schon hier, weil die Vergabe-Konfiguration an
+	// ihm hängt: Sie fragt die Mitgliedschaften ab, und diese Abfrage soll
+	// mit dem Herunterfahren enden.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	vergabeCfg, vergabeAn := assignmentConfig(ctx, zusteller, mitglieder)
+
 	// OptionalAuth versorgt nur den öffentlichen Ideen-Eingang: Wer aus der
 	// angemeldeten App einreicht, bekommt die Idee dem Konto zugeordnet;
 	// wer über die Website kommt, reicht anonym ein.
@@ -166,6 +179,11 @@ func main() {
 		} else {
 			slog.Warn("ADMIN_CLIENT_ID fehlt — Verwaltung deaktiviert, nur Startseite")
 		}
+		// Test-Knöpfe (Uhr stellen, Vergabe anstoßen). devmode.Register
+		// hängt nichts ein, solange der Auth-Modus nicht insecure-dev ist —
+		// in der Produktion gibt es diese Pfade also gar nicht, statt sie
+		// bloß abzuweisen.
+		devmode.Register(mux, authMode, devmode.Config{DB: database, Assignment: vergabeCfg})
 	})
 
 	// Reihenfolge von außen nach innen: Panics fangen, Kopfzeilen setzen,
@@ -181,10 +199,8 @@ func main() {
 
 	// Hintergrund: tägliche Sicherung der SQLite-Datei ins PVC und der Takt
 	// der Aufgaben-Vergabe (Anfragen freischalten, Zusagen verfallen lassen).
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 	backupFertig := backupStarten(ctx, database, dbPath)
-	vergabeFertig := vergabeStarten(ctx, database, zusteller, mitglieder)
+	vergabeFertig := vergabeStarten(ctx, database, vergabeCfg, vergabeAn)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -297,14 +313,23 @@ func backupStarten(ctx context.Context, database *db.DB, dbPath string) <-chan s
 // Server und nicht als eigener Dienst — aus demselben Grund wie die
 // Sicherung: Es gibt genau einen Pod mit genau einer Schreibverbindung zur
 // SQLite-Datenbank.
-func vergabeStarten(ctx context.Context, database *db.DB, zusteller vergabe.Zusteller,
-	mitglieder mitglied.Quelle,
-) <-chan struct{} {
-	cfg, an := vergabe.FromEnv()
+func vergabeStarten(ctx context.Context, database *db.DB, cfg vergabe.Config, an bool) <-chan struct{} {
 	if !an {
 		slog.Warn("Vergabe abgeschaltet (VERGABE=off) — es werden keine Anfragen zugestellt")
 		return nil
 	}
+	slog.Info("Vergabe-Zeitgeber aktiv", "takt", cfg.Takt.String())
+	return vergabe.Start(ctx, database, cfg)
+}
+
+// assignmentConfig builds the configuration the assignment engine runs with.
+// Separate from vergabeStarten because the dev-only /dev/assignment/run has
+// to drive the very same engine: a hand-started pass that differed from the
+// scheduled one would prove nothing.
+func assignmentConfig(ctx context.Context, zusteller vergabe.Zusteller,
+	mitglieder mitglied.Quelle,
+) (vergabe.Config, bool) {
+	cfg, an := vergabe.FromEnv()
 	cfg.Zusteller = zusteller
 	// Interne Aufgaben werden nur Mitgliedern angeboten. Ohne Quelle gar
 	// niemandem (siehe vergabe.Engine.Mitgliedschaften).
@@ -319,8 +344,7 @@ func vergabeStarten(ctx context.Context, database *db.DB, zusteller vergabe.Zust
 			return stand.Rollen, nil
 		}
 	}
-	slog.Info("Vergabe-Zeitgeber aktiv", "takt", cfg.Takt.String())
-	return vergabe.Start(ctx, database, cfg)
+	return cfg, an
 }
 
 // errStandVeraltet meldet der Vergabe, dass die Mitgliedschaften gerade nicht
@@ -400,7 +424,7 @@ func seed(d *db.DB) error {
 	if err != nil || len(places) > 0 {
 		return err
 	}
-	now := time.Now()
+	now := clock.Now()
 	ten := 10.0
 	for _, def := range []struct {
 		place model.Place

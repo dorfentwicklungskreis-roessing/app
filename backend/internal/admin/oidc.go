@@ -84,7 +84,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
 
-	f := flow{State: randomString(24), Verifier: verifier, Exp: time.Now().Add(10 * time.Minute).Unix()}
+	f := flow{State: randomString(24), Verifier: verifier, Exp: a.now().Add(10 * time.Minute).Unix()}
 	value, err := a.signer.encode(cookieFlow, f)
 	if err != nil {
 		a.fail(w, r, http.StatusInternalServerError, err)
@@ -119,7 +119,7 @@ func (a *App) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	c, err := r.Cookie(cookieFlow)
 	var f flow
-	if err != nil || !a.signer.decode(cookieFlow, c.Value, &f) || f.Exp < time.Now().Unix() {
+	if err != nil || !a.signer.decode(cookieFlow, c.Value, &f) || f.Exp < a.now().Unix() {
 		a.setFlash(w, "error", "Die Anmeldung ist abgelaufen. Bitte erneut versuchen.")
 		http.Redirect(w, r, ziel, http.StatusSeeOther)
 		return
@@ -172,7 +172,7 @@ func (a *App) handleCallback(w http.ResponseWriter, r *http.Request) {
 		Sub: user.Sub, Name: user.Name, Email: user.Email, Admin: user.IsAdmin(),
 		Rollen:  rollenListe(user),
 		IDToken: tok.IDToken,
-		Exp:     time.Now().Add(8 * time.Hour).Unix(),
+		Exp:     a.now().Add(8 * time.Hour).Unix(),
 	}
 	value, err := a.signer.encode(cookieSession, s)
 	if err != nil {

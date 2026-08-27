@@ -33,6 +33,27 @@ Textlängen), zu gesprächige Fehlermeldungen und fehlende Schutz-Kopfzeilen.
 
 ## Geprüft und in Ordnung
 
+- **Die Test-Knöpfe unter `/dev`** (Uhr stellen, Vergabe anstoßen) sind kein
+  neuer Angriffspunkt: Sie werden nur eingehängt, wenn `AUTH_MODE` auf
+  `insecure-dev` steht. In der Produktion gibt es die Pfade nicht — sie
+  antworten dort mit 404, weil nichts registriert ist, und nicht mit 403,
+  weil eine Prüfung greift. Der Unterschied ist der Punkt: Eine bewachte
+  Route wäre eine vergessene Prüfung davon entfernt, die Uhr des laufenden
+  Dorfes zu verstellen und damit Fälligkeiten, Fristen und Sitzungsablauf.
+  Die Sperre sitzt in `devmode.Register` selbst, nicht nur an der Aufrufstelle.
+  Nachweis: `internal/devmode/devmode_test.go: TestNotMountedOutsideDevMode`
+  und `cmd/server/main_test.go: TestTestEndpunkteNurImDevModus` — dort startet
+  der echte Server einmal im Dev-Modus und einmal im Produktionspfad.
+- **Rückdatierung von Erledigungen** ist von 14 auf **drei Tage** gesenkt
+  (`model.MaxBackdate`); die Verwaltung darf weiterhin 14 Tage zurück
+  (`model.MaxBackdateAdmin`). Gewertet wird eine Meldung nur, wenn die Aufgabe
+  zu ihrem Zeitpunkt nicht frisch erledigt war — ein breites Zeitfenster ist
+  deshalb ein Werkzeug, die Rangliste nachträglich umzuschreiben. Einen
+  abweichenden Zeitpunkt darf ohnehin nur die Verwaltung setzen
+  (`internal/api/completion.go`). Nachweis:
+  `internal/api/spielschutz_test.go: TestBackdatingWindow`,
+  `TestBackdatingLimit`, `TestBackdatingBleibtDerVerwaltungVorbehalten`.
+
 - **Redirect-URI-Allowlist der Dynamic Client Registration (`POST /oauth/register`).**
   Der Schwerpunkt der Prüfung. Der Vergleich ist ein exakter Nachschlag in einer
   festen Liste — keine Präfixe, keine Muster, keine Normalisierung. Alle

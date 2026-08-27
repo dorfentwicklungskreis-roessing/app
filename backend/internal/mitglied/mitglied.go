@@ -45,6 +45,7 @@ import (
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
@@ -110,7 +111,7 @@ func (DevQuelle) Fuer(_ context.Context, u auth.User) Stand {
 		}
 		rollen[projekt][name] = true
 	}
-	return Stand{Rollen: rollen, Geholt: time.Now()}
+	return Stand{Rollen: rollen, Geholt: clock.Now()}
 }
 
 // --- Zwischenspeicher -------------------------------------------------------

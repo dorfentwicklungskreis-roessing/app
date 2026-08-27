@@ -127,6 +127,10 @@ func Neu(cfg Config) (*Zusteller, error) {
 	}
 	jetzt := cfg.Now
 	if jetzt == nil {
+		// Deliberately time.Now and not clock.Now: iat/exp of these
+		// JWTs are checked by Apple and Google against THEIR clocks. A
+		// backend travelling through time for a test would mint tokens
+		// that are simply invalid out there.
 		jetzt = time.Now
 	}
 	return &Zusteller{
