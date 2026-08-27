@@ -127,6 +127,7 @@ func (a *App) register(mux *http.ServeMux) {
 	a.registerMithelfen(mux)
 	a.registerTraeger(mux)
 	a.registerIdeen(mux)
+	a.registerErrorReports(mux)
 	a.registerDorfbewohner(mux)
 }
 

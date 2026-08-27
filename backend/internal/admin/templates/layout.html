@@ -71,6 +71,16 @@
           {{end}}
         </li>
         <li>
+          <a href="/admin/fehlerberichte/" {{if eq .Nav "fehlerberichte"}}class="menu-active"{{end}}>Fehlerberichte</a>
+          {{if eq .Nav "fehlerberichte"}}
+          <ul>
+            <li><a href="/admin/fehlerberichte/">Alle</a></li>
+            <li><a href="/admin/fehlerberichte/?status=new">Neu</a></li>
+            <li><a href="/admin/fehlerberichte/?art=crash">Abstürze</a></li>
+          </ul>
+          {{end}}
+        </li>
+        <li>
           <a href="/admin/dorfbewohner/" {{if eq .Nav "dorfbewohner"}}class="menu-active"{{end}}>Dorfbewohner</a>
           {{if eq .Nav "dorfbewohner"}}
           <ul>

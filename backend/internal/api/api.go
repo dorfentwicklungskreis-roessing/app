@@ -38,6 +38,9 @@ type Server struct {
 	// IdeenRedirects sind die Ursprünge, auf die nach dem Absenden
 	// weitergeleitet werden darf. Leer = aus der Umgebung.
 	IdeenRedirects []string
+	// ErrorReportLimiter begrenzt den offenen Eingang für Fehlerberichte
+	// (siehe error_reports.go). Leer = aus der Umgebung.
+	ErrorReportLimiter *httpx.RateLimiter
 	// Mitglieder liefert die Träger-Mitgliedschaften einer Person (Zitadel,
 	// über einen Dienst-Nutzer — siehe internal/mitglied). Ohne Angabe gibt
 	// es keine Träger-Rollen: Dann verwaltet der Betreiber alles, und alle
@@ -46,6 +49,8 @@ type Server struct {
 
 	// ideenEinmal baut die Zugriffsgrenze des Ideen-Eingangs genau einmal.
 	ideenEinmal sync.Once
+	// errorReportOnce builds the limit of the report entrance exactly once.
+	errorReportOnce sync.Once
 }
 
 // Handler baut den HTTP-Router. authMW schützt alle /api/v1-Routen.
@@ -88,6 +93,10 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 	// Der Ideen-Eingang hängt bewusst außerhalb der Anmeldepflicht (siehe
 	// ideen.go) und ist als genauere Route trotzdem vorrangig.
 	s.registerIdeenEingang(mux)
+	// Fehlerberichte hängen aus demselben Grund außerhalb der Anmeldepflicht:
+	// Wenn die Anmeldung selbst klemmt, ist genau das der Bericht, der fehlt
+	// (siehe error_reports.go).
+	s.registerErrorReports(mux)
 	if extra != nil {
 		extra(mux)
 	}

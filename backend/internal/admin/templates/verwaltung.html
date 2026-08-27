@@ -28,6 +28,19 @@
     </div>
   </div>
 
+  <div class="card bg-base-100 shadow-sm" id="bereich-fehlerberichte">
+    <div class="card-body">
+      <h2 class="card-title">
+        🐞 Fehlerberichte
+        {{if .Data.NeueFehlerberichte}}<span class="badge badge-error" id="fehlerberichte-neu">{{.Data.NeueFehlerberichte}}</span>{{else}}<span class="badge badge-ghost" id="fehlerberichte-neu">0</span>{{end}}
+      </h2>
+      <p class="text-base-content/70">Was auf den Telefonen im Dorf schiefgegangen ist: Abstürze und Fehlermeldungen, abgeschickt mit einem Fingertipp aus der App.</p>
+      <div class="card-actions justify-end">
+        <a class="btn btn-primary btn-sm" href="/admin/fehlerberichte/">Öffnen</a>
+      </div>
+    </div>
+  </div>
+
   <div class="card bg-base-100 shadow-sm" id="bereich-traeger">
     <div class="card-body">
       <h2 class="card-title">

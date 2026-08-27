@@ -1,0 +1,79 @@
+{{/* Bereich „Fehlerberichte“: was auf den Telefonen im Dorf schiefgegangen
+     ist. Gefiltert wird über echte Links (?status=…&art=…), nicht über
+     clientseitiges Ein- und Ausblenden. */}}
+{{define "seite"}}
+<h1 class="text-2xl font-bold" id="seitentitel">Fehlerberichte aus den Apps</h1>
+<p class="mt-1 text-base-content/70">
+  Was auf einem Telefon schiefgegangen ist — abgeschickt mit einem Fingertipp,
+  aus der Android- und der iOS-App. Wer etwas dazugeschrieben hat, steht im
+  Bericht; die meisten haben nur den Knopf gedrückt, und das hilft genauso.
+</p>
+
+<div class="mt-4 flex flex-wrap items-center gap-2" id="fehlerberichte-filter">
+  {{range .Data.Filter}}
+    <a class="btn btn-sm {{if .Aktiv}}btn-primary{{else}}btn-ghost{{end}}" href="{{.Href}}">
+      {{.Titel}} <span class="badge badge-sm">{{.Anzahl}}</span>
+    </a>
+  {{end}}
+</div>
+
+<div class="mt-2 flex flex-wrap items-center gap-2" id="fehlerberichte-arten">
+  {{range .Data.Kinds}}
+    <a class="btn btn-sm {{if .Aktiv}}btn-secondary{{else}}btn-ghost{{end}}" href="{{.Href}}">
+      {{.Titel}} <span class="badge badge-sm">{{.Anzahl}}</span>
+    </a>
+  {{end}}
+</div>
+
+{{if .Data.Reports}}
+  <div class="mt-4 overflow-x-auto rounded-box bg-base-100 shadow-sm">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Wann</th>
+          <th>Art</th>
+          <th>Meldung</th>
+          <th>Gerät</th>
+          <th>Wer</th>
+          <th>Stand</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Data.Reports}}
+          <tr>
+            <td class="whitespace-nowrap align-top">{{datumZeit .OccurredAt}}</td>
+            <td class="align-top"><span class="badge {{.KindBadge}}">{{.KindText}}</span></td>
+            <td class="align-top">
+              <a class="link link-hover" href="/admin/fehlerberichte/{{.ID}}">{{.Message}}</a>
+              {{if .Comment}}<span class="badge badge-sm badge-outline">mit Ergänzung</span>{{end}}
+              {{if .Area}}<div class="text-sm text-base-content/60">{{.Area}}</div>{{end}}
+            </td>
+            <td class="align-top text-sm">
+              {{if .DeviceModel}}{{.DeviceModel}}{{else}}{{.Platform}}{{end}}
+              <div class="text-base-content/60">{{.OSVersion}} · App {{.AppVersion}}</div>
+            </td>
+            <td class="align-top">
+              {{if .Anonym}}<span class="text-base-content/50">nicht angemeldet</span>
+              {{else if .UserName}}{{.UserName}}
+              {{else}}<span class="text-base-content/50">ohne Namen</span>{{end}}
+            </td>
+            <td class="align-top"><span class="badge {{.Badge}}">{{.StatusText}}</span></td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+{{else}}
+  <div class="mt-4 alert" id="keine-fehlerberichte">
+    {{if or .Data.Aktiv .Data.AktiveArt}}
+      <span>Mit dieser Auswahl ist gerade nichts da.</span>
+      <a class="btn btn-sm" id="keine-fehlerberichte-zurueck" href="/admin/fehlerberichte/">Alle Berichte zeigen</a>
+    {{else}}
+      <span>
+        Hier ist noch nichts eingegangen. Berichte schicken die Apps ab, sobald
+        jemand nach einer Fehlermeldung auf „Bericht schicken“ tippt.
+      </span>
+    {{end}}
+  </div>
+{{end}}
+{{end}}
