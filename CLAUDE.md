@@ -93,6 +93,43 @@ Flux deployt in den K3S-Cluster). Details: siehe `README.md`.
 - **Keine Secrets committen.** Der MCP-Endpoint nutzt OAuth (Rössing-ID,
   admin-Rolle) — es gibt bewusst kein statisches Token.
 
+## Arbeit an Agenten übergeben
+
+Wer eine Aufgabe an einen Agenten gibt, schreibt **Absicht, Konzepte und harte
+Bedingungen** — sonst nichts.
+
+**Nicht in den Auftrag gehören** eigene Diagnosen, Lösungsskizzen und Warnungen
+der Art „achte auf X". Wer schon weiß, wo der Fehler sitzt, braucht keinen
+Agenten; wer es nur vermutet, macht aus seiner Vermutung dessen Vorgabe. Alles,
+was über die Absicht hinausgeht, **wird ungewollt zur Anforderung**: Der Agent
+optimiert dann auf die Hypothese statt auf die Sache, und ist sie falsch, ist
+der Fehler eingebaut statt gefunden.
+
+Der Anlass ist nicht theoretisch. Beim Absenken des iOS-Mindestsystems stand im
+Auftrag eine ausführliche Warnung vor einer bestimmten Falle. Der Agent fand
+eine **andere**, gefährlichere — die Warnung war Rauschen, seine eigene
+Untersuchung das Ergebnis. Beim Umbau der Backend-Uhr standen im Auftrag drei
+„Befunde", die zehn Minuten altes Halbwissen waren; sie hätten stillschweigend
+den Lösungsraum verengt.
+
+**In den Auftrag gehören:**
+
+- **Absicht** — warum das gemacht wird, und woran man erkennt, dass es stimmt.
+  („Ein Test, der wartet, prüft das Falsche" trägt weiter als „bau einen
+  Endpunkt, der den Durchlauf anstößt".)
+- **Konzepte** des Projekts, die er nicht erraten kann — die Allmende, ein
+  Träger, warum Regeln im Backend stehen und nicht in den Clients.
+- **Harte Bedingungen**, die wirklich nicht verhandelbar sind: keine
+  Fremdbibliotheken, kein Test fasst einen entfernten Server an, Bezeichner
+  englisch und Oberfläche deutsch, nicht selbst nach `main` mergen.
+- **Umstände der Umgebung** als Tatsache, nicht als Rat — etwa, dass hier kein
+  Android-Emulator läuft und Instrumentierungstests nur übersetzt werden können.
+- **Dateigrenzen**, solange mehrere Agenten parallel arbeiten. Das ist keine
+  fachliche Vorgabe, sondern verhindert, dass sich Zweige gegenseitig zerlegen.
+
+Wird ein Befund doch mitgegeben, weil er Zeit spart, dann ausdrücklich als
+**unverbindlicher Zwischenstand**, den der Agent prüfen und verwerfen darf.
+
 ## Träger (Vereine und Gruppen)
 
 Die Dorf-App verwaltet die **Allmende**, sie vermittelt nicht zwischen
