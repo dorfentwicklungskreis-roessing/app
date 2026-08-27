@@ -3,6 +3,7 @@ package de.roessing.app
 import android.os.Build
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import de.roessing.app.auth.TokenResult
 import de.roessing.app.data.ApiDeviceRepository
 import de.roessing.app.data.DorfApi
 import de.roessing.app.push.Anmeldespeicher
@@ -164,7 +165,7 @@ class GeraetekennungE2eTest {
      */
     private fun abgleich() = Geraeteabgleich(
         speicher = speicher,
-        geraete = ApiDeviceRepository(DorfApi.create(BuildConfig.API_BASE_URL) { token }),
+        geraete = ApiDeviceRepository(DorfApi.create(BuildConfig.API_BASE_URL) { TokenResult.Token(token) }),
         kennung = { kennungAbgefragt++; kennung },
         kennungVerwerfen = {},
     )

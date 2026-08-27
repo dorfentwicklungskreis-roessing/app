@@ -1,9 +1,11 @@
 package de.roessing.app.data
 
+import de.roessing.app.auth.TokenResult
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.http.Body
@@ -14,6 +16,7 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 interface DorfApi {
@@ -90,10 +93,31 @@ interface DorfApi {
         }
 
         /**
-         * Baut den API-Client. tokenProvider liefert ein frisches Access-Token
-         * (oder null, wenn nicht eingeloggt) und wird pro Request aufgerufen.
+         * Hängt die Autorisierung an eine Anfrage — oder bricht ab.
+         *
+         * Der dritte Fall ist der wichtige: Besteht eine Anmeldung, ließ sie
+         * sich aber gerade nicht erneuern, geht die Anfrage **nicht** ohne
+         * Kopfzeile hinaus. Sonst käme ein 401 zurück, und die App machte
+         * daraus „nicht angemeldet" — falsch, und es kostet eine Anmeldung,
+         * die noch gilt. Eine IOException ist die Wahrheit: Es ist ein
+         * Netzproblem, und die Bereiche zeigen dafür längst „offline" an.
+         *
+         * Als reine Funktion, damit sie sich ohne Netz prüfen lässt.
          */
-        fun create(baseUrl: String, tokenProvider: suspend () -> String?): DorfApi {
+        fun autorisiert(request: Request, token: TokenResult): Request = when (token) {
+            is TokenResult.Token ->
+                request.newBuilder().header("Authorization", "Bearer ${token.value}").build()
+            // Ein paar Endpunkte (Ideen) nehmen die Anfrage auch ohne an.
+            TokenResult.LoggedOut -> request
+            TokenResult.Unreachable ->
+                throw IOException("Die Anmeldung ließ sich gerade nicht erneuern")
+        }
+
+        /**
+         * Baut den API-Client. tokenProvider liefert die Tokenlage und wird
+         * pro Request aufgerufen.
+         */
+        fun create(baseUrl: String, tokenProvider: suspend () -> TokenResult): DorfApi {
             val client = OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(20, TimeUnit.SECONDS)
@@ -101,11 +125,7 @@ interface DorfApi {
                     // OkHttp-Interceptoren sind synchron; der Tokenabruf ist
                     // lokal (Cache/Refresh) und läuft auf dem IO-Dispatcher.
                     val token = runBlocking { tokenProvider() }
-                    val req = if (token != null) {
-                        chain.request().newBuilder()
-                            .header("Authorization", "Bearer $token").build()
-                    } else chain.request()
-                    chain.proceed(req)
+                    chain.proceed(autorisiert(chain.request(), token))
                 }
                 .build()
             return Retrofit.Builder()

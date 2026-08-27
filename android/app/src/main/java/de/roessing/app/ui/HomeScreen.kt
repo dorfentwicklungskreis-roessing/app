@@ -129,6 +129,9 @@ fun HomeScreen(
 
     val savedMsg = stringResource(R.string.watered_success)
     val failMsg = stringResource(R.string.error_network)
+    // Beim Ausfall eines Abrufs steht ausdrücklich dabei, dass die Anmeldung
+    // hält — sonst liest sich „keine Verbindung" wie „du bist raus".
+    val offlineMsg = stringResource(R.string.error_offline_signed_in)
     val deniedMsg = stringResource(R.string.location_denied)
     val zusageMsg = stringResource(R.string.assignment_claimed_toast)
     val rueckgabeMsg = stringResource(R.string.assignment_released_toast)
@@ -241,7 +244,7 @@ fun HomeScreen(
         }
     }
     LaunchedEffect(state.offline) {
-        if (state.offline) snackbar.showSnackbar(failMsg)
+        if (state.offline) snackbar.showSnackbar(offlineMsg)
     }
     LaunchedEffect(abgelehnt) {
         // Einmal freundlich erklären, dann nie wieder nörgeln.

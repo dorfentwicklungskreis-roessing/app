@@ -7,6 +7,7 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.google.firebase.messaging.FirebaseMessaging
+import de.roessing.app.auth.TokenResult
 import de.roessing.app.data.ApiDeviceRepository
 import de.roessing.app.data.ApiVergabeRepository
 import de.roessing.app.data.DorfApi
@@ -94,7 +95,7 @@ class PushEchtTest {
             "Keine Gerätekennung — dieses Systemabbild hat keine Google-Play-Dienste",
             kennung != null,
         )
-        val api = DorfApi.create(BuildConfig.API_BASE_URL) { token }
+        val api = DorfApi.create(BuildConfig.API_BASE_URL) { TokenResult.Token(token) }
         runBlocking { ApiDeviceRepository(api).register(kennung!!) }
 
         // Ein eigener, überfälliger Ort — daran läuft die Vergabe sofort los.

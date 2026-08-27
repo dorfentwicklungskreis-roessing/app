@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
+import de.roessing.app.auth.TokenResult
 import de.roessing.app.data.ApiPlacesRepository
 import de.roessing.app.data.ApiIdeenRepository
 import de.roessing.app.data.ApiProfileRepository
@@ -66,7 +67,7 @@ class VergabeE2eTest {
     private val client = OkHttpClient()
     private val json = "application/json".toMediaType()
 
-    private fun api(token: String) = DorfApi.create(BuildConfig.API_BASE_URL) { token }
+    private fun api(token: String) = DorfApi.create(BuildConfig.API_BASE_URL) { TokenResult.Token(token) }
 
     private val annaToken = "anna-e2e:Anna E2E:admin"
     private val berndToken = "bernd-e2e:Bernd E2E:"
