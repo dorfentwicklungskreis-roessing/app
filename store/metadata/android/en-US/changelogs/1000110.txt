@@ -1,0 +1,3 @@
+Changed: Places and tasks are no longer maintained inside the app. Use Claude via the village server or the web admin instead. Administrators now find both routes on the home screen.
+
+The reason: on a phone, Claude knows your location. You can stand in front of the flower box and have the coordinates taken over – the app is no longer needed for that.
