@@ -183,6 +183,11 @@
     <string name="admin_hint_claude_benefit">Der Vorteil: Du kannst vor dem Blumenkasten stehen und Claude die Koordinaten deines Geräts übernehmen lassen.</string>
     <string name="admin_hint_web_title">Im Browser</string>
     <string name="admin_hint_web_body">Dieselben Dinge zum Klicken — mit einer Karte, auf der du den Punkt setzt.</string>
+    <string name="admin_hint_copy">Adresse kopieren</string>
+    <string name="admin_hint_copied">Adresse kopiert</string>
+    <!-- Beschriftung des Zwischenablage-Eintrags: Android zeigt sie in der Ablageleiste an. -->
+    <string name="admin_hint_clip_label">MCP-Adresse der Dorf-App</string>
+    <string name="admin_hint_open">Im Browser öffnen</string>
     <!-- Veranstaltungen: „Was ist los in Rössing" — Termine von der Website -->
     <string name="area_events_title">Was ist los?</string>
     <string name="area_events_subtitle">Termine im Dorf.</string>
