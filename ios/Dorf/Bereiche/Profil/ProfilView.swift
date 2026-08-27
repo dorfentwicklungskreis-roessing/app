@@ -281,7 +281,7 @@ private struct Profilfeld: View {
     }
     .environmentObject(AppUmgebung(
         anmeldung: Anmeldung(),
-        api: DorfApi(tokenGeber: { nil }),
+        api: DorfApi(tokenGeber: { .abgemeldet }),
         ich: Ich(sub: "abc", name: "Anna Beispiel", email: "anna@example.org")
     ))
 }

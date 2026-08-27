@@ -70,7 +70,7 @@ struct PushTests {
     /// Anfrage vom **gemeinsamen** Transport (`DorfApi.anfrage`), damit hier
     /// geprüft wird, was tatsächlich hinausginge. Geschickt wird nichts.
     private static func zugang(token: String?) -> DorfApi {
-        DorfApi(basis: testBasis, tokenGeber: { token })
+        DorfApi(basis: testBasis, tokenGeber: { token.map { .token($0) } ?? .abgemeldet })
     }
 
     private static func geraeteanfrage(_ methode: String, token: String?) async throws -> URLRequest {

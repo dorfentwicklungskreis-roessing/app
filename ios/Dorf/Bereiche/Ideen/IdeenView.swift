@@ -166,7 +166,7 @@ struct IdeenView: View {
     .environmentObject(
         AppUmgebung(
             anmeldung: Anmeldung(),
-            api: DorfApi(tokenGeber: { nil }),
+            api: DorfApi(tokenGeber: { .abgemeldet }),
             ich: Ich(sub: "1", name: "Anna Beispiel", email: "anna@example.org")
         )
     )

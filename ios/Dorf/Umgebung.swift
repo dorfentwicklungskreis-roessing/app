@@ -86,6 +86,20 @@ final class AppUmgebung: ObservableObject {
         }
     }
 
+    /// Was die Startseite meldet, wenn gerade nichts geht.
+    ///
+    /// Eine App, die stumm nichts lädt, ist so schlecht wie eine, die
+    /// abmeldet: In beiden Fällen weiß niemand, woran es liegt. Der Satz
+    /// kommt aus `DorfFehler` und redet deshalb von der Verbindung — nicht
+    /// von der Anmeldung, denn die gilt weiter.
+    var stoerungshinweis: String? { ichFehler ?? orte.hinweis }
+
+    /// Noch einmal versuchen — was der Hinweis auf der Startseite anbietet.
+    func erneutVersuchen() async {
+        await ichLaden()
+        await orte.laden()
+    }
+
     func profilUebernehmen(_ profil: Profil) {
         guard var stand = ich else { return }
         stand.profile = profil

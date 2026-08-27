@@ -49,6 +49,24 @@ const val ROLLEN_SCOPE = "urn:zitadel:iam:org:projects:roles"
  */
 val LOGIN_SCOPES = listOf("openid", "profile", "email", "offline_access", ROLLEN_SCOPE)
 
+/**
+ * Was die App gerade als Access-Token anbieten kann.
+ *
+ * Der Unterschied zwischen [LoggedOut] und [Unreachable] ist der ganze Punkt:
+ * „Der Server sagt nein" ist eine Entscheidung, „ich konnte den Server nicht
+ * fragen" ein Umstand. Nur das Erste beendet eine Anmeldung. Solange beides
+ * `null` hieß, kostete jedes Funkloch die Anmeldung.
+ */
+sealed interface TokenResult {
+    data class Token(val value: String) : TokenResult
+
+    /** Niemand ist angemeldet. */
+    data object LoggedOut : TokenResult
+
+    /** Jemand ist angemeldet, aber das Token ließ sich gerade nicht erneuern. */
+    data object Unreachable : TokenResult
+}
+
 /** Login-Zustand der App. */
 sealed interface SessionState {
     data object Loading : SessionState
@@ -218,23 +236,53 @@ class AuthManager(private val context: Context) {
         _session.value = SessionState.LoggedIn(devMode = true)
     }
 
-    /** Liefert ein gültiges Access-Token (refresht bei Bedarf) oder null. */
-    suspend fun freshAccessToken(): String? {
-        devToken?.let { return it }
-        val state = authState ?: return null
+    /**
+     * Liefert die Tokenlage: ein gültiges Access-Token (refresht bei Bedarf),
+     * „niemand angemeldet" oder „gerade nicht erreichbar".
+     *
+     * Um die gleichzeitigen Erneuerungen muss sich hier niemand kümmern:
+     * [AuthState.performActionWithFreshTokens] bündelt sie selbst (es reiht
+     * weitere Aufrufe in `mPendingActions` ein, solange eine Erneuerung
+     * läuft). Ohne das schickte jeder Abruf beim Kaltstart seine eigene
+     * Erneuerung los — und Zitadel gibt bei jeder ein neues Refresh-Token aus
+     * und weist das alte danach ab.
+     */
+    suspend fun freshToken(): TokenResult {
+        devToken?.let { return TokenResult.Token(it) }
+        val state = authState ?: return TokenResult.LoggedOut
         return suspendCancellableCoroutine { cont ->
             state.performActionWithFreshTokens(authService) { accessToken, _, ex ->
-                if (ex != null) {
-                    // Refresh fehlgeschlagen (z.B. Token widerrufen) → ausloggen.
-                    scope.launch { logout() }
-                    cont.resume(null)
-                } else {
-                    scope.launch { persist() }
-                    cont.resume(accessToken)
+                when {
+                    ex == null && accessToken != null -> {
+                        scope.launch { persist() }
+                        cont.resume(TokenResult.Token(accessToken))
+                    }
+                    // Ohne Refresh-Token gibt es nichts mehr zu erneuern —
+                    // das ist wirklich das Ende der Sitzung, kein Umstand.
+                    state.refreshToken == null || isSessionEnded(ex?.type, ex?.error) -> {
+                        Log.w(TAG, "Die Rössing-ID hat die Sitzung beendet (${ex?.error})")
+                        scope.launch { logout() }
+                        cont.resume(TokenResult.LoggedOut)
+                    }
+                    else -> {
+                        // Nicht fragen zu können ist kein Nein: Die Anmeldung
+                        // bleibt stehen, der nächste Abruf versucht es erneut.
+                        Log.i(TAG, "Erneuerung gerade nicht möglich (${ex?.type}.${ex?.code})")
+                        cont.resume(TokenResult.Unreachable)
+                    }
                 }
             }
         }
     }
+
+    /**
+     * Liefert ein gültiges Access-Token oder null.
+     *
+     * Bleibt für den E2E-Lauf, der nur wissen will, ob eines herauskommt. Der
+     * Unterschied zwischen „abgemeldet" und „nicht erreichbar" geht dabei
+     * verloren — wer ihn braucht, nimmt [freshToken].
+     */
+    suspend fun freshAccessToken(): String? = (freshToken() as? TokenResult.Token)?.value
 
     /**
      * Das zuletzt erhaltene ID-Token — nur zur Diagnose im Login-Test.
@@ -261,6 +309,28 @@ class AuthManager(private val context: Context) {
         private const val TAG = "AuthManager"
 
         fun isDevAuthAllowed(): Boolean = BuildConfig.DEBUG && BuildConfig.DEV_AUTH
+
+        /**
+         * Ob eine gescheiterte Erneuerung das Ende der Sitzung bedeutet.
+         *
+         * RFC 6749 lässt den Token-Endpunkt eine abgelehnte Zuteilung mit
+         * einem Kürzel beantworten. `invalid_grant` ist das einzige, das
+         * „diese Sitzung ist vorbei" heißt — widerrufenes Refresh-Token,
+         * gesperrtes Konto, geändertes Passwort. Alles andere ist entweder
+         * ein Fehler in unserer Einrichtung (`invalid_client`) oder der
+         * Zustand des Netzes bzw. des Servers, und beides darf keine gültige
+         * Anmeldung kosten: Nach `invalid_client` scheiterte die neue
+         * Anmeldung an derselben Stelle wieder, und nach einem Funkloch war
+         * nie etwas mit der Sitzung.
+         *
+         * Bewusst als reine Funktion ohne Android-Abhängigkeiten, damit sie
+         * im JVM-Unit-Test abgedeckt werden kann.
+         *
+         * @param type AppAuth-Fehlertyp (AuthorizationException.TYPE_*), oder null.
+         * @param error OAuth-Fehlerkürzel aus der Antwort, oder null.
+         */
+        fun isSessionEnded(type: Int?, error: String?): Boolean =
+            type == AuthorizationException.TYPE_OAUTH_TOKEN_ERROR && error == "invalid_grant"
 
         /**
          * Übersetzt eine AppAuth-Fehlerkennung in ein [LoginResult].

@@ -2,6 +2,7 @@ package de.roessing.app
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import de.roessing.app.auth.TokenResult
 import de.roessing.app.data.ApiIdeenRepository
 import de.roessing.app.data.DorfApi
 import de.roessing.app.data.IdeeInput
@@ -33,7 +34,7 @@ class IdeenBackendE2eTest {
     }
 
     private fun repo() = ApiIdeenRepository(
-        DorfApi.create(BuildConfig.API_BASE_URL) { "e2e-idee:E2E Ideengeber:member" },
+        DorfApi.create(BuildConfig.API_BASE_URL) { TokenResult.Token("e2e-idee:E2E Ideengeber:member") },
     )
 
     @Test

@@ -60,6 +60,7 @@
     <string name="delete">Löschen</string>
     <string name="cancel">Abbrechen</string>
     <string name="error_network">Keine Verbindung zum Server. Es werden ggf. alte Daten angezeigt.</string>
+    <string name="error_offline_signed_in">Keine Verbindung zum Server. Du bleibst angemeldet — es geht weiter, sobald die Verbindung wieder steht.</string>
     <!-- Bestätigung vor dem Melden einer Erledigung -->
     <string name="confirm_completion_watering">Hast du wirklich gegossen?</string>
     <string name="confirm_completion_weeding">Hast du wirklich gejätet?</string>

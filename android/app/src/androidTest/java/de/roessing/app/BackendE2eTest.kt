@@ -2,6 +2,7 @@ package de.roessing.app
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import de.roessing.app.auth.TokenResult
 import de.roessing.app.data.ApiPlacesRepository
 import de.roessing.app.data.ApiProfileRepository
 import de.roessing.app.data.ApiStatsRepository
@@ -41,7 +42,9 @@ class BackendE2eTest {
         )
     }
 
-    private fun api() = DorfApi.create(BuildConfig.API_BASE_URL) { "e2e-user:E2E Tester:admin" }
+    private fun api() = DorfApi.create(BuildConfig.API_BASE_URL) {
+        TokenResult.Token("e2e-user:E2E Tester:admin")
+    }
 
     private fun repo() = ApiPlacesRepository(api())
 

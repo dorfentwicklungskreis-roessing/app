@@ -40,7 +40,7 @@ class DorfApp : Application() {
 
 class AppContainer(context: Context) {
     val authManager = AuthManager(context.applicationContext)
-    private val api = DorfApi.create(BuildConfig.API_BASE_URL) { authManager.freshAccessToken() }
+    private val api = DorfApi.create(BuildConfig.API_BASE_URL) { authManager.freshToken() }
     val repository: PlacesRepository = ApiPlacesRepository(api)
     val statsRepository: StatsRepository = ApiStatsRepository(api)
     val profileRepository: ProfileRepository = ApiProfileRepository(api)
