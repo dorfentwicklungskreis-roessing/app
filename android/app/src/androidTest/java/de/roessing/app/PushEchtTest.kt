@@ -17,6 +17,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -41,12 +42,22 @@ class PushEchtTest {
     private val json = "application/json".toMediaType()
     private val token = "push-e2e:Push Tester:admin"
 
+    private val dev = DevBackend()
+
     @Before
     fun nurAufZuruf() {
         assumeTrue(
             "Echter Push nur mit -e push true",
             InstrumentationRegistry.getArguments().getString("push") == "true",
         )
+    }
+
+    /** Die Uhr gehört dem ganzen Backend — wer sie verstellt, stellt sie zurück. */
+    @After
+    fun uhrZurueck() {
+        if (InstrumentationRegistry.getArguments().getString("push") == "true") {
+            dev.resetClock()
+        }
     }
 
     private fun post(pfad: String, koerper: String): JSONObject {
@@ -97,25 +108,28 @@ class PushEchtTest {
         val api = DorfApi.create(BuildConfig.API_BASE_URL) { token }
         runBlocking { ApiDeviceRepository(api).register(kennung!!) }
 
-        // Ein eigener, überfälliger Ort — daran läuft die Vergabe sofort los.
+        // Ein eigener Ort mit Gieß-Aufgabe. Fällig wird er nicht durch eine
+        // zurückdatierte Erledigung (das darf inzwischen nur die Verwaltung
+        // und nur drei Tage weit), sondern durch die Uhr des Backends: zehn
+        // Tage vor, einmal vergeben lassen — dann liegt die Anfrage vor und
+        // Google trägt sie aus.
         val ort = post(
             "/api/v1/places",
             """{"name":"Push-E2E ${System.currentTimeMillis()}","kind":"blumenkasten","lat":52.2105,"lon":9.8695}""",
         )
-        val aufgabe = post(
+        post(
             "/api/v1/places/${ort.getLong("id")}/tasks",
             """{"kind":"giessen","liters":5,"intervalDays":7,"redAfterDays":14}""",
         )
-        val vorZehnTagen = java.time.Instant.now().minus(java.time.Duration.ofDays(10))
-        post(
-            "/api/v1/tasks/${aufgabe.getLong("id")}/completions",
-            """{"liters":5,"doneAt":"${java.time.format.DateTimeFormatter.ISO_INSTANT.format(vorZehnTagen)}","force":true}""",
-        )
         runBlocking { ApiVergabeRepository(api).signup(ort.getLong("id"), null) }
+        dev.travelForward(days = 10)
+        dev.runAssignment()
 
         // Auf die Systemmeldung warten — sie kommt über Google, nicht über uns.
         geraet.openNotification()
         val gefunden = geraet.wait(Until.hasObject(By.textContains("ist dran")), 90_000)
+        // Gewartet wird oben auf die Bedingung; dieser kurze Schlaf gilt nur
+        // dem Ausklappen der Leiste, damit das Foto sie ganz zeigt.
         SystemClock.sleep(500)
         geraet.takeScreenshot(
             java.io.File(
@@ -129,6 +143,7 @@ class PushEchtTest {
         // (siehe MainActivity.zielAus und PushZiel).
         geraet.findObject(By.textContains("ist dran")).click()
         val vorn = geraet.wait(Until.hasObject(By.pkg("de.roessing.app").depth(0)), 20_000)
+        // Wieder nur fürs Bild: Die App ist da, sie zeichnet sich noch.
         SystemClock.sleep(1_500)
         geraet.takeScreenshot(
             java.io.File(
