@@ -21,7 +21,8 @@ type CompletionInput struct {
 	// Force: Spielschutz übergehen — nur Admins.
 	Force bool `json:"force"`
 	// DoneAt: abweichender Zeitpunkt (RFC3339), nur Admins, höchstens
-	// model.MaxBackdate in der Vergangenheit und nie in der Zukunft.
+	// model.MaxBackdate (für Admins model.MaxBackdateAdmin) in der
+	// Vergangenheit und nie in der Zukunft.
 	DoneAt string `json:"doneAt"`
 }
 
@@ -80,9 +81,9 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 		switch {
 		case t.After(now):
 			return nil, completionErr(http.StatusBadRequest, "doneAt darf nicht in der Zukunft liegen")
-		case now.Sub(t) > model.MaxBackdate:
+		case now.Sub(t) > backdateLimit(u):
 			return nil, completionErr(http.StatusBadRequest,
-				"doneAt liegt zu weit zurück (höchstens %d Tage)", int(model.MaxBackdate.Hours()/24))
+				"doneAt liegt zu weit zurück (höchstens %d Tage)", int(backdateLimit(u).Hours()/24))
 		}
 		doneAt = t
 	}
@@ -124,6 +125,21 @@ func CreateCompletion(d *db.DB, now time.Time, taskID int64, in CompletionInput,
 	beendeVergabe(d, now, task.ID, u.Sub)
 	raeumeAbWennErledigt(d, now, *task)
 	return &c, nil
+}
+
+// backdateLimit liefert die Rückdatierungsgrenze dieser Person.
+//
+// Der Bezug auf u.IsAdmin() ist heute die einzige Verzweigung, die greift:
+// Weiter oben scheitert eine Meldung mit doneAt schon daran, dass sie nicht
+// von einem Admin kommt. model.MaxBackdate ist damit die Regel für alle
+// anderen Wege — die Web-Verwaltung datiert gar nicht zurück, und wer
+// später einen Weg für die App aufmacht, findet die Grenze hier schon
+// stehen, statt sie neu erfinden zu müssen.
+func backdateLimit(u auth.User) time.Duration {
+	if u.IsAdmin() {
+		return model.MaxBackdateAdmin
+	}
+	return model.MaxBackdate
 }
 
 // raeumeAbWennErledigt nimmt eine einmalige Aufgabe von Karte und Liste,
