@@ -12,14 +12,16 @@ import SwiftUI
 ///   - **Dazuschreiben** opens the sheet for those who want to say what they
 ///     were doing, and shows exactly what leaves the phone.
 ///
-/// Merge note: the branch `fix/anmeldung-haelt` adds a section to `StartView`
-/// that says the same thing for the special case „gerade keine Verbindung"
-/// and offers „Erneut versuchen". When that lands, these two belong together:
-/// the section keeps „Erneut versuchen", and its text stays the single
-/// source — this banner then only adds „Bericht schicken". Two boxes about
-/// one failure would be one too many.
+/// Here also lives the retry that used to sit as its own section on the start
+/// page: two boxes about one failure would be one too many, and the one on
+/// the start page was blind to everything that goes wrong anywhere else.
+/// `erneutVersuchen` is passed in when a reload could actually help — that is
+/// what `AppUmgebung.stoerungshinweis` answers.
 struct Fehlerbanner: ViewModifier {
     @ObservedObject var melder: ErrorReporter
+    /// Noch einmal versuchen — nur gesetzt, wenn ein erneuter Abruf etwas
+    /// bringen kann.
+    var erneutVersuchen: (() -> Void)?
     @State private var zeigeBlatt = false
 
     func body(content: Content) -> some View {
@@ -79,7 +81,27 @@ struct Fehlerbanner: ViewModifier {
                         .accessibilityIdentifier("fehler-banner-sendefehler")
                 }
 
+                if erneutVersuchen != nil, melder.vorfall?.kind == .network {
+                    // Wer eben noch angemeldet war, sucht den Fehler sonst bei
+                    // sich. Die Anmeldung gilt weiter — das gehört dazu.
+                    Text("Du bleibst angemeldet — sobald die Verbindung wieder steht, "
+                        + "geht es weiter, wo du warst.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("fehler-banner-bleibt-angemeldet")
+                }
+
                 HStack(spacing: 12) {
+                    if let erneutVersuchen {
+                        Button("Erneut versuchen") {
+                            erneutVersuchen()
+                            melder.schliessen()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(melder.sendet)
+                        .accessibilityIdentifier("fehler-erneut-versuchen")
+                    }
+
                     Button {
                         Task { await melder.absenden() }
                     } label: {
@@ -118,8 +140,10 @@ struct Fehlerbanner: ViewModifier {
 
 extension View {
     /// Hangs the report banner onto the root of the app.
-    func fehlerbanner(_ melder: ErrorReporter) -> some View {
-        modifier(Fehlerbanner(melder: melder))
+    func fehlerbanner(_ melder: ErrorReporter,
+                      erneutVersuchen: (() -> Void)? = nil) -> some View
+    {
+        modifier(Fehlerbanner(melder: melder, erneutVersuchen: erneutVersuchen))
     }
 }
 

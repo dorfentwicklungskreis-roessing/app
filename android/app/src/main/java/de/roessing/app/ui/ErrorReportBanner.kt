@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.roessing.app.R
 import de.roessing.app.errors.ErrorIncident
+import de.roessing.app.errors.ErrorReportKind
 import de.roessing.app.errors.ErrorReportUiState
 import de.roessing.app.errors.ErrorReporter
 import kotlinx.coroutines.launch
@@ -68,6 +69,8 @@ fun ErrorReportBanner(
     onDismiss: () -> Unit,
     contentLines: (ErrorIncident, String) -> List<Pair<String, String>>,
     modifier: Modifier = Modifier,
+    /** Noch einmal versuchen — nur gesetzt, wenn ein neuer Abruf etwas bringt. */
+    onRetry: (() -> Unit)? = null,
 ) {
     val vorfall = state.vorfall ?: return
     var blattOffen by rememberSaveable { mutableStateOf(false) }
@@ -133,7 +136,27 @@ fun ErrorReportBanner(
                 )
             }
 
+            if (onRetry != null && vorfall.kind == ErrorReportKind.NETWORK) {
+                // Wer eben noch angemeldet war, sucht den Fehler sonst bei
+                // sich. Die Anmeldung gilt weiter — das gehört dazu.
+                Text(
+                    stringResource(R.string.error_offline_signed_in),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.testTag("fehler-banner-bleibt-angemeldet"),
+                )
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (onRetry != null) {
+                    TextButton(
+                        onClick = {
+                            onRetry()
+                            onDismiss()
+                        },
+                        enabled = !state.sendet,
+                        modifier = Modifier.testTag("fehler-erneut-versuchen"),
+                    ) { Text(stringResource(R.string.error_report_retry)) }
+                }
                 TextButton(
                     onClick = { onSend("") },
                     enabled = !state.sendet,
@@ -265,7 +288,11 @@ private fun ErrorReportDialog(
  * Wurzel eine Zeile genügt.
  */
 @Composable
-fun ErrorReportBannerHost(melder: ErrorReporter, modifier: Modifier = Modifier) {
+fun ErrorReportBannerHost(
+    melder: ErrorReporter,
+    modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null,
+) {
     val state by melder.state.collectAsState()
     val bereich = rememberCoroutineScope()
     ErrorReportBanner(
@@ -276,5 +303,6 @@ fun ErrorReportBannerHost(melder: ErrorReporter, modifier: Modifier = Modifier) 
             melder.contentLines(melder.inputFor(vorfall, kommentar), vorfall.occurredAt)
         },
         modifier = modifier,
+        onRetry = onRetry,
     )
 }

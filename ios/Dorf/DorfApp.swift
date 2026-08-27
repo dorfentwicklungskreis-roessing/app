@@ -12,10 +12,6 @@ struct DorfApp: App {
     @Environment(\.scenePhase) private var szene
     @StateObject private var umgebung = AppUmgebung()
 
-    /// Der Melder für Fehlerberichte. Einer für die ganze App — jede Stelle
-    /// muss melden können, und angezeigt wird es an genau einer.
-    @ObservedObject private var melder = ErrorReporter.gemeinsam
-
     init() {
         // Muss vor allem anderen stehen: Was jetzt noch schiefgeht, soll
         // schon gefangen werden.
@@ -45,7 +41,6 @@ struct DorfApp: App {
                 // Ende — siehe `CrashWatch`. `onChange` meldet den ersten
                 // Zustand nicht, deshalb die Aufgabe daneben.
                 .task { CrashWatch.imVordergrund() }
-                .fehlerbanner(melder)
                 .onChange(of: szene) { neu in
                     switch neu {
                     case .active:

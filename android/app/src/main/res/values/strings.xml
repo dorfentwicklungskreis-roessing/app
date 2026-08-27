@@ -207,6 +207,7 @@
     <string name="error_report_server">Der Server antwortet gerade nicht (%1$d).</string>
     <string name="error_report_not_found">Das gibt es nicht (mehr).</string>
     <string name="error_report_crash">Die App hat sich beim letzten Mal unerwartet beendet.</string>
+    <string name="error_report_retry">Erneut versuchen</string>
     <string name="error_report_send">Bericht schicken</string>
     <string name="error_report_sending">Wird geschickt …</string>
     <string name="error_report_add">Dazuschreiben</string>

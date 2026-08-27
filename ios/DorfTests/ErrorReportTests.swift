@@ -29,7 +29,7 @@ struct ErrorReportTests {
         Berichtsablage.letzteAnfrage = nil
         let k = URLSessionConfiguration.ephemeral
         k.protocolClasses = [Berichtsablage.self]
-        let api = DorfApi(basis: basis, sitzung: URLSession(configuration: k), tokenGeber: { nil })
+        let api = DorfApi(basis: basis, sitzung: URLSession(configuration: k), tokenGeber: { .abgemeldet })
         let melder = ErrorReporter(angaben: angaben())
         melder.verdrahten(api: api)
         return melder
