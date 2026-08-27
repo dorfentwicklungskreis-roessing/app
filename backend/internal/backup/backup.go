@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 )
 
 // Quelle ist alles, was sich selbst in eine Datei sichern kann (in der Praxis
@@ -79,7 +81,7 @@ func (c *Config) vollstaendig() {
 		c.Takt = DefaultTakt
 	}
 	if c.Now == nil {
-		c.Now = time.Now
+		c.Now = clock.Now
 	}
 }
 

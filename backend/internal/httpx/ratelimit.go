@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 )
 
 // Rate-Limiting: ein schlichter Token-Bucket je Aufrufer. Begrenzt werden
@@ -95,7 +97,7 @@ func NewRateLimiter(cfg RateLimitConfig) *RateLimiter {
 		proSek = float64(DefaultPerMinute) / 60
 	}
 	if cfg.Now == nil {
-		cfg.Now = time.Now
+		cfg.Now = clock.Now
 	}
 	return &RateLimiter{
 		burst:  float64(cfg.Burst),

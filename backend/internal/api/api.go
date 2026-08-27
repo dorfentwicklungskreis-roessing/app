@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/httpx"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
@@ -93,6 +94,11 @@ func (s *Server) Handler(authMW func(http.Handler) http.Handler, extra func(mux 
 	return logRequests(mux)
 }
 
+// logRequests measures how long a request took. Deliberately time.Now and
+// NOT clock.Now: this is a stopwatch, not a date. It answers "how long did
+// the server work", and that has to stay true even while a dev-mode test
+// moves the clock — a travelled clock would otherwise report a request that
+// took ten days.
 func logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -105,7 +111,7 @@ func (s *Server) now() time.Time {
 	if s.Now != nil {
 		return s.Now()
 	}
-	return time.Now()
+	return clock.Now()
 }
 
 // AssemblePlaces baut die Orts-Liste in der Sicht des Betreibers — alles,

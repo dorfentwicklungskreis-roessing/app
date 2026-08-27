@@ -40,6 +40,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
@@ -94,7 +95,7 @@ type Engine struct {
 func New(d *db.DB, cfg Config) *Engine {
 	e := &Engine{db: d, now: cfg.Now, zusteller: cfg.Zusteller, Mitgliedschaften: cfg.Mitgliedschaften}
 	if e.now == nil {
-		e.now = time.Now
+		e.now = clock.Now
 	}
 	if e.zusteller == nil {
 		e.zusteller = Abruf{}

@@ -36,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
@@ -127,7 +128,7 @@ func Neu(cfg Config) (*Zusteller, error) {
 	}
 	jetzt := cfg.Now
 	if jetzt == nil {
-		jetzt = time.Now
+		jetzt = clock.Now
 	}
 	return &Zusteller{
 		geraete: cfg.Geraete, projekt: z.ProjectID, mail: z.ClientEmail,

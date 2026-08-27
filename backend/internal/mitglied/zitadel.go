@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
@@ -110,7 +111,7 @@ func New(cfg Config) (*Zitadel, error) {
 		jetzt:   cfg.Now,
 	}
 	if z.jetzt == nil {
-		z.jetzt = time.Now
+		z.jetzt = clock.Now
 	}
 	return z, nil
 }

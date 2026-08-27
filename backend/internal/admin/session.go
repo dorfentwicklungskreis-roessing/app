@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // Cookie-Namen. Alle Cookies sind HttpOnly und SameSite=Lax; „Secure“ wird
@@ -132,7 +131,7 @@ func (a *App) sessionOf(r *http.Request) (session, bool) {
 	if !a.signer.decode(cookieSession, c.Value, &s) {
 		return session{}, false
 	}
-	if s.Exp < time.Now().Unix() {
+	if s.Exp < a.now().Unix() {
 		return session{}, false
 	}
 	return s, true

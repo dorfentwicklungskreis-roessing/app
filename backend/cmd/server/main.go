@@ -48,6 +48,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/backup"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/httpx"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mcp"
@@ -400,7 +401,7 @@ func seed(d *db.DB) error {
 	if err != nil || len(places) > 0 {
 		return err
 	}
-	now := time.Now()
+	now := clock.Now()
 	ten := 10.0
 	for _, def := range []struct {
 		place model.Place

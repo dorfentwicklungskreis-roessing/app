@@ -39,6 +39,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
@@ -159,7 +160,7 @@ func NeuAPNs(cfg APNsConfig) (*APNsZusteller, error) {
 	}
 	jetzt := cfg.Now
 	if jetzt == nil {
-		jetzt = time.Now
+		jetzt = clock.Now
 	}
 	return &APNsZusteller{
 		geraete: cfg.Geraete, basis: basis, topic: topic,
