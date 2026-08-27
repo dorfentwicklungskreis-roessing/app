@@ -529,6 +529,104 @@ der iOS-Weg kommt damit **ganz ohne Google** aus. Die Weiche steht im Feld
   auf der Sperrliste; die Go-Tests prüfen die ES256-Signatur gegen einen
   lokalen Server, der sich verhält wie Apple.
 
+## Fehlerberichte aus den Apps (Stand 27.08.2026)
+
+`POST /api/v1/error-reports` ist nach dem Ideen-Eingang der **zweite**
+Endpunkt ohne Anmeldepflicht. Das ist Absicht und keine Bequemlichkeit: Die
+Ausfälle, auf die es ankommt, sind gerade die, bei denen das Anmelden selbst
+klemmt — ein Bericht, der dann nicht hinausgeht, ist nichts wert. Kommt ein
+gültiges Token mit, hängt der Bericht am Konto; die Person wird dabei **aus
+dem Token** genommen und nie aus dem Rumpf, sonst ließe sie sich behaupten.
+
+| Riegel | Wirkung | Test |
+|---|---|---|
+| Eigene Zugriffsgrenze | `FEHLERBERICHT_BURST` (10) und `FEHLERBERICHT_PRO_STUNDE` (10) je Aufrufer — bei anonymen Berichten also je IP. `429` mit `Retry-After`. `RATE_LIMIT=off` schaltet sie mit ab. | `TestErrorReportRateLimit` |
+| Eingabeprüfung | Art und Plattform aus geschlossenen Listen, Meldung ≤ 500, technische Angaben ≤ 8000, Ergänzung ≤ 2000, Bereich und Versionen ≤ 100, keine Steuerzeichen (in mehrzeiligen Feldern sind Umbrüche erlaubt). | `TestErrorReportValidierung` |
+| Person aus dem Token | `userSub`/`userName` im Rumpf werden ignoriert. | `TestErrorReportMitAnmeldungHaengtAmKonto` |
+| Uhr des Geräts | Ein `occurredAt` aus der Zukunft wird auf „jetzt“ gezogen, ein unlesbares ebenso. Sonst schöbe eine falsch gestellte Uhr den Bericht ans Ende der Liste, wo ihn niemand sieht. | `TestErrorReportZeitstempelAusDerZukunftWirdEingefangen` |
+| Rechte | Lesen, Einordnen und Löschen gibt es **nur** in der Web-Verwaltung (`/admin/fehlerberichte/`, admin-pflichtig) und über MCP. Eine REST-Route zum Lesen existiert bewusst nicht — die Verwaltung läuft nicht mehr in den Apps. | `TestFehlerberichteNurFuerAngemeldete`, `TestFehlerberichteNurFuerAdmins` |
+
+Kein Honigtopf und keine Mindestzeit wie bei den Ideen: Dieses Formular tippt
+niemand, es füllt die App.
+
+**Anzeige.** Der Inhalt kommt von einem fremden Gerät und ist damit Fremdtext.
+Die Verwaltung rendert ausschließlich über `html/template`
+(`TestFehlerberichtMitMarkupWirdEscaped`).
+
+**Migration**: `CREATE TABLE IF NOT EXISTS error_reports` — rein additiv, an
+bestehenden Tabellen ändert sich nichts, ein Rückschritt auf die vorige
+Version funktioniert weiterhin.
+
+### Was in einem Bericht steht — und was nicht
+
+Vollständig, abgelesen an `model.ErrorReport` und `api.ErrorReportInput`:
+
+- **Art** (`crash`, `network`, `server`, `unexpected`),
+- die **Meldung**, die die Person auf dem Schirm gelesen hat — derselbe Satz,
+  kein zweiter für den Bericht,
+- **technische Angaben**: HTTP-Status und Pfad der Anfrage, bei einem Absturz
+  die Aufrufliste (höchstens 4000 Zeichen). **Nie** ein Anfrage- oder
+  Antwortrumpf,
+- der **Bereich** in Alltagssprache („Mithelfen“, „Mein Profil“) — aus dem
+  Pfad abgeleitet, damit „api/v1/places“ nicht in der Liste steht,
+- **Plattform**, **App-Version**, **Systemversion**, **Gerätebezeichnung**
+  („iPhone14,3“, „Google Pixel 6“) — der Gerätetyp, ausdrücklich **keine**
+  Gerätekennung,
+- der **Zeitpunkt** auf dem Gerät und der Eingangszeitpunkt,
+- die **freiwillige Ergänzung** der Person, meist leer,
+- **wer**, sofern angemeldet: `user_sub` und `user_name` aus dem Token.
+
+Nicht dabei: Protokolle, Bildschirmfotos, Standort, Gerätekennungen für Push
+(FCM/APNs), Werbekennungen, Kontaktdaten aus dem Profil, IP-Adressen. Die
+Zugriffsgrenze hält die IP nur flüchtig im Arbeitsspeicher.
+
+**Nichts geht von selbst hinaus.** Beide Apps zeigen den Fehler an und warten
+auf einen Knopfdruck. Ein Absturzmelder, der von allein sendet, wäre die eine
+Stelle in dieser App, an der still etwas erhoben wird. Das Blatt
+„Dazuschreiben“ führt vor dem Absenden Zeile für Zeile auf, was hinausgeht —
+und zwar aus genau den Werten, aus denen die Anfrage gebaut wird, nicht aus
+einer nebenher gepflegten Liste (`esGehtNurHinausWasImBlattSteht`,
+`es geht nur hinaus was im Blatt steht`).
+
+**Was eine Regel ist, wird nicht gemeldet.** 400, 401, 403, 409 und 429 sind
+das Backend bei der Arbeit — zu kurzer Text, fehlende Rolle, jemand war
+schneller, zu viel auf einmal. Sie stehen dort, wo sie hingehören, und
+erzeugen keinen Bericht; sonst ersäufte die echte Störung im Rauschen.
+
+### Abstürze
+
+- **Android**: `Thread.setDefaultUncaughtExceptionHandler` bekommt praktisch
+  jeden Kotlin- und Java-Fehler samt Aufrufliste. Der bisherige Handler wird
+  danach trotzdem aufgerufen — ohne ihn stürbe der Prozess anders als sonst,
+  und Play sähe den Absturz nicht mehr.
+- **iOS**: `NSSetUncaughtExceptionHandler` fängt Objective-C-Ausnahmen.
+  Swift-Laufzeitfehler (`fatalError`, Index außerhalb) tun das **nicht** —
+  dafür steht eine Marke in den Defaults, solange die App im Vordergrund ist.
+  Ist sie beim nächsten Start noch da, war das Ende kein ordentliches. Wer die
+  App aus dem Umschalter wegwischt, geht vorher durch den Hintergrund und löst
+  deshalb keinen Fehlalarm aus. **Bewusst keine Signal-Handler**: Schreiben
+  aus einem Signal-Handler ist nicht signalsicher, und ein Absturzmelder, der
+  beim Melden abstürzt, ist schlimmer als keiner.
+- Ein Absturz wird **einmal** angeboten und danach weggeräumt.
+
+### Was daraus für die Datenschutzerklärung folgt
+
+Die Datenschutzerklärung (Website `/app/datenschutz` und
+`store/datenschutz.md`) braucht einen eigenen Abschnitt: gespeichert werden
+**Fehlermeldung, technische Angaben, Bereich, Plattform, App- und
+Systemversion, Gerätebezeichnung und Zeitpunkt**, dazu eine **freiwillige**
+Ergänzung und — nur bei angemeldeter Person — Kennung und Name aus der
+Rössing-ID. Zweck: die Fehlersuche während des laufenden Tests.
+Rechtsgrundlage: Einwilligung (Art. 6 Abs. 1 lit. a DSGVO) durch das Drücken
+des Knopfes; ohne Anmeldung ist der Bericht anonym. Empfänger: ausschließlich
+die Verwaltenden des Dorfentwicklungskreises — Berichte werden **nicht**
+veröffentlicht. Speicherdauer: bis der Fehler behoben oder verworfen ist.
+Löschung formlos per E-Mail. **Es wird keine IP-Adresse gespeichert.**
+
+Für die Play-Datensicherheit und Apples „App Privacy“ ändert sich etwas: Die
+Zeile *Absturzberichte / Diagnostics* steht dort nicht mehr auf „nein“ —
+siehe `store/data-safety.md` und `store/ios-datenschutz.md`.
+
 ## Wenn doch etwas klemmt
 
 Alle Riegel sind über die Umgebung steuerbar, ohne neues Image:

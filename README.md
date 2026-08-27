@@ -245,6 +245,37 @@ keine der beiden Apps noch einmal.
   des Backends im Wortlaut und lässt den getippten Text stehen; nach dem
   Abschicken bleibt nur das Wunschfeld leer, damit die nächste Idee ohne
   Tipparbeit hineinpasst.
+- **Fehlerberichte aus den Apps**: Die App ist im Test im Dorf, und wenn etwas
+  schiefgeht, soll es nicht bei „hat nicht geklappt" bleiben. Beide Apps zeigen
+  eine Störung an der **Wurzel** an — in verständlichem Deutsch, auch schon auf
+  dem Anmeldeschirm — und bieten zwei Knöpfe: **„Bericht schicken"** (ein Tipp,
+  ohne dass jemand etwas beschreiben muss) und **„Dazuschreiben"** für alle, die
+  etwas sagen wollen. Das Blatt dahinter führt vor dem Absenden Zeile für Zeile
+  auf, was hinausgeht; **von selbst geht nichts hinaus**.
+  Gefüttert wird das an genau einer Stelle — auf iOS in `DorfApi`, auf Android
+  über einen OkHttp-Interceptor —, damit kein Bereich daran denken muss.
+  Gemeldet wird nur, was niemand wollte: keine Verbindung, 5xx, 404. **400,
+  401, 403, 409 und 429 sind Regeln bei der Arbeit** und erzeugen keinen
+  Bericht, sonst ersäufte die echte Störung im Rauschen.
+  **Abstürze** merkt sich die App selbst und legt sie beim nächsten Start vor:
+  Android über `Thread.setDefaultUncaughtExceptionHandler` (samt Aufrufliste,
+  der bisherige Handler wird danach trotzdem aufgerufen), iOS über
+  `NSSetUncaughtExceptionHandler` **plus** eine Vordergrund-Marke, weil ein
+  Swift-`fatalError` keine Ausnahme wirft. Signal-Handler gibt es bewusst
+  keine.
+  `POST /api/v1/error-reports` ist — wie der Ideen-Eingang — **ohne Anmeldung**
+  erreichbar: Die Ausfälle, auf die es ankommt, sind gerade die, bei denen das
+  Anmelden klemmt. Ein Token geht mit, wenn es eines gibt; die Person wird dann
+  **aus dem Token** genommen, nie aus dem Rumpf. Eigene Zugriffsgrenze
+  (`FEHLERBERICHT_BURST`/`FEHLERBERICHT_PRO_STUNDE`, Vorgabe 10 und 10).
+  Gelesen wird **nicht** über REST, sondern dort, wo die Verwaltung wohnt: in
+  der Web-Verwaltung unter `/admin/fehlerberichte/` (Zähler auf der
+  Bereichsübersicht, Filter nach Stand und Art als echte Links, Löschen über
+  eine eigene Bestätigungsseite) und aus Claude heraus über
+  `fehlerberichte_liste` (mit Überblick über den ganzen Bestand: gesamt, offen,
+  je Art, je Plattform, je App-Version) und `fehlerbericht_status_setzen`.
+  Was genau in einem Bericht steht und was ausdrücklich nicht:
+  `backend/SICHERHEIT.md`, Abschnitt „Fehlerberichte aus den Apps".
 - **Veranstaltungen** („Was ist los in Rössing"): Die Termine kommen von der
   **Website** (`https://xn--rssing-wxa.de/events.json`) und werden **dort**
   gepflegt (`src/content/events/` im Repo `roessing.de`) — keine zweite
