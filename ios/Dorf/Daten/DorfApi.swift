@@ -194,11 +194,41 @@ nonisolated final class DorfApi: Sendable {
         do {
             return try JSONDecoder().decode(T.self, from: daten)
         } catch {
-            throw DorfFehler.netz("Antwort nicht lesbar: \(error.localizedDescription)")
+            let fehler = DorfFehler.netz("Antwort nicht lesbar: \(error.localizedDescription)")
+            melde(fehler, versand)
+            throw fehler
         }
     }
 
+    /// Jeder gescheiterte Aufruf wird gemeldet — an genau einer Stelle.
+    ///
+    /// Vorher stand die Behandlung in jedem Bereich einzeln, und was dabei
+    /// herauskam, erfuhr niemand: Ein Absturz fiel nur auf, weil zufällig
+    /// jemand auf eine Meldung getippt hatte. Hier kommt alles vorbei, also
+    /// steht der Weg zum Fehlerbericht hier — und kein Bereich muss daran
+    /// denken. Was davon wirklich eine Störung ist und was eine Regel, die
+    /// greift, entscheidet `ErrorIncident.aus` (siehe `ErrorReports/`).
     func rohAusfuehren(_ versand: URLRequest) async throws -> Data {
+        do {
+            return try await rohVersenden(versand)
+        } catch let fehler as DorfFehler {
+            melde(fehler, versand)
+            throw fehler
+        }
+    }
+
+    /// Reicht den Vorfall an den Melder weiter. Der lebt auf dem Hauptthread,
+    /// der Versand nicht — deshalb der Sprung, und deshalb ohne Warten: Ein
+    /// Fehlerbericht darf den Aufrufer nicht aufhalten.
+    private func melde(_ fehler: DorfFehler, _ versand: URLRequest) {
+        let methode = versand.httpMethod ?? ""
+        let pfad = versand.url?.path ?? ""
+        Task { @MainActor in
+            ErrorReporter.gemeinsam.beobachte(fehler, methode: methode, pfad: pfad)
+        }
+    }
+
+    private func rohVersenden(_ versand: URLRequest) async throws -> Data {
         let daten: Data
         let antwort: URLResponse
         do {

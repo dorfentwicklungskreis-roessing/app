@@ -50,6 +50,10 @@ final class AppUmgebung: ObservableObject {
         // Gerätekennung an und beim Abmelden wieder ab. Gefragt wird damit
         // noch niemand — das passiert erst beim Eintragen als Helfer:in.
         Benachrichtigungen.gemeinsam.verdrahten(api: api)
+        // Fehlerberichte gehen denselben Weg. Der Eingang kommt auch ohne
+        // Anmeldung durch — genau darauf kommt es an, wenn die Anmeldung
+        // selbst klemmt (siehe `ErrorReports/`).
+        ErrorReporter.gemeinsam.verdrahten(api: api)
         kinderWeiterreichen()
     }
 

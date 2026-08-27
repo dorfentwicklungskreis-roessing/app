@@ -799,3 +799,36 @@ nonisolated enum RFC3339 {
         return mitBruchteilen.date(from: text) ?? ohneBruchteile.date(from: text)
     }
 }
+
+// MARK: - Error reports
+
+/// What the app reports when something went wrong. Everything in here is
+/// what the app already knows about itself — there is no log, no screenshot,
+/// no location and no device identifier in it.
+///
+/// The wording of `message` is what the person actually read on screen; the
+/// backend keeps it verbatim, so a report says what somebody saw and not what
+/// the code thought it said.
+nonisolated struct ErrorReportInput: Codable, Sendable {
+    /// crash · network · server · unexpected
+    var kind: String
+    var message: String
+    var detail: String = ""
+    /// Voluntary. Usually empty — one tap helps just as much.
+    var comment: String = ""
+    var area: String = ""
+    var platform: String = "ios"
+    var appVersion: String = ""
+    var osVersion: String = ""
+    var deviceModel: String = ""
+    /// RFC3339. A crash is reported at the next start, so this is regularly
+    /// earlier than the moment the report arrives.
+    var occurredAt: String = ""
+}
+
+/// The answer of `POST /api/v1/error-reports`. Only the identity is needed;
+/// everything else the app already knows.
+nonisolated struct ErrorReportEcho: Codable, Sendable {
+    var id: Int64 = 0
+    var status: String = "new"
+}
