@@ -4,6 +4,7 @@ import SwiftUI
 /// Wertzielen arbeiten kann und jede Seite auch aus einer Benachrichtigung
 /// heraus erreichbar bleibt.
 enum Ziel: Hashable {
+    case chat
     case mithelfen
     case rangliste
     case profil
@@ -21,6 +22,7 @@ extension View {
     func dorfZiele() -> some View {
         navigationDestination(for: Ziel.self) { ziel in
             switch ziel {
+            case .chat: ChatView()
             case .mithelfen: MithelfenView()
             case .rangliste: RanglisteView()
             case .profil: ProfilView()
