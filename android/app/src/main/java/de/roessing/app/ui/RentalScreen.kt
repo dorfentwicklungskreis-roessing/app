@@ -148,7 +148,10 @@ fun RentalScreen(
         }
 
         LazyColumn(
-            Modifier.fillMaxWidth(),
+            // Die Kennung trägt die Liste selbst: Eine LazyColumn baut nur,
+            // was zu sehen ist, und ein Test muss sie zum Blättern greifen
+            // können, statt eine Kachel zu suchen, die es noch nicht gibt.
+            Modifier.fillMaxWidth().testTag("rental-list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

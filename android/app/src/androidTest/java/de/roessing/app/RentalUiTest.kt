@@ -8,11 +8,13 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import de.roessing.app.auth.RentalSignIn
 import de.roessing.app.data.BookingRequest
@@ -224,6 +226,25 @@ class RentalUiTest {
         compose.onNodeWithTag("rental").assertIsDisplayed()
     }
 
+    /** Blättert zu einer Gerätekachel und stellt fest, dass sie da ist. */
+    private fun geraetIstDa(id: String) {
+        compose.onNodeWithTag("rental-list").performScrollToNode(hasTestTag("device-$id"))
+        compose.onNodeWithTag("device-$id").assertIsDisplayed()
+    }
+
+    /**
+     * Öffnet ein Gerät.
+     *
+     * Erst blättern, dann tippen: Über den Geräten stehen die eigenen
+     * Buchungen, und eine LazyColumn baut nur, was zu sehen ist — eine Kachel
+     * weiter unten gibt es also noch gar nicht, wenn man nach ihr greift.
+     */
+    private fun oeffneGeraet(id: String) {
+        compose.onNodeWithTag("rental-list").performScrollToNode(hasTestTag("device-$id"))
+        compose.onNodeWithTag("device-$id").performClick()
+        compose.waitForIdle()
+    }
+
     @Test
     fun kachelAufDerStartseiteFuehrtZumMaschinchenring() {
         zeigeApp(FakeRental(devices = listOf(maeher, walze)))
@@ -231,8 +252,8 @@ class RentalUiTest {
         compose.onNodeWithTag("bereich-verleih").performScrollTo().assertIsDisplayed()
         zumVerleih()
 
-        compose.onNodeWithTag("device-${maeher.id}").assertIsDisplayed()
-        compose.onNodeWithTag("device-${walze.id}").assertIsDisplayed()
+        geraetIstDa(maeher.id)
+        geraetIstDa(walze.id)
     }
 
     /** Der Preis steht als Tarif da — die App rechnet keine Summe daraus. */
@@ -276,7 +297,7 @@ class RentalUiTest {
         compose.onNodeWithTag("rental-stale").assertIsDisplayed()
         compose.onNodeWithTag("rental-stale-signin").assertIsDisplayed()
         // Die Geräte sind öffentlich und stehen trotzdem da.
-        compose.onNodeWithTag("device-${maeher.id}").assertIsDisplayed()
+        geraetIstDa(maeher.id)
     }
 
     /**
@@ -288,8 +309,7 @@ class RentalUiTest {
         zeigeApp(FakeRental(devices = listOf(maeher)))
         zumVerleih()
 
-        compose.onNodeWithTag("device-${maeher.id}").performClick()
-        compose.waitForIdle()
+        oeffneGeraet(maeher.id)
 
         compose.onNodeWithTag("device-detail").assertIsDisplayed()
         compose.onNodeWithTag("rental-book").performScrollTo().assertIsNotEnabled()
@@ -307,8 +327,7 @@ class RentalUiTest {
         zeigeApp(FakeRental(devices = listOf(maeher)))
         zumVerleih()
 
-        compose.onNodeWithTag("device-${maeher.id}").performClick()
-        compose.waitForIdle()
+        oeffneGeraet(maeher.id)
 
         compose.onNodeWithTag("device-description")
             .assertTextContains("• Arbeitsbreite 85 cm", substring = true)
@@ -328,8 +347,7 @@ class RentalUiTest {
         zeigeApp(FakeRental(devices = listOf(maeher)))
         zumVerleih()
 
-        compose.onNodeWithTag("device-${maeher.id}").performClick()
-        compose.waitForIdle()
+        oeffneGeraet(maeher.id)
         compose.onNodeWithTag("rental-web").performScrollTo().performClick()
         compose.waitForIdle()
 
@@ -341,10 +359,11 @@ class RentalUiTest {
         zeigeApp(FakeRental(devices = listOf(maeher)))
         zumVerleih()
 
-        compose.onNodeWithTag("device-${maeher.id}").performClick()
-        compose.waitForIdle()
+        oeffneGeraet(maeher.id)
 
-        compose.onNodeWithText("12.–13. September 2026 (vergeben)").assertIsDisplayed()
+        compose.onNodeWithText("12.–13. September 2026 (vergeben)")
+            .performScrollTo()
+            .assertIsDisplayed()
     }
 
     /** Ohne Anmeldung gibt es keine Buchungen und keinen Anfrageknopf. */
@@ -353,7 +372,7 @@ class RentalUiTest {
         zeigeApp(FakeRental(devices = listOf(maeher)), anmeldung = RentalSignIn.MISSING)
         zumVerleih()
 
-        compose.onNodeWithTag("device-${maeher.id}").assertIsDisplayed()
+        geraetIstDa(maeher.id)
         compose.onNodeWithTag("booking-b-4711").assertDoesNotExist()
     }
 
@@ -361,8 +380,7 @@ class RentalUiTest {
     fun einAnfrageknopfWirdErstFreiWennDerServerFreiSagt() {
         zeigeApp(FakeRental(devices = listOf(maeher), bookings = listOf(buchung)))
         zumVerleih()
-        compose.onNodeWithTag("device-${maeher.id}").performClick()
-        compose.waitForIdle()
+        oeffneGeraet(maeher.id)
 
         compose.onNodeWithTag("rental-pick-period").performScrollTo().assertIsEnabled()
         compose.onNodeWithTag("rental-book").performScrollTo().assertIsNotEnabled()
