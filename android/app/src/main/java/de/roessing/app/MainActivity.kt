@@ -76,6 +76,9 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
     val scope = rememberCoroutineScope()
     // null = kein Fehler. Ein Abbruch (Zurück-Taste) ist bewusst kein Fehler.
     var loginError by remember { mutableStateOf<String?>(null) }
+    // Der Maschinchenring ist der einzige Bereich, den man ohne Anmeldung
+    // ansehen kann — seine Geräteliste ist auch im Web öffentlich.
+    var verleihOhneAnmeldung by remember { mutableStateOf(false) }
 
     val authLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -93,19 +96,40 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
             CircularProgressIndicator()
         }
 
-        is SessionState.LoggedOut -> LoginScreen(
-            errorCode = loginError,
-            onLogin = {
+        is SessionState.LoggedOut -> {
+            val anmelden = {
                 loginError = null
                 scope.launch {
                     runCatching { authLauncher.launch(container.authManager.buildLoginIntent()) }
                         .onFailure { loginError = it::class.java.simpleName }
                 }
-            },
-            onDevLogin = { asAdmin ->
-                scope.launch { container.authManager.devLogin(asAdmin) }
-            },
-        )
+                Unit
+            }
+            if (verleihOhneAnmeldung) {
+                val verleihVm: de.roessing.app.ui.RentalViewModel =
+                    viewModel(factory = viewModelFactory(container))
+                val verleih by verleihVm.state.collectAsState()
+                androidx.compose.runtime.LaunchedEffect(Unit) { verleihVm.load() }
+                de.roessing.app.ui.PublicRentalScreen(
+                    state = verleih,
+                    onBack = { verleihOhneAnmeldung = false },
+                    onSignIn = { verleihOhneAnmeldung = false; anmelden() },
+                    onQuery = verleihVm::setQuery,
+                    onRefresh = verleihVm::refresh,
+                    onOpen = verleihVm::open,
+                    onClose = verleihVm::close,
+                )
+            } else {
+                LoginScreen(
+                    errorCode = loginError,
+                    onLogin = anmelden,
+                    onDevLogin = { asAdmin ->
+                        scope.launch { container.authManager.devLogin(asAdmin) }
+                    },
+                    onBrowseRental = { verleihOhneAnmeldung = true },
+                )
+            }
+        }
 
         is SessionState.LoggedIn -> {
             val factory = viewModelFactory(container)
@@ -114,12 +138,14 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
             val profilVm: ProfileViewModel = viewModel(factory = factory)
             val ideenVm: IdeenViewModel = viewModel(factory = factory)
             val termineVm: VeranstaltungenViewModel = viewModel(factory = factory)
+            val verleihVm: de.roessing.app.ui.RentalViewModel = viewModel(factory = factory)
             HomeScreen(
                 viewModel = vm,
                 leaderboardViewModel = rangVm,
                 profileViewModel = profilVm,
                 ideenViewModel = ideenVm,
                 veranstaltungenViewModel = termineVm,
+                rentalViewModel = verleihVm,
                 pushZiel = pushZiel,
                 onPushZielVerbraucht = onPushZielVerbraucht,
                 onLogout = {
@@ -153,6 +179,12 @@ private fun viewModelFactory(container: AppContainer) =
 
             modelClass.isAssignableFrom(VeranstaltungenViewModel::class.java) ->
                 VeranstaltungenViewModel(container.veranstaltungenRepository) as T
+
+            modelClass.isAssignableFrom(de.roessing.app.ui.RentalViewModel::class.java) ->
+                de.roessing.app.ui.RentalViewModel(
+                    container.rentalRepository,
+                    signIn = { container.rentalSignIn() },
+                ) as T
 
             else -> error("Unbekanntes ViewModel: ${modelClass.name}")
         }

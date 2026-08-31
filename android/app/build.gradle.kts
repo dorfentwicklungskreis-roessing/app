@@ -43,6 +43,21 @@ android {
             "WEBSITE_BASE_URL",
             "\"${prop("websiteBaseUrl", "https://xn--rssing-wxa.de")}\"",
         )
+        // Die Mietplattform („Maschinchenring") ist ein eigener Dienst; die App
+        // redet unmittelbar mit ihr, das Dorf-Backend weiß nichts davon.
+        buildConfigField(
+            "String",
+            "MIETEN_BASE_URL",
+            "\"${prop("mietenBaseUrl", "https://mieten.xn--rssing-wxa.de")}\"",
+        )
+        // Zitadel-Projekt der Mietplattform. Es muss in der `aud` des Tokens
+        // stehen, sonst weist sie jede angemeldete Anfrage ab — angefordert
+        // wird das über einen Scope, siehe auth/RentalAudience.kt.
+        buildConfigField(
+            "String",
+            "MIETEN_PROJECT_ID",
+            "\"${prop("mietenProjectId", "377276525071827047")}\"",
+        )
         buildConfigField("String", "OIDC_ISSUER", "\"${prop("oidcIssuer", "https://id.xn--rssing-wxa.de")}\"")
         buildConfigField("String", "OIDC_CLIENT_ID", "\"${prop("oidcClientId", "385941807986376899")}\"")
         buildConfigField("String", "OIDC_REDIRECT_URI", "\"de.roessing.app:/oauth2redirect\"")

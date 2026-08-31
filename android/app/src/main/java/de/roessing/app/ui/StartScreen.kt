@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Handyman
 import androidx.compose.material.icons.filled.LocalFlorist
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Lightbulb
@@ -45,7 +46,7 @@ import de.roessing.app.ui.theme.statusFarben
  * Die Bereiche der App. „Mithelfen" ist der erste — weitere kommen, deshalb
  * ist die Startseite eine Übersicht und nicht die Gieß-Karte.
  */
-enum class Bereich { START, MITHELFEN, VERANSTALTUNGEN, PROFIL, DORFBEWOHNER, IDEEN }
+enum class Bereich { START, MITHELFEN, VERANSTALTUNGEN, VERLEIH, PROFIL, DORFBEWOHNER, IDEEN }
 
 /**
  * Startseite: freundlicher Einstieg mit dem Namen aus dem Profil, darunter
@@ -120,6 +121,16 @@ fun StartScreen(
             symbol = Icons.Filled.Event,
             testTag = "bereich-veranstaltungen",
             onClick = { onBereich(Bereich.VERANSTALTUNGEN) },
+        )
+
+        // Der Maschinchenring: Nachbarn verleihen ihre Geräte. Die Liste kommt
+        // unmittelbar von mieten.rössing.de — gepflegt wird sie dort.
+        BereichKachel(
+            titel = stringResource(R.string.area_rental_title),
+            text = stringResource(R.string.area_rental_subtitle),
+            symbol = Icons.Filled.Handyman,
+            testTag = "bereich-verleih",
+            onClick = { onBereich(Bereich.VERLEIH) },
         )
 
         Row(

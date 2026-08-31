@@ -1,0 +1,35 @@
+{
+  "bookings": [
+    {
+      "id": "b-4711",
+      "itemId": "as-585-km-kreiselmaeher",
+      "itemName": "Kreiselmäher AS 585",
+      "startDate": "2026-09-04",
+      "endDate": "2026-09-06",
+      "status": "approved",
+      "statusText": "Bestätigt",
+      "cancellable": true,
+      "pickupAddress": "Hinter den Höfen 7, 31171 Nordstemmen"
+    },
+    {
+      "id": "b-4712",
+      "itemId": "rasenwalze",
+      "itemName": "Rasenwalze",
+      "startDate": "2026-09-19",
+      "endDate": "2026-09-19",
+      "status": "pending",
+      "statusText": "Warte auf die Zusage des Eigentümers",
+      "cancellable": true
+    },
+    {
+      "id": "b-4699",
+      "itemId": "rasenwalze",
+      "itemName": "Rasenwalze",
+      "startDate": "2026-07-11",
+      "endDate": "2026-07-12",
+      "status": "completed",
+      "statusText": "Zurückgegeben",
+      "cancellable": false
+    }
+  ]
+}

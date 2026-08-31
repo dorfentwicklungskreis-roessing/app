@@ -42,12 +42,30 @@ private val Context.authDataStore by preferencesDataStore(name = "auth")
 const val ROLLEN_SCOPE = "urn:zitadel:iam:org:projects:roles"
 
 /**
+ * Der Scope, mit dem das Token auch für die Mietplattform gilt.
+ *
+ * Ein Zitadel-Token gilt nur für die Projekte, die in seiner `aud` stehen.
+ * Die Mietplattform („Maschinchenring") ist ein eigenes Projekt derselben
+ * Rössing-ID; ohne diesen Scope weist sie jede angemeldete Anfrage der App
+ * ab. Die Projektkennung steht in den Build-Einstellungen, nicht hier.
+ */
+val MIETEN_AUDIENCE_SCOPE: String = RentalAudience.scopeFor(BuildConfig.MIETEN_PROJECT_ID)
+
+/**
  * Die Scopes, mit denen sich die App anmeldet.
  *
  * offline_access hält die Sitzung über den Neustart hinweg, die Rollen
- * entscheiden, wer verwalten darf.
+ * entscheiden, wer verwalten darf, und die Empfänger-Angabe macht das Token
+ * zusätzlich für die Mietplattform gültig.
  */
-val LOGIN_SCOPES = listOf("openid", "profile", "email", "offline_access", ROLLEN_SCOPE)
+val LOGIN_SCOPES = listOf(
+    "openid",
+    "profile",
+    "email",
+    "offline_access",
+    ROLLEN_SCOPE,
+    MIETEN_AUDIENCE_SCOPE,
+)
 
 /**
  * Was die App gerade als Access-Token anbieten kann.

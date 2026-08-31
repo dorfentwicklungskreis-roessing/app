@@ -35,6 +35,12 @@ fun LoginScreen(
     errorCode: String? = null,
     onLogin: () -> Unit,
     onDevLogin: (asAdmin: Boolean) -> Unit,
+    /**
+     * Leads into the rental area without signing in. Reading is public over
+     * there, so nobody has to hand over a name to see what the village lends
+     * out — the Rössing-ID is asked for at the booking, where it is needed.
+     */
+    onBrowseRental: (() -> Unit)? = null,
 ) {
     Surface(Modifier.fillMaxSize()) {
         Column(
@@ -88,6 +94,15 @@ fun LoginScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.testTag("login-error"),
                 )
+            }
+            if (onBrowseRental != null) {
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = onBrowseRental,
+                    modifier = Modifier.testTag("login-rental"),
+                ) {
+                    Text(stringResource(R.string.rental_browse_public))
+                }
             }
             if (AuthManager.isDevAuthAllowed()) {
                 Spacer(Modifier.height(24.dp))

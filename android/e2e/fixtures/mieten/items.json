@@ -1,0 +1,36 @@
+{
+  "items": [
+    {
+      "id": "as-585-km-kreiselmaeher",
+      "name": "Kreiselmäher AS 585",
+      "description": "Für hohes Gras und Böschungen. Benzin, wird vollgetankt übergeben.",
+      "imageUrl": "/bilder/as-585-km.jpg",
+      "ownerName": "Familie Beispiel",
+      "location": "Rössing, Hinter den Höfen",
+      "priceText": "15 € pro Tag",
+      "depositText": "100 € Kaution",
+      "tags": ["Garten", "Motorgeräte"],
+      "bookable": true
+    },
+    {
+      "id": "rasenwalze",
+      "name": "Rasenwalze",
+      "description": "Zum Andrücken nach der Neuaussaat. Wasserfüllung, 50 Liter.",
+      "ownerName": "Dorfpflege Rössing",
+      "location": "Rössing, Kirchstraße",
+      "priceText": "5 € pro Tag",
+      "tags": ["Garten"],
+      "bookable": true
+    },
+    {
+      "id": "fallschutzmatten",
+      "name": "Fallschutzmatten (10 Stück)",
+      "description": "Für Feste mit Hüpfburg oder Klettergerüst.",
+      "ownerName": "Kirchenstiftung Rössing",
+      "priceText": "20 € pro Wochenende",
+      "tags": ["Feste"],
+      "bookable": false,
+      "notBookableReason": "Bis Ende September in Reparatur."
+    }
+  ]
+}

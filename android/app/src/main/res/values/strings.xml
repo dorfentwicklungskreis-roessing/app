@@ -201,4 +201,52 @@
     <string name="events_offline_stale">Gerade keine Verbindung — die Liste ist möglicherweise nicht mehr aktuell.</string>
     <string name="events_retry">Erneut versuchen</string>
     <string name="events_loading">Termine werden geholt …</string>
+    <!-- Maschinchenring: der Verleih von Gerät zu Gerät im Dorf. Die Daten
+         kommen unmittelbar von mieten.rössing.de; die App entscheidet nichts,
+         sie zeigt an, was der Server sagt. -->
+    <string name="area_rental_title">Maschinchenring</string>
+    <string name="area_rental_subtitle">Geräte im Dorf leihen.</string>
+    <string name="rental_title">Maschinchenring</string>
+    <string name="rental_intro">Nachbarn verleihen ihre Geräte. Ansehen und suchen geht ohne Anmeldung; gebucht wird mit der Rössing-ID, und der Eigentümer entscheidet.</string>
+    <string name="rental_search_label">Gerät suchen</string>
+    <string name="rental_search_placeholder">Zum Beispiel: Rasenmäher</string>
+    <string name="rental_search_clear">Suche leeren</string>
+    <string name="rental_empty">Hier steht gerade kein Gerät. Sobald jemand eines einstellt, findest du es hier.</string>
+    <string name="rental_empty_search">Zu deiner Suche ist nichts eingestellt.</string>
+    <string name="rental_offline">Der Maschinchenring ist gerade nicht erreichbar. Besteht eine Verbindung?</string>
+    <string name="rental_offline_stale">Gerade keine Verbindung — die Liste ist möglicherweise nicht mehr aktuell.</string>
+    <string name="rental_retry">Erneut versuchen</string>
+    <string name="rental_signin_title">Zum Buchen brauchst du deine Rössing-ID</string>
+    <string name="rental_signin_body">Ansehen und suchen geht auch ohne. Buchen, eigene Buchungen sehen und stornieren nur angemeldet.</string>
+    <string name="rental_signin_button">Mit Rössing-ID anmelden</string>
+    <string name="rental_stale_title">Bitte einmal neu anmelden</string>
+    <string name="rental_stale_body">Deine Anmeldung stammt aus der Zeit vor dem Maschinchenring und gilt dort noch nicht. Einmal ab- und wieder anmelden genügt — deine Buchungen bleiben erhalten.</string>
+    <string name="rental_stale_button">Neu anmelden</string>
+    <string name="rental_bookings_title">Meine Buchungen</string>
+    <string name="rental_bookings_empty">Du hast gerade nichts gebucht.</string>
+    <string name="rental_bookings_offline">Deine Buchungen konnten nicht geladen werden.</string>
+    <string name="rental_cancel_booking">Stornieren</string>
+    <string name="rental_cancelled">Die Buchung ist storniert.</string>
+    <string name="rental_booked">Deine Anfrage ist raus — der Eigentümer entscheidet.</string>
+    <string name="rental_pickup">Abholen bei: %1$s</string>
+    <string name="rental_not_bookable">Zurzeit nicht buchbar</string>
+    <string name="rental_owner">Von %1$s</string>
+    <string name="rental_deposit">Kaution: %1$s</string>
+    <string name="rental_choose_period">Zeitraum wählen</string>
+    <string name="rental_change_period">Zeitraum ändern</string>
+    <string name="rental_checking">Wird geprüft …</string>
+    <string name="rental_free">Frei — du kannst anfragen.</string>
+    <string name="rental_taken">In diesem Zeitraum belegt.</string>
+    <string name="rental_occupied_title">Schon vergeben</string>
+    <string name="rental_message_label">Nachricht an den Eigentümer (freiwillig)</string>
+    <string name="rental_book">Anfragen</string>
+    <string name="rental_booking">Wird gesendet …</string>
+    <string name="rental_period_ok">Übernehmen</string>
+    <string name="rental_period_abort">Abbrechen</string>
+    <string name="rental_browse_public">Geräte im Maschinchenring ansehen</string>
+    <string name="rental_back_to_login">Zurück zur Anmeldung</string>
+    <plurals name="rental_days">
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tage</item>
+    </plurals>
 </resources>
