@@ -44,6 +44,8 @@ type lokalesModell struct {
 	Schluessel string
 	// Version ist die zuletzt gesehene anthropic-version-Kopfzeile.
 	Version string
+	// Beta ist die zuletzt gesehene anthropic-beta-Kopfzeile.
+	Beta string
 }
 
 // modellAnfrage ist die Anfrage, wie sie beim Modell ankommt.
@@ -63,6 +65,7 @@ type modellAnfrage struct {
 	OutputConfig *struct {
 		Effort string `json:"effort"`
 	} `json:"output_config"`
+	Fallbacks string `json:"fallbacks"`
 }
 
 // LetzterText liefert den Text des letzten „user“-Zugs, sofern er reiner
@@ -165,6 +168,7 @@ func (m *lokalesModell) bedienen(w http.ResponseWriter, r *http.Request) {
 	m.Anfragen = append(m.Anfragen, ein)
 	m.Schluessel = r.Header.Get("x-api-key")
 	m.Version = r.Header.Get("anthropic-version")
+	m.Beta = r.Header.Get("anthropic-beta")
 	m.mu.Unlock()
 
 	ergebnis := m.zug(nummer, ein)
@@ -184,7 +188,7 @@ func (m *lokalesModell) bedienen(w http.ResponseWriter, r *http.Request) {
 // Anbieter liefert den Zugang zu diesem Modell.
 func (m *lokalesModell) Anbieter() *Anbieter {
 	return &Anbieter{Schluessel: "test-schluessel", Modell: "lokales-testmodell",
-		Basis: m.server.URL, HTTP: m.server.Client()}
+		Basis: m.server.URL, HTTP: m.server.Client(), Rueckfall: true}
 }
 
 func (m *lokalesModell) letzteAnfrage(t *testing.T) modellAnfrage {

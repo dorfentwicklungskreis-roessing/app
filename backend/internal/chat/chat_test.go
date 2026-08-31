@@ -262,6 +262,49 @@ func TestAnfrageTraegtModellUndWerkzeuge(t *testing.T) {
 	}
 }
 
+// Der serverseitige Rückfall geht in der Form hinaus, die zusammengehört:
+// die Kennung „…-07-01" zur Kurzform „default". Die andere Kennung gehört zur
+// Listenform, und beides zu mischen weist die API mit 400 ab — der Chat wäre
+// dann nicht schlechter, sondern kaputt.
+func TestRueckfallGehtInEinemStueckHinaus(t *testing.T) {
+	dd := neuesDorf(t)
+	modell := starteModell(t, func(int, modellAnfrage) any { return antwortText("Moin!") })
+	ts := dd.server(t, modell)
+	frage(t, ts, tokenNachbarin, "Moin").Body.Close()
+
+	if modell.Beta != rueckfallBeta {
+		t.Fatalf("anthropic-beta = %q, erwartet %q", modell.Beta, rueckfallBeta)
+	}
+	if ein := modell.letzteAnfrage(t); ein.Fallbacks != "default" {
+		t.Fatalf("fallbacks = %q, erwartet „default“", ein.Fallbacks)
+	}
+}
+
+// Abschaltbar muss es sein: Eine Beta-Kennung, die es nicht mehr gibt, lässt
+// die API die ganze Anfrage abweisen. Dann soll der Betreiber den Bereich mit
+// einer Umgebungsvariablen zurückbekommen und nicht auf eine Auslieferung
+// warten müssen.
+func TestOhneRueckfallGehtNichtsDavonHinaus(t *testing.T) {
+	dd := neuesDorf(t)
+	modell := starteModell(t, func(int, modellAnfrage) any { return antwortText("Moin!") })
+	anbieter := modell.Anbieter()
+	anbieter.Rueckfall = false
+	cfg := Config{DB: dd.DB, Mitglieder: mitglied.DevQuelle{}, Anbieter: anbieter,
+		Now: func() time.Time { return jetzt }}
+	mux := http.NewServeMux()
+	Register(mux, auth.Middleware(auth.InsecureDevVerifier{}), cfg)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	frage(t, ts, tokenNachbarin, "Moin").Body.Close()
+
+	if modell.Beta != "" {
+		t.Fatalf("anthropic-beta = %q, erwartet keine Kopfzeile", modell.Beta)
+	}
+	if ein := modell.letzteAnfrage(t); ein.Fallbacks != "" {
+		t.Fatalf("fallbacks = %q, erwartet nichts", ein.Fallbacks)
+	}
+}
+
 // Der Systemtext sagt, mit wem gesprochen wird und wann — sonst rechnet das
 // Modell mit dem Datum seines Trainings.
 func TestSystemtextNenntPersonUndDatum(t *testing.T) {

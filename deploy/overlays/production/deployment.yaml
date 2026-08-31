@@ -225,6 +225,17 @@ spec:
             #   CHAT_BASIS_URL         abweichender Endpunkt; gedacht fürs
             #                          Ausprobieren gegen ein lokales Modell,
             #                          im Cluster nicht gesetzt.
+            #   CHAT_RUECKFALL         „aus" schaltet den serverseitigen
+            #                          Rückfall ab. Er ist an: Lehnt das
+            #                          Modell eine Frage aus
+            #                          Sicherheitsgründen ab, beantwortet sie
+            #                          im selben Aufruf ein anderes. Weil das
+            #                          eine Beta-Erweiterung ist, gehört der
+            #                          erste Versuch nach dem Eintragen des
+            #                          Schlüssels beobachtet: Kommt eine 400
+            #                          mit „unknown beta" zurück, hier
+            #                          CHAT_RUECKFALL=aus setzen — der Chat
+            #                          läuft dann ohne Rückfall weiter.
             - name: BACKUP_DIR
               value: /data/backups
             - name: BACKUP_KEEP

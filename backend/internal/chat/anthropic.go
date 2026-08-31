@@ -56,6 +56,11 @@ const StandardModell = "claude-opus-5"
 // Blumenkästen reichlich; wer es anders will, setzt CHAT_AUFWAND.
 const StandardAufwand = "medium"
 
+// rueckfallBeta ist die Beta-Kennung des serverseitigen Rückfalls. Sie
+// gehört zur Form `"fallbacks": "default"` — die ältere Listenform trägt eine
+// andere Kennung, und beides zu mischen wird mit 400 abgewiesen.
+const rueckfallBeta = "server-side-fallback-2026-07-01"
+
 // maxTokens begrenzt die Antwortlänge. Ein Chat im Dorf beantwortet Fragen,
 // er schreibt keine Aufsätze — und ohne Streaming muss die Antwort in die
 // Schreibfrist des Servers passen.
@@ -74,7 +79,16 @@ type Anbieter struct {
 	Basis string
 	// Aufwand ist output_config.effort (leer = StandardAufwand).
 	Aufwand string
-	HTTP    *http.Client
+	// Rueckfall schaltet den serverseitigen Rückfall ein: Lehnt das Modell
+	// eine Frage aus Sicherheitsgründen ab, beantwortet sie im selben Aufruf
+	// ein anderes, statt dass die Person vor einer Absage steht.
+	//
+	// Warum abschaltbar: Es ist eine Beta-Erweiterung, und eine Beta-Kennung,
+	// die es nicht mehr gibt, lässt die API die ganze Anfrage mit 400
+	// abweisen — der Chat wäre dann nicht schlechter, sondern kaputt. Wer
+	// das erlebt, setzt CHAT_RUECKFALL=aus und hat den Bereich zurück.
+	Rueckfall bool
+	HTTP      *http.Client
 }
 
 // AnbieterAusUmgebung baut den Zugang aus der Umgebung.
@@ -86,6 +100,7 @@ type Anbieter struct {
 //	CHAT_BASIS_URL     abweichender Endpunkt; gedacht für ein lokales,
 //	                   billiges Modell beim Ausprobieren
 //	CHAT_AUFWAND       low | medium | high | xhigh | max
+//	CHAT_RUECKFALL     „aus" schaltet den serverseitigen Rückfall ab
 func AnbieterAusUmgebung() *Anbieter {
 	schluessel := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY"))
 	if schluessel == "" {
@@ -96,6 +111,7 @@ func AnbieterAusUmgebung() *Anbieter {
 		Modell:     envOr("CHAT_MODELL", StandardModell),
 		Basis:      strings.TrimSuffix(strings.TrimSpace(os.Getenv("CHAT_BASIS_URL")), "/"),
 		Aufwand:    envOr("CHAT_AUFWAND", StandardAufwand),
+		Rueckfall:  envOr("CHAT_RUECKFALL", "an") != "aus",
 	}
 }
 
@@ -153,6 +169,9 @@ type anfrage struct {
 	Messages     []Nachricht            `json:"messages"`
 	Tools        []Werkzeugbeschreibung `json:"tools,omitempty"`
 	OutputConfig *ausgabeKonfig         `json:"output_config,omitempty"`
+	// Fallbacks ist „default": Bei einer Absage aus Sicherheitsgründen
+	// beantwortet ein anderes Modell dieselbe Anfrage im selben Aufruf.
+	Fallbacks string `json:"fallbacks,omitempty"`
 }
 
 // Antwort ist die Antwort der Messages-API.
@@ -224,14 +243,18 @@ func (a *Anbieter) Senden(ctx context.Context, system string, nachrichten []Nach
 	if a == nil || a.Schluessel == "" {
 		return nil, errors.New("kein Anthropic-Schlüssel eingerichtet")
 	}
-	koerper, err := json.Marshal(anfrage{
+	rumpf := anfrage{
 		Model:        a.modell(),
 		MaxTokens:    maxTokens,
 		System:       system,
 		Messages:     nachrichten,
 		Tools:        werkzeuge,
 		OutputConfig: a.ausgabe(),
-	})
+	}
+	if a.Rueckfall {
+		rumpf.Fallbacks = "default"
+	}
+	koerper, err := json.Marshal(rumpf)
 	if err != nil {
 		return nil, err
 	}
@@ -243,6 +266,9 @@ func (a *Anbieter) Senden(ctx context.Context, system string, nachrichten []Nach
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("anthropic-version", apiVersion)
+	if a.Rueckfall {
+		req.Header.Set("anthropic-beta", rueckfallBeta)
+	}
 	// Der Schlüssel steht ausschließlich hier — nie in einem Log, nie in
 	// einer Fehlermeldung, nie in einer Antwort an die App.
 	req.Header.Set("x-api-key", a.Schluessel)
