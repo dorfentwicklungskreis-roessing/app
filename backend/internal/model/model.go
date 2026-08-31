@@ -128,6 +128,21 @@ type CareTask struct {
 	// BefaehigungID: verlangte Einweisung (0 = keine). Ohne sie kann
 	// niemand zusagen; durchgesetzt wird das serverseitig.
 	BefaehigungID int64 `json:"befaehigungId,omitempty"`
+	// LastKnownDoneAt: wann diese Arbeit zuletzt gemacht wurde, **bevor** die
+	// App davon wusste.
+	//
+	// Jeder Ort im Dorf hat eine Geschichte, die älter ist als die App. Wird
+	// eine Aufgabe heute angelegt, rechnet der Server sonst ab heute — und
+	// ein Beet, das im Juni zuletzt gejätet wurde, stünde bis Ende Oktober
+	// auf grün, obwohl es längst dran ist.
+	//
+	// Das ist **keine Erledigung**: kein Punkt in der Rangliste, keine
+	// Person daran, keine Historie. Es ist allein der Startpunkt der
+	// Rechnung, und die erste echte Meldung löst ihn ab. Genau deshalb
+	// umgeht es auch nicht die Rückdatierungsgrenze (model.MaxBackdate):
+	// Wer hier ein Datum einträgt, verschiebt Fälligkeiten, aber schreibt
+	// keine Rangliste um.
+	LastKnownDoneAt *time.Time `json:"lastKnownDoneAt,omitempty"`
 	// BefaehigungName ist ein Anzeigefeld (nicht gespeichert).
 	BefaehigungName string `json:"befaehigungName,omitempty"`
 }
@@ -233,7 +248,12 @@ func ComputeStatus(task CareTask, last *Completion, now time.Time, factor float6
 	if factor <= 0 {
 		factor = 1
 	}
+	// Startpunkt der Rechnung: die letzte echte Meldung, sonst das, was über
+	// die Zeit davor bekannt ist, sonst das Anlegedatum.
 	base := task.CreatedAt
+	if task.LastKnownDoneAt != nil {
+		base = *task.LastKnownDoneAt
+	}
 	if last != nil {
 		base = last.DoneAt
 	}

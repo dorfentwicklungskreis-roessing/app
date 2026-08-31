@@ -478,9 +478,21 @@ type TaskInput struct {
 	// Aufgabe nicht ihre Jahreszeit wegnehmen.
 	SeasonStartMonth *int `json:"seasonStartMonth"`
 	SeasonEndMonth   *int `json:"seasonEndMonth"`
+	// LastKnownDoneAt: wann diese Arbeit zuletzt gemacht wurde, bevor die App
+	// davon wusste („das Beet wurde im Juni gejätet"). Datum (2026-06-15)
+	// oder RFC3339. Leerer String nimmt die Angabe wieder weg.
+	//
+	// Ausdrücklich **keine** Erledigung: kein Punkt in der Rangliste, keine
+	// Person daran. Deshalb gilt hier auch nicht die Rückdatierungsgrenze —
+	// wer hier ein Datum einträgt, verschiebt Fälligkeiten, schreibt aber
+	// keine Rangliste um. Die erste echte Meldung löst die Angabe ab.
+	LastKnownDoneAt *string `json:"lastKnownDoneAt"`
 
 	// termin ist das geprüfte DueDate. Validate() setzt es, Apply() nutzt es.
 	termin *time.Time
+	// zuletzt ist das geprüfte LastKnownDoneAt.
+	zuletzt    *time.Time
+	zuletztWeg bool
 }
 
 func (in *TaskInput) Validate() error {
@@ -544,6 +556,48 @@ func (in *TaskInput) Validate() error {
 		von, bis := model.NormalizeSeasonMonths(*in.SeasonStartMonth, *in.SeasonEndMonth)
 		in.SeasonStartMonth, in.SeasonEndMonth = &von, &bis
 	}
+	if err := in.pruefeZuletzt(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ParseZuletztErledigt liest „zuletzt erledigt, bevor die App davon wusste"
+// aus einem rohen Text. Leer heißt: Angabe wegnehmen.
+//
+// Öffentlich, weil MCP dieselbe Prüfung braucht — dieselbe Regel zweimal
+// geschrieben ist beim nächsten Sonderfall einmal falsch.
+func ParseZuletztErledigt(roh string, jetzt time.Time) (*time.Time, bool, error) {
+	roh = strings.TrimSpace(roh)
+	if roh == "" {
+		return nil, true, nil
+	}
+	wann, err := ParseTermin(roh)
+	if err != nil {
+		return nil, false, errors.New("lastKnownDoneAt: " + err.Error())
+	}
+	if wann.After(jetzt) {
+		return nil, false, errors.New("lastKnownDoneAt darf nicht in der Zukunft liegen")
+	}
+	return &wann, false, nil
+}
+
+// pruefeZuletzt liest „zuletzt erledigt, bevor die App davon wusste".
+//
+// Ein leerer String nimmt die Angabe weg — das ist etwas anderes als ein
+// fehlendes Feld, das sie stehen lässt. In der Zukunft liegen darf sie
+// nicht: „zuletzt gemacht" ist eine Aussage über die Vergangenheit, und ein
+// Datum von morgen würde die Aufgabe stumm auf grün stellen.
+func (in *TaskInput) pruefeZuletzt() error {
+	in.zuletzt, in.zuletztWeg = nil, false
+	if in.LastKnownDoneAt == nil {
+		return nil
+	}
+	wann, weg, err := ParseZuletztErledigt(*in.LastKnownDoneAt, clock.Now())
+	if err != nil {
+		return err
+	}
+	in.zuletzt, in.zuletztWeg = wann, weg
 	return nil
 }
 
@@ -596,6 +650,12 @@ func (in *TaskInput) Apply(t *model.CareTask) {
 	}
 	if in.SeasonEndMonth != nil {
 		t.SeasonEndMonth = *in.SeasonEndMonth
+	}
+	switch {
+	case in.zuletztWeg:
+		t.LastKnownDoneAt = nil
+	case in.zuletzt != nil:
+		t.LastKnownDoneAt = in.zuletzt
 	}
 	t.Kind, t.Title = model.TaskKind(in.Kind), in.Title
 	t.Liters = in.Liters

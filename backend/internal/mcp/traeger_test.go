@@ -196,3 +196,63 @@ func TestTraegerWerkzeugeNurFuerAdmins(t *testing.T) {
 		t.Fatalf("Mitglied bekommt Status %d, erwartet 403", resp.StatusCode)
 	}
 }
+
+// --- Was vor der App war -----------------------------------------------------
+
+// Der Anlass: Das Beet vor dem Dorfgemeinschaftshaus wurde im Juni gejätet,
+// die Aufgabe dafür aber erst im August angelegt. Ohne diese Angabe stünde es
+// bis Ende Oktober auf grün.
+func TestZuletztErledigtUeberMCP(t *testing.T) {
+	ts, d := serverMitDB(t)
+
+	text, _ := callTool(t, ts, "ort_anlegen", map[string]any{
+		"name": "Beet vor dem Dorfgemeinschaftshaus", "kind": "beet",
+		"lat": 52.1829639, "lon": 9.8100629,
+	})
+	var ort model.Place
+	if err := json.Unmarshal([]byte(text), &ort); err != nil {
+		t.Fatalf("Ort nicht lesbar: %v — %s", err, text)
+	}
+
+	text, fehler := callTool(t, ts, "aufgabe_anlegen", map[string]any{
+		"placeId": ort.ID, "kind": "jaeten",
+		"intervalDays": 56, "redAfterDays": 77,
+		"lastKnownDoneAt": "2026-06-15",
+	})
+	if fehler {
+		t.Fatalf("aufgabe_anlegen: %s", text)
+	}
+	var aufgabe model.CareTask
+	if err := json.Unmarshal([]byte(text), &aufgabe); err != nil {
+		t.Fatalf("Aufgabe nicht lesbar: %v — %s", err, text)
+	}
+	if aufgabe.LastKnownDoneAt == nil {
+		t.Fatal("die Angabe kam nicht an")
+	}
+	if got := aufgabe.LastKnownDoneAt.Format("2006-01-02"); got != "2026-06-15" {
+		t.Fatalf("zuletzt erledigt am %s, erwartet 2026-06-15", got)
+	}
+
+	gespeichert, err := d.GetTask(aufgabe.ID)
+	if err != nil || gespeichert.LastKnownDoneAt == nil {
+		t.Fatalf("nicht gespeichert: %+v (%v)", gespeichert, err)
+	}
+
+	// Leerer Text nimmt die Angabe wieder weg.
+	if text, fehler := callTool(t, ts, "aufgabe_aendern", map[string]any{
+		"id": aufgabe.ID, "lastKnownDoneAt": "",
+	}); fehler {
+		t.Fatalf("aufgabe_aendern: %s", text)
+	}
+	nach, _ := d.GetTask(aufgabe.ID)
+	if nach.LastKnownDoneAt != nil {
+		t.Fatalf("Angabe blieb stehen: %v", nach.LastKnownDoneAt)
+	}
+
+	// „Zuletzt gemacht" ist eine Aussage über die Vergangenheit.
+	if _, fehler := callTool(t, ts, "aufgabe_aendern", map[string]any{
+		"id": aufgabe.ID, "lastKnownDoneAt": "2099-01-01",
+	}); !fehler {
+		t.Error("ein Datum in der Zukunft wurde angenommen")
+	}
+}

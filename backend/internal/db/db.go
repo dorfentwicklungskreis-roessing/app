@@ -195,6 +195,10 @@ CREATE INDEX IF NOT EXISTS idx_devices_person ON push_devices(user_sub);
 		// trotzdem sagen können, worum es ging (siehe loeseNotificationsVomVorgang).
 		`ALTER TABLE care_notifications ADD COLUMN place_name TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE care_notifications ADD COLUMN task_name TEXT NOT NULL DEFAULT ''`,
+		// Was vor der App war: der Startpunkt der Rechnung, wenn es noch
+		// keine Meldung gibt. Leer heißt „nichts bekannt" — dann zählt wie
+		// bisher das Anlegedatum.
+		`ALTER TABLE care_tasks ADD COLUMN last_known_done_at TEXT NOT NULL DEFAULT ''`,
 	} {
 		if _, err := d.sql.Exec(stmt); err != nil && !istDoppelteSpalte(err) {
 			return err
@@ -445,13 +449,13 @@ func (d *DB) InsertTask(t *model.CareTask) error {
 	}
 	res, err := d.sql.Exec(`INSERT INTO care_tasks(place_id,kind,title,liters,interval_days,red_after_days,
 			one_off,due_date,remove_when_done,active,created_at,sichtbarkeit,befaehigung_id,
-			season_start_month,season_end_month)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			season_start_month,season_end_month,last_known_done_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.PlaceID, string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays,
 		boolToInt(t.OneOff), zeitText(t.DueDate), boolToInt(t.RemoveWhenDone),
 		boolToInt(t.Active), t.CreatedAt.UTC().Format(timeFormat),
 		string(t.Sichtbarkeit), t.BefaehigungID,
-		t.SeasonStartMonth, t.SeasonEndMonth)
+		t.SeasonStartMonth, t.SeasonEndMonth, zeitText(t.LastKnownDoneAt))
 	if err != nil {
 		return err
 	}
@@ -465,11 +469,11 @@ func (d *DB) UpdateTask(t *model.CareTask) error {
 	}
 	res, err := d.sql.Exec(`UPDATE care_tasks SET kind=?,title=?,liters=?,interval_days=?,red_after_days=?,
 			one_off=?,due_date=?,remove_when_done=?,active=?,sichtbarkeit=?,befaehigung_id=?,
-			season_start_month=?,season_end_month=? WHERE id=?`,
+			season_start_month=?,season_end_month=?,last_known_done_at=? WHERE id=?`,
 		string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays,
 		boolToInt(t.OneOff), zeitText(t.DueDate), boolToInt(t.RemoveWhenDone),
 		boolToInt(t.Active), string(t.Sichtbarkeit), t.BefaehigungID,
-		t.SeasonStartMonth, t.SeasonEndMonth, t.ID)
+		t.SeasonStartMonth, t.SeasonEndMonth, zeitText(t.LastKnownDoneAt), t.ID)
 	if err != nil {
 		return err
 	}
@@ -499,7 +503,7 @@ func (d *DB) DeleteTask(id int64) error {
 
 const taskSpalten = `id,place_id,kind,title,liters,interval_days,red_after_days,
 	one_off,due_date,remove_when_done,removed_at,active,created_at,sichtbarkeit,befaehigung_id,
-	season_start_month,season_end_month`
+	season_start_month,season_end_month,last_known_done_at`
 
 // GetTask liefert auch abgeräumte Aufgaben — die Rangliste und die Historie
 // müssen ihre Erledigungen weiter zuordnen können.
@@ -530,10 +534,10 @@ func (d *DB) ListTasks() ([]model.CareTask, error) {
 func scanTask(row scannable) (*model.CareTask, error) {
 	var t model.CareTask
 	var active, oneOff, removeWhenDone int
-	var created, kind, dueDate, removedAt, sichtbarkeit string
+	var created, kind, dueDate, removedAt, sichtbarkeit, lastKnown string
 	err := row.Scan(&t.ID, &t.PlaceID, &kind, &t.Title, &t.Liters, &t.IntervalDays, &t.RedAfterDays,
 		&oneOff, &dueDate, &removeWhenDone, &removedAt, &active, &created,
-		&sichtbarkeit, &t.BefaehigungID, &t.SeasonStartMonth, &t.SeasonEndMonth)
+		&sichtbarkeit, &t.BefaehigungID, &t.SeasonStartMonth, &t.SeasonEndMonth, &lastKnown)
 	if err != nil {
 		return nil, err
 	}
@@ -545,6 +549,7 @@ func scanTask(row scannable) (*model.CareTask, error) {
 	t.RemovedAt = zeitWert(removedAt)
 	t.Active = active != 0
 	t.CreatedAt, _ = time.Parse(timeFormat, created)
+	t.LastKnownDoneAt = zeitWert(lastKnown)
 	return &t, nil
 }
 
