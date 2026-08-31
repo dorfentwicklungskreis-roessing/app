@@ -223,3 +223,26 @@ func TestGeschlosseneGruppeVerraetIhrenNamenNicht(t *testing.T) {
 		t.Errorf("offene Gruppe verdeckt ihren Namen: %q", got)
 	}
 }
+
+// Ein Träger unter sich selbst wäre kein Dach, sondern ein Kreis. Die
+// Prüfung, ob es das Dach überhaupt gibt und ob es selbst unter einem steht,
+// braucht den Bestand und sitzt deshalb in der Ablage — hier steht nur, was
+// sich am Datensatz allein entscheiden lässt.
+func TestTraegerIstNichtSeinEigenesDach(t *testing.T) {
+	tr := Traeger{ID: 7, ParentID: 7, Name: "AK 2",
+		Status: TraegerZugelassen, Sichtbarkeit: TraegerOffen}
+	if err := tr.Validate(); err == nil {
+		t.Fatal("ein Träger durfte sein eigenes Dach sein")
+	}
+}
+
+func TestTraegerOhneDachIstGueltig(t *testing.T) {
+	tr := Traeger{ID: 7, Name: "Dorfpflege",
+		Status: TraegerZugelassen, Sichtbarkeit: TraegerOffen}
+	if err := tr.Validate(); err != nil {
+		t.Fatalf("ein Träger ohne Dach wurde abgewiesen: %v", err)
+	}
+	if tr.IstUnterTraeger() {
+		t.Error("ohne parentId ist er kein Unter-Träger")
+	}
+}

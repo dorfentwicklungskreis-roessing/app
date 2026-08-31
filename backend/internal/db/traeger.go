@@ -75,6 +75,9 @@ CREATE INDEX IF NOT EXISTS idx_antrag_status ON befaehigungs_antraege(status);
 		`ALTER TABLE places ADD COLUMN traeger_id INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE care_tasks ADD COLUMN sichtbarkeit TEXT NOT NULL DEFAULT 'oeffentlich'`,
 		`ALTER TABLE care_tasks ADD COLUMN befaehigung_id INTEGER NOT NULL DEFAULT 0`,
+		// Das Dach über einem Arbeitskreis. 0 heißt „keins“ — damit ändert
+		// sich für jeden bestehenden Träger nichts.
+		`ALTER TABLE traeger ADD COLUMN parent_id INTEGER NOT NULL DEFAULT 0`,
 	} {
 		if _, err := d.sql.Exec(stmt); err != nil && !istDoppelteSpalte(err) {
 			return err
@@ -135,13 +138,16 @@ func (d *DB) TraegerSicherstellen(schluessel, name string) (*model.Traeger, erro
 
 // --- Träger -----------------------------------------------------------------
 
-const traegerSpalten = `id,schluessel,projekt_id,name,beschreibung,status,sichtbarkeit,created_at`
+const traegerSpalten = `id,schluessel,projekt_id,name,beschreibung,status,sichtbarkeit,parent_id,created_at`
 
 func (d *DB) InsertTraeger(t *model.Traeger) error {
-	res, err := d.sql.Exec(`INSERT INTO traeger(schluessel,projekt_id,name,beschreibung,status,sichtbarkeit,created_at)
-		VALUES(?,?,?,?,?,?,?)`,
+	if err := d.dachPruefen(t); err != nil {
+		return err
+	}
+	res, err := d.sql.Exec(`INSERT INTO traeger(schluessel,projekt_id,name,beschreibung,status,sichtbarkeit,parent_id,created_at)
+		VALUES(?,?,?,?,?,?,?,?)`,
 		t.Schluessel, t.ProjektID, t.Name, t.Beschreibung, string(t.Status), string(t.Sichtbarkeit),
-		t.CreatedAt.UTC().Format(timeFormat))
+		t.ParentID, t.CreatedAt.UTC().Format(timeFormat))
 	if err != nil {
 		return err
 	}
@@ -150,13 +156,77 @@ func (d *DB) InsertTraeger(t *model.Traeger) error {
 }
 
 func (d *DB) UpdateTraeger(t *model.Traeger) error {
-	res, err := d.sql.Exec(`UPDATE traeger SET projekt_id=?,name=?,beschreibung=?,status=?,sichtbarkeit=?
+	if err := d.dachPruefen(t); err != nil {
+		return err
+	}
+	res, err := d.sql.Exec(`UPDATE traeger SET projekt_id=?,name=?,beschreibung=?,status=?,sichtbarkeit=?,parent_id=?
 		WHERE id=?`,
-		t.ProjektID, t.Name, t.Beschreibung, string(t.Status), string(t.Sichtbarkeit), t.ID)
+		t.ProjektID, t.Name, t.Beschreibung, string(t.Status), string(t.Sichtbarkeit), t.ParentID, t.ID)
 	if err != nil {
 		return err
 	}
 	return requireRow(res)
+}
+
+// dachPruefen hält die Hierarchie flach und kreisfrei.
+//
+// Zwei Regeln, beide aus demselben Grund: Ein Dach über einem Dach gibt es
+// im Dorf nicht (Verein → Arbeitskreis, fertig), und ohne die Grenze bräuchte
+// jede Abfrage eine Zyklusprüfung. Was hier nicht durchkommt, kann später
+// nirgends mehr Schaden anrichten.
+//
+// Die Prüfung steht in der Ablage und nicht in Validate, weil sie den
+// Bestand kennen muss: ob es das Dach gibt und ob es selbst unter einem steht.
+func (d *DB) dachPruefen(t *model.Traeger) error {
+	if t.ParentID == 0 {
+		return nil
+	}
+	if t.ParentID == t.ID {
+		return errors.New("ein Träger kann nicht sein eigenes Dach sein")
+	}
+	dach, err := d.GetTraeger(t.ParentID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errors.New("das angegebene Dach gibt es nicht")
+	}
+	if err != nil {
+		return err
+	}
+	if dach.ParentID != 0 {
+		return errors.New("ein Dach steht nicht selbst unter einem Dach — " +
+			"vorgesehen ist genau eine Ebene, Verein über Arbeitskreis")
+	}
+	// Wer selbst schon Arbeitskreise trägt, kann nicht unter ein Dach ziehen:
+	// sonst stünde am Ende doch etwas auf der dritten Ebene.
+	if t.ID != 0 {
+		var kinder int
+		if err := d.sql.QueryRow(`SELECT COUNT(*) FROM traeger WHERE parent_id=?`, t.ID).
+			Scan(&kinder); err != nil {
+			return err
+		}
+		if kinder > 0 {
+			return errors.New("dieser Träger trägt selbst schon Arbeitskreise " +
+				"und kann deshalb nicht unter ein Dach ziehen")
+		}
+	}
+	return nil
+}
+
+// ListUnterTraeger nennt die Arbeitskreise unter einem Dach, nach Namen.
+func (d *DB) ListUnterTraeger(parentID int64) ([]model.Traeger, error) {
+	rows, err := d.sql.Query(`SELECT `+traegerSpalten+` FROM traeger WHERE parent_id=? ORDER BY name`, parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Traeger{}
+	for rows.Next() {
+		t, err := scanTraeger(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *t)
+	}
+	return out, rows.Err()
 }
 
 // DeleteTraeger gibt es bewusst nicht: An einem Träger hängen Orte, Aufgaben
@@ -229,7 +299,7 @@ func scanTraeger(row scannable) (*model.Traeger, error) {
 	var t model.Traeger
 	var status, sicht, created string
 	if err := row.Scan(&t.ID, &t.Schluessel, &t.ProjektID, &t.Name, &t.Beschreibung,
-		&status, &sicht, &created); err != nil {
+		&status, &sicht, &t.ParentID, &created); err != nil {
 		return nil, err
 	}
 	t.Status = model.TraegerStatus(status)
