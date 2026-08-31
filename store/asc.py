@@ -509,25 +509,51 @@ def testflight_gruppe() -> None:
     print("Der Link trägt erst, wenn ein Build die Beta App Review bestanden hat.")
 
 
-def _neuester_build(app_id: str) -> dict:
-    """Der zuletzt hochgeladene Build der App.
+def _build_holen(app_id: str, bauzahl: str, frist: int = 1800) -> dict:
+    """Den Build mit dieser Buildnummer holen — notfalls auf ihn warten.
 
-    Nach Uploaddatum absteigend, ein Treffer. Eine Buildnummer als Filter wäre
-    genauer, aber der Workflow kennt sie nicht mehr, wenn dieser Schritt
-    läuft — `altool` gibt sie nicht zurück.
+    **Warum nicht einfach „der neueste":** Direkt nach dem Upload ist der
+    frische Build bei Apple noch gar nicht gelistet; die Verarbeitung braucht
+    5 bis 30 Minuten. „Der zuletzt hochgeladene" liefert in diesem Fenster den
+    **vorigen** Build zurück — und der wird dann eingereicht, während der neue
+    unbemerkt liegen bleibt. Genau das ist am 31.08.2026 passiert: Der Lauf
+    hat Build 329 vom 27.08. der Gruppe zugeordnet, obwohl er gerade 337
+    hochgeladen hatte.
+
+    Deshalb ist die Buildnummer Pflicht. Der Workflow kennt sie als $BAUZAHL —
+    dieselbe Zahl, die er als CURRENT_PROJECT_VERSION eingebaut hat.
     """
-    antwort = anfrage(
-        "GET",
-        f"/v1/builds?filter[app]={app_id}&sort=-uploadedDate&limit=1",
-    )
-    daten = antwort.get("data", [])
-    if not daten:
+    bauzahl = str(bauzahl).strip()
+    if not bauzahl:
         raise SystemExit(
-            "Zu dieser App ist noch kein Build in App Store Connect.\n"
-            "Erst hochladen (.github/workflows/ios-release.yml), dann "
-            "einreichen. Es wurde nichts geändert."
+            "Ohne Buildnummer wird nichts eingereicht.\n"
+            "Sie steht als BAUZAHL in der Umgebung oder kommt als "
+            "--bauzahl <n>. Der Grund: Direkt nach dem Upload ist der neue "
+            "Build noch nicht gelistet, und „der neueste“ wäre dann der alte."
         )
-    return daten[0]
+    while True:
+        antwort = anfrage(
+            "GET",
+            f"/v1/builds?filter[app]={app_id}&filter[version]={bauzahl}&limit=1",
+        )
+        daten = antwort.get("data", [])
+        if daten:
+            return daten[0]
+        if PROBE:
+            print(f"[Trockenlauf] Build {bauzahl} ist noch nicht gelistet.")
+            return {"id": "(Trockenlauf)", "attributes": {"version": bauzahl,
+                                                          "processingState": "VALID"}}
+        if frist <= 0:
+            raise SystemExit(
+                f"Build {bauzahl} ist bei Apple auch nach der Wartezeit nicht "
+                "aufgetaucht. Das ist kein Fehler, nur langsam — oder der "
+                "Upload ist gar nicht angekommen. Später erneut aufrufen:\n"
+                f"  BAUZAHL={bauzahl} python3 store/asc.py beta-einreichen"
+            )
+        print(f"  Build {bauzahl} ist noch nicht gelistet — in 60 s noch "
+              f"einmal nachsehen (noch {frist // 60} Minuten Geduld).")
+        time.sleep(60)
+        frist -= 60
 
 
 def _auf_verarbeitung_warten(build: dict, frist: int = 1800) -> dict:
@@ -568,7 +594,7 @@ def _auf_verarbeitung_warten(build: dict, frist: int = 1800) -> dict:
 
 
 def beta_einreichen() -> None:
-    """Den neuesten Build der externen Gruppe geben und zur Beta App Review anmelden.
+    """Den Build aus $BAUZAHL der externen Gruppe geben und zur Beta App Review anmelden.
 
     Interne Tester bekommen einen Build sofort. Die Gruppe „Dorf“ ist aber
     **extern** — das ist der Grund für den öffentlichen Link, mit dem ein Link
@@ -582,7 +608,8 @@ def beta_einreichen() -> None:
     doppelt angemeldet, sondern gemeldet.
     """
     app = app_datensatz()
-    build = _auf_verarbeitung_warten(_neuester_build(app["id"]))
+    bauzahl = os.environ.get("BAUZAHL", "")
+    build = _auf_verarbeitung_warten(_build_holen(app["id"], bauzahl))
     eigenschaften = build.get("attributes", {})
     print(f"Build {eigenschaften.get('version')} "
           f"(hochgeladen {eigenschaften.get('uploadedDate')}), Stand "
