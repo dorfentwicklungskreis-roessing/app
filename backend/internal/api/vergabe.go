@@ -171,7 +171,7 @@ func (s *Server) handlePlaceSignups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i := range liste {
-		liste[i].UserName = namen.Resolve(liste[i].UserSub, "")
+		liste[i].UserName = namen.Resolve(liste[i].UserSub, "", model.SichtDorf)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"signups": liste})
 }
@@ -296,7 +296,7 @@ func ergaenzeVergabe(d *db.DB, orte []model.PlaceWithStatus, namen model.NameRes
 	}
 	proAufgabe := map[int64]model.Assignment{}
 	for _, a := range laufende {
-		a.ClaimedByName = namen.Resolve(a.ClaimedBy, a.ClaimedByName)
+		a.ClaimedByName = namen.Resolve(a.ClaimedBy, a.ClaimedByName, model.SichtDorf)
 		proAufgabe[a.TaskID] = a
 	}
 	anmeldungen, err := d.ListSignups()

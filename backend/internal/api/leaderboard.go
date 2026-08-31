@@ -114,10 +114,13 @@ func AssembleLeaderboardFuer(d *db.DB, now time.Time, period model.Period, limit
 		return model.Leaderboard{}, err
 	}
 	for i := range entries {
-		entries[i].UserName = namen.Resolve(entries[i].UserSub, entries[i].UserName)
+		entries[i].UserName = namen.Resolve(entries[i].UserSub, entries[i].UserName, model.SichtDorf)
 	}
 	if mine != nil {
-		mine.UserName = namen.Resolve(mine.UserSub, mine.UserName)
+		// Die eigene Zeile: Den eigenen Namen darf man sehen, auch wenn man ihn
+		// nicht freigegeben hat — sonst stünde man sich selbst als Spitzname
+		// gegenüber und hielte es für einen Fehler.
+		mine.UserName = namen.Resolve(mine.UserSub, mine.UserName, model.SichtVerwaltung)
 	}
 
 	return model.Leaderboard{

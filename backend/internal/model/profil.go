@@ -73,25 +73,59 @@ type Profile struct {
 	TokenName string `json:"-"`
 }
 
-// EffectiveName ist der Name, unter dem die Person im Dorf auftritt:
-// Nickname, sonst Anzeigename, sonst der Name aus der Rössing-ID — und wenn
-// nichts davon da ist, der Spitzname (siehe AnonymousName).
+// Namenssicht sagt, wer zusieht. Der Schalter am Anzeigenamen heißt „für
+// alle Dorfbewohner" oder „nur für Verwaltende" — er ist eine Entscheidung
+// über den Namen, nicht über eine einzelne Liste. Wer ihn umlegt, darf
+// erwarten, dass er überall gilt.
+type Namenssicht int
+
+const (
+	// SichtDorf: gewöhnliche Angemeldete. Sie sehen nur, was freigegeben ist.
+	SichtDorf Namenssicht = iota
+	// SichtVerwaltung: Betreiber und Träger-Admins. Sie sehen ohnehin alles;
+	// ihnen einen Spitznamen vorzusetzen, hülfe niemandem — sie müssen
+	// Meldungen zuordnen können.
+	SichtVerwaltung
+)
+
+// EffectiveName ist der Name für die **Verwaltung**: Nickname, sonst
+// Anzeigename, sonst der Name aus der Rössing-ID — und wenn nichts davon da
+// ist, der Spitzname (siehe AnonymousName).
 //
 // Der Spitzname steht ausdrücklich am Ende: Er ersetzt keinen Namen, er
 // vertritt ihn nur dort, wo sonst eine Leerstelle stünde. Genau das war der
 // Fall — die Rangliste zeigte Zeilen mit Punkten, Litern und Auszeichnungen,
 // aber ohne Namen.
-func (p Profile) EffectiveName() string {
-	switch {
-	case p.Nickname != "":
-		return p.Nickname
-	case p.DisplayName != "":
-		return p.DisplayName
-	case p.TokenName != "":
-		return p.TokenName
-	default:
+//
+// **Für das Dorf gilt NameFuer(SichtDorf).** Dort werden die
+// Sichtbarkeits-Schalter beachtet, und der Name aus der Rössing-ID kommt gar
+// nicht vor: Er hat keinen Schalter, ihn hat niemand freigegeben.
+func (p Profile) EffectiveName() string { return p.NameFuer(SichtVerwaltung) }
+
+// NameFuer liefert den Namen, den diese Sicht sehen darf.
+func (p Profile) NameFuer(sicht Namenssicht) string {
+	if sicht == SichtVerwaltung {
+		switch {
+		case p.Nickname != "":
+			return p.Nickname
+		case p.DisplayName != "":
+			return p.DisplayName
+		case p.TokenName != "":
+			return p.TokenName
+		}
 		return AnonymousName(p.UserSub)
 	}
+	// Für das Dorf zählt nur, was ausdrücklich freigegeben ist. Der TokenName
+	// fehlt hier mit Absicht: Er kommt aus der Rössing-ID, trägt keinen
+	// Schalter, und wer beide eigenen Namen zurückzieht, hat ihn erst recht
+	// nicht freigegeben.
+	if p.Nickname != "" && p.Visibility.Nickname == VisibilityVillage {
+		return p.Nickname
+	}
+	if p.DisplayName != "" && p.Visibility.DisplayName == VisibilityVillage {
+		return p.DisplayName
+	}
+	return AnonymousName(p.UserSub)
 }
 
 // MatchesStoredName sagt, ob ein in einer Erledigung eingefrorener Name zu
@@ -117,7 +151,15 @@ func (p Profile) MatchesStoredName(gespeichert string) bool {
 // geöffnet haben) bleibt es beim gespeicherten Namen.
 type NameResolver map[string]Profile
 
-func (r NameResolver) Resolve(userSub, gespeichert string) string {
+// Resolve verlangt die Sicht des Betrachters — ausdrücklich als Parameter
+// und nicht als Vorbelegung. Der Schalter am Namen galt eine Zeitlang nur im
+// Verzeichnis der Dorfbewohner und in Rangliste, Historie, Vergabe und Chat
+// gar nicht (#80). Wer hier eine Sicht angeben muss, entscheidet sich
+// bewusst, statt eine bequeme Vorgabe zu erben.
+//
+// Ohne Profil bleibt es beim gespeicherten Namen: Wer die App nie geöffnet
+// hat, hat auch keinen Schalter umgelegt.
+func (r NameResolver) Resolve(userSub, gespeichert string, sicht Namenssicht) string {
 	p, ok := r[userSub]
 	if !ok {
 		return gespeichert
@@ -125,7 +167,7 @@ func (r NameResolver) Resolve(userSub, gespeichert string) string {
 	if !p.MatchesStoredName(gespeichert) {
 		return gespeichert
 	}
-	if name := p.EffectiveName(); name != "" {
+	if name := p.NameFuer(sicht); name != "" {
 		return name
 	}
 	return gespeichert

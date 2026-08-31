@@ -523,7 +523,7 @@ func (s *Server) handleListAntraege(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i := range liste {
-		liste[i].UserName = namen.Resolve(liste[i].UserSub, "")
+		liste[i].UserName = namen.Resolve(liste[i].UserSub, "", model.SichtVerwaltung)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"antraege": liste})
 }

@@ -119,7 +119,7 @@ func (s *Server) namenEintragen(liste []model.Beitritt) error {
 		return err
 	}
 	for i := range liste {
-		liste[i].UserName = namen.Resolve(liste[i].UserSub, "")
+		liste[i].UserName = namen.Resolve(liste[i].UserSub, "", model.SichtVerwaltung)
 	}
 	return nil
 }

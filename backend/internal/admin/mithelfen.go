@@ -252,7 +252,7 @@ func (a *App) zeigeOrt(w http.ResponseWriter, r *http.Request, status int, id in
 			return
 		}
 		for _, c := range cs {
-			c.UserName = namen.Resolve(c.UserSub, c.UserName)
+			c.UserName = namen.Resolve(c.UserSub, c.UserName, model.SichtVerwaltung)
 			historie = append(historie, historieEintrag{Aufgabe: aufgabenName(t.CareTask), Erledigung: c})
 		}
 	}
@@ -648,7 +648,7 @@ func (a *App) erledigungZuruecknehmenFrage(w http.ResponseWriter, r *http.Reques
 		menge = " (" + zahl(*c.Liters) + " l)"
 	}
 	if namen, err := a.db.NameResolver(); err == nil {
-		c.UserName = namen.Resolve(c.UserSub, c.UserName)
+		c.UserName = namen.Resolve(c.UserSub, c.UserName, model.SichtVerwaltung)
 	}
 	a.render(w, r, http.StatusOK, "bestaetigen", view{
 		Title: "Erledigung zurücknehmen", Nav: "mithelfen",

@@ -221,7 +221,7 @@ func werkzeugHistorie(args json.RawMessage, s Sitzung) (any, error) {
 		return nil, err
 	}
 	for i := range meldungen {
-		meldungen[i].UserName = namen.Resolve(meldungen[i].UserSub, meldungen[i].UserName)
+		meldungen[i].UserName = namen.Resolve(meldungen[i].UserSub, meldungen[i].UserName, model.SichtVerwaltung)
 	}
 	return map[string]any{"erledigungen": meldungen}, nil
 }

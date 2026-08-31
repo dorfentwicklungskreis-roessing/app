@@ -185,7 +185,7 @@ func AssemblePlacesFuer(d *db.DB, now time.Time, z model.Zugriff) ([]model.Place
 		t.BefaehigungName = befaehigungName[t.BefaehigungID]
 		var lc *model.Completion
 		if c, ok := last[t.ID]; ok {
-			c.UserName = namen.Resolve(c.UserSub, c.UserName)
+			c.UserName = namen.Resolve(c.UserSub, c.UserName, model.SichtDorf)
 			lc = &c
 		}
 		// Der Hitzefaktor beschleunigt nur das Gießen — Jäten etc. bleiben normal.
@@ -800,7 +800,7 @@ func (s *Server) handleListCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for i := range cs {
-		cs[i].UserName = namen.Resolve(cs[i].UserSub, cs[i].UserName)
+		cs[i].UserName = namen.Resolve(cs[i].UserSub, cs[i].UserName, model.SichtDorf)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"completions": cs})
 }
