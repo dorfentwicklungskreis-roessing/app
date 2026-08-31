@@ -251,13 +251,28 @@ jobs:
       # den Store. Für diesen einen Aufruf wird das übersteuert, statt die
       # Datei anzufassen.
       #
-      # Die Identität ist hier bewusst **Apple Development** und nicht
-      # Distribution. Beim automatischen Signieren sucht Xcode sie selbst aus;
-      # wer ihm daneben eine Distributionsidentität vorschreibt, bekommt
-      # „Dorf has conflicting provisioning settings" und gar kein Archiv. Zur
-      # Distribution signiert der Export weiter unten um — dafür ist
-      # `method: app-store-connect` da. Genau daran ist der erste Lauf
-      # gescheitert (ios-v0.1.11, 31.08.2026).
+      # Die Identität wird hier **geleert**, nicht gesetzt. Das ist der Kern:
+      # Beim automatischen Signieren sucht Xcode sie selbst aus, und für ein
+      # Archiv auf der Release-Konfiguration wählt es die Verteilung. Wer ihm
+      # daneben etwas vorschreibt, verliert genau diese Wahl — beide Wege sind
+      # am 31.08.2026 vorgeführt worden:
+      #
+      #   "Apple Distribution" -> "Dorf has conflicting provisioning settings.
+      #       Dorf is automatically signed for development, but a conflicting
+      #       code signing identity Apple Distribution has been manually
+      #       specified."
+      #   "Apple Development"  -> "Your team has no devices from which to
+      #       generate a provisioning profile."
+      #
+      # Der zweite Fehler ist der lehrreiche: Ein Entwicklungsprofil verlangt
+      # ein registriertes Gerät, und zu diesem Team gehört keines — es gibt
+      # kein echtes iPhone (siehe CLAUDE.md, "Entwicklungsumgebung (iOS)").
+      # Ein Verteilungsprofil braucht keines. Der Weg über die Verteilung ist
+      # hier also nicht der bequemere, sondern der einzige.
+      #
+      # Geleert werden muss die Angabe, weil ios/project.yml
+      # CODE_SIGN_IDENTITY: "-" traegt — Ad-hoc, richtig fuer den Simulator
+      # und untauglich fuer den Store. Ohne das Leeren gilt sie auch hier.
       - name: Archivieren (signiert)
         if: env.SIGNIEREN == 'ja'
         working-directory: ios
@@ -277,7 +292,8 @@ jobs:
             -authenticationKeyIssuerID "$ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM" \
             CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Development" \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES \
             CURRENT_PROJECT_VERSION="$BAUZAHL" \
