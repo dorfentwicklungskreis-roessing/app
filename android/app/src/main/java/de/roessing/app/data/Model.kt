@@ -3,8 +3,19 @@ package de.roessing.app.data
 import kotlinx.serialization.Serializable
 
 /** Ampel-Status — Werte kommen 1:1 vom Backend. */
-enum class CareStatus { green, yellow, red }
+/**
+ * `dormant` heißt: außer Dienst. Die Aufgabe fällt zu dieser Jahreszeit nicht
+ * an — das Beet wird im Winter nicht gejätet. Sie ist dann weder fällig noch
+ * gelb noch rot, und es fragt auch niemand nach Helfern.
+ */
+enum class CareStatus { green, yellow, red, dormant }
 
+/**
+ * Ein unbekannter Zustand fällt auf grün zurück, statt die Antwort zu kosten.
+ * Das ist Absicht — ein neuer Wert vom Server darf eine ältere App nicht
+ * lahmlegen —, kostet aber Genauigkeit: Genau so hat diese App `dormant` eine
+ * Zeitlang als „Alles gut" angezeigt.
+ */
 private fun parseStatus(raw: String): CareStatus =
     runCatching { CareStatus.valueOf(raw) }.getOrDefault(CareStatus.green)
 

@@ -46,6 +46,7 @@ fun statusColor(status: CareStatus) = when (status) {
     CareStatus.green -> statusFarben.gruen
     CareStatus.yellow -> statusFarben.gelb
     CareStatus.red -> statusFarben.rot
+    CareStatus.dormant -> statusFarben.ruhend
 }
 
 /** Flächenfarbe hinter einem Status (Plaketten). */
@@ -54,6 +55,7 @@ fun statusFlaeche(status: CareStatus) = when (status) {
     CareStatus.green -> statusFarben.gruenFlaeche
     CareStatus.yellow -> statusFarben.gelbFlaeche
     CareStatus.red -> statusFarben.rotFlaeche
+    CareStatus.dormant -> statusFarben.ruhendFlaeche
 }
 
 /** Status als Plakette: Punkt plus Text, gut sichtbar und gut lesbar. */
@@ -85,6 +87,7 @@ fun statusLabel(status: CareStatus): String = when (status) {
     CareStatus.green -> stringResource(R.string.status_green)
     CareStatus.yellow -> stringResource(R.string.status_yellow)
     CareStatus.red -> stringResource(R.string.status_red)
+    CareStatus.dormant -> stringResource(R.string.status_dormant)
 }
 
 /** Statustext einer einzelnen Aufgabe — hier passt die Aufgabenart dazu. */
@@ -103,6 +106,13 @@ fun taskStatusLabel(kind: String, status: CareStatus): String = when (status) {
             "giessen" -> R.string.status_red_watering
             "jaeten" -> R.string.status_red_weeding
             else -> R.string.status_red
+        },
+    )
+    CareStatus.dormant -> stringResource(
+        when (kind) {
+            "giessen" -> R.string.status_dormant_watering
+            "jaeten" -> R.string.status_dormant_weeding
+            else -> R.string.status_dormant
         },
     )
 }

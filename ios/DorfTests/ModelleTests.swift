@@ -113,3 +113,43 @@ struct TraegerAmOrtTests {
         #expect(ort.traegerName.isEmpty)
     }
 }
+
+// MARK: - Außer Dienst
+
+/// Eine Aufgabe, die zu dieser Jahreszeit nicht anfällt, ist nicht „grün".
+/// Grün hieße „alles gut" — eine Aussage über etwas, das gerade gar nicht
+/// ansteht. Das Beet vor dem Dorfgemeinschaftshaus wird im Winter nicht
+/// gejätet, und genau das soll dort stehen.
+struct AusserDienstTests {
+    @Test func ruhenderStatusWirdGelesen() throws {
+        let roh = """
+        {"id":3,"name":"Beet","lat":52.18,"lon":9.81,"status":"dormant"}
+        """.data(using: .utf8)!
+        let ort = try JSONDecoder().decode(Ort.self, from: roh)
+        #expect(ort.ampel == .dormant)
+    }
+
+    @Test func ruhendSagtWasSacheIst() {
+        #expect(Ampel.dormant.text(fuer: "jaeten") == "Wird jetzt nicht gejätet")
+        #expect(Ampel.dormant.text(fuer: "giessen") == "Wird jetzt nicht gegossen")
+        #expect(Ampel.dormant.text() == "Außer Dienst")
+        // Die Farbe allein ist keine Information.
+        #expect(Ampel.dormant.vorlesetext == "Außer Dienst")
+    }
+
+    /// Was nicht ansteht, steht auch nicht oben in der Liste.
+    @Test func ruhendSortiertGanzNachHinten() {
+        let sortiert = [Ampel.dormant, .green, .red, .yellow]
+            .sorted { $0.dringlichkeit < $1.dringlichkeit }
+        #expect(sortiert == [.red, .yellow, .green, .dormant])
+    }
+
+    /// Ein Wert, den diese Fassung nicht kennt, darf die Antwort nicht kosten.
+    @Test func unbekannterStatusKostetNichtDieAntwort() throws {
+        let roh = """
+        {"id":9,"name":"Neu","lat":52.18,"lon":9.81,"status":"irgendwas"}
+        """.data(using: .utf8)!
+        let ort = try JSONDecoder().decode(Ort.self, from: roh)
+        #expect(ort.ampel == .green)
+    }
+}
