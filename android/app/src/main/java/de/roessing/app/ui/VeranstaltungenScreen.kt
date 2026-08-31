@@ -47,6 +47,7 @@ fun VeranstaltungenScreen(
     state: VeranstaltungenUiState,
     modifier: Modifier = Modifier,
     onAktualisieren: () -> Unit = {},
+    onTermin: (Termin) -> Unit = {},
 ) {
     val browser = LocalUriHandler.current
     Column(modifier.fillMaxWidth().testTag("veranstaltungen")) {
@@ -86,7 +87,14 @@ fun VeranstaltungenScreen(
             }
 
             items(state.termine, key = { it.id }) { termin ->
-                TerminKarte(termin) { browser.openUri(termin.url) }
+                // Ein Termin des Dorfes trägt alles, was wir über ihn wissen,
+                // schon in sich — dafür muss niemand die App verlassen. Nur
+                // eine fremde Primärquelle führt hinaus; sie hier
+                // nachzuerzählen hieße, eine zweite Fassung in die Welt zu
+                // setzen, die irgendwann von der ersten abweicht.
+                TerminKarte(termin) {
+                    if (termin.extern) browser.openUri(termin.url) else onTermin(termin)
+                }
             }
 
             if (state.leer) {
@@ -163,6 +171,9 @@ private fun TerminKarte(termin: Termin, onClick: () -> Unit) {
                 termin.zeitText ?: stringResource(R.string.events_all_day),
             )
             termin.ortName?.let { Zeile(Icons.Filled.Place, it) }
+            // Die Adresse gehört unter den Ortsnamen, nicht an den linken
+            // Rand — deshalb bleibt die Symbolspalte leer stehen.
+            termin.ortAdresse?.let { Zeile(null, it) }
             termin.veranstalter?.let { Zeile(Icons.Filled.Group, it) }
 
             if (termin.beschreibung.isNotBlank()) {
@@ -186,14 +197,18 @@ private fun TerminKarte(termin: Termin, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Zeile(symbol: ImageVector, text: String) {
+private fun Zeile(symbol: ImageVector?, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            symbol,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (symbol != null) {
+            Icon(
+                symbol,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Spacer(Modifier.size(16.dp))
+        }
         Spacer(Modifier.width(8.dp))
         Text(
             text,
