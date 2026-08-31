@@ -157,6 +157,16 @@ data class PlaceDto(
     val lon: Double,
     val active: Boolean = true,
     val status: String = "green",
+    /**
+     * Der Verein oder Arbeitskreis, dem dieser Ort gehört — der
+     * Ansprechpartner. Leer, wenn das Backend ihn nicht mitschickt.
+     *
+     * Der Name kommt fertig vom Server, samt Verdeckung: Eine geschlossene
+     * Gruppe heißt für Außenstehende „Eine Gruppe aus dem Dorf". Die App
+     * entscheidet daran nichts, sie zeigt an — sonst gäbe es die
+     * Sichtbarkeitsregel zweimal.
+     */
+    val traegerName: String = "",
     val tasks: List<TaskDto> = emptyList(),
 ) {
     val careStatus: CareStatus get() = parseStatus(status)
