@@ -127,7 +127,16 @@ func TestOAuthGating(t *testing.T) {
 
 func TestProtectedResourceMetadata(t *testing.T) {
 	ts := newTestServer(t)
-	for _, path := range []string{"/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"} {
+	// Die Ressourcen-Kennung muss zu dem Dokument passen, unter dem sie
+	// gefunden wurde (RFC 9728 §3.3). Ein Client, der die Adresse
+	// „…/mcp" bekommen hat, holt das pfadspezifische Dokument und vergleicht
+	// zeichengenau — stimmt es nicht, verwirft er es und kann den
+	// Anmeldeweg nicht mehr selbst finden.
+	cases := map[string]string{
+		"/.well-known/oauth-protected-resource":     "https://api.example",
+		"/.well-known/oauth-protected-resource/mcp": "https://api.example/mcp",
+	}
+	for path, wantResource := range cases {
 		resp, err := http.Get(ts.URL + path)
 		if err != nil {
 			t.Fatal(err)
@@ -135,16 +144,167 @@ func TestProtectedResourceMetadata(t *testing.T) {
 		var meta struct {
 			Resource             string   `json:"resource"`
 			AuthorizationServers []string `json:"authorization_servers"`
+			ScopesSupported      []string `json:"scopes_supported"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
 		resp.Body.Close()
+		if meta.Resource != wantResource {
+			t.Fatalf("%s: resource = %q, erwartet %q", path, meta.Resource, wantResource)
+		}
 		// authorization_servers zeigt auf UNS (wir spiegeln die AS-Metadata
 		// und ergänzen den DCR-Endpoint, den Zitadel nicht hat).
-		if meta.Resource != "https://api.example" || len(meta.AuthorizationServers) != 1 || meta.AuthorizationServers[0] != "https://api.example" {
+		if len(meta.AuthorizationServers) != 1 || meta.AuthorizationServers[0] != "https://api.example" {
 			t.Fatalf("%s: unerwartete Metadata: %+v", path, meta)
 		}
+		if !contains(meta.ScopesSupported, rolesScope) {
+			t.Fatalf("%s: Rollen-Scope fehlt in scopes_supported: %v", path, meta.ScopesSupported)
+		}
+	}
+}
+
+func contains(list []string, value string) bool {
+	for _, e := range list {
+		if e == value {
+			return true
+		}
+	}
+	return false
+}
+
+// Der 401 muss auf das Dokument der Ressource zeigen, an der der Client
+// gerade hängengeblieben ist — also auf die pfadspezifische Variante.
+func TestUnauthorizedPointsAtTheResourceDocument(t *testing.T) {
+	ts := newTestServer(t)
+	resp := rpcRaw(t, ts, "", "tools/list", nil)
+	defer resp.Body.Close()
+	wa := resp.Header.Get("WWW-Authenticate")
+	if !strings.Contains(wa, `resource_metadata="https://api.example/.well-known/oauth-protected-resource/mcp"`) {
+		t.Fatalf("WWW-Authenticate zeigt woandershin: %q", wa)
+	}
+	// Ohne Freigabe darf ein Browser die Kopfzeile gar nicht erst lesen.
+	if !strings.Contains(resp.Header.Get("Access-Control-Expose-Headers"), "WWW-Authenticate") {
+		t.Fatalf("WWW-Authenticate ist für den Browser nicht sichtbar: %q",
+			resp.Header.Get("Access-Control-Expose-Headers"))
+	}
+}
+
+// Ein MCP-Client kann im Browser laufen. Ein Endpunkt ohne CORS ist von dort
+// aus unbenutzbar: Die Vorabfrage scheitert, und der Client sieht nie, dass es
+// eine Registrierung gibt — übrig bleibt die Frage nach einer Client-ID.
+func TestOAuthEndpointsAreUsableFromABrowser(t *testing.T) {
+	ts := newTestServer(t)
+	paths := []string{
+		"/mcp",
+		"/oauth/register",
+		"/.well-known/oauth-protected-resource",
+		"/.well-known/oauth-protected-resource/mcp",
+		"/.well-known/oauth-authorization-server",
+	}
+	for _, p := range paths {
+		t.Run("preflight "+p, func(t *testing.T) {
+			req, _ := http.NewRequest(http.MethodOptions, ts.URL+p, nil)
+			req.Header.Set("Origin", "https://claude.ai")
+			req.Header.Set("Access-Control-Request-Method", "POST")
+			req.Header.Set("Access-Control-Request-Headers", "authorization, content-type")
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode >= 300 {
+				t.Fatalf("Vorabfrage abgewiesen: HTTP %d", resp.StatusCode)
+			}
+			if resp.Header.Get("Access-Control-Allow-Origin") == "" {
+				t.Fatal("Access-Control-Allow-Origin fehlt")
+			}
+			allowed := strings.ToLower(resp.Header.Get("Access-Control-Allow-Headers"))
+			if !strings.Contains(allowed, "authorization") || !strings.Contains(allowed, "content-type") {
+				t.Fatalf("Access-Control-Allow-Headers unbrauchbar: %q", allowed)
+			}
+		})
+	}
+
+	// Auch die Antwort der Registrierung selbst muss der Browser lesen dürfen.
+	body := `{"redirect_uris":["https://claude.ai/api/mcp/auth_callback"],"client_name":"Claude"}`
+	resp, err := http.Post(ts.URL+"/oauth/register", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("Access-Control-Allow-Origin") == "" {
+		t.Fatal("Registrierungs-Antwort ohne Access-Control-Allow-Origin — im Browser unlesbar")
+	}
+}
+
+// Die gespiegelte AS-Metadata ist das einzige, was claude.ai über den
+// Anmeldeweg erfährt. Steht der Rollen-Scope nicht darin, fragt der Client
+// ihn nicht an — und Zitadel legt die Projektrollen dann nicht ins
+// Access-Token. Die Anmeldung klappt, jeder Aufruf endet trotzdem in 403.
+func TestASMetadataNamesRolesScopeAndRegistration(t *testing.T) {
+	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/openid-configuration" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"authorization_endpoint":"https://id.example/oauth/v2/authorize",
+			"token_endpoint":"https://id.example/oauth/v2/token",
+			"jwks_uri":"https://id.example/oauth/v2/keys"}`))
+	}))
+	defer idp.Close()
+
+	d, err := db.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	mux := http.NewServeMux()
+	New(d, stubVerifier{}, idp.URL, "https://api.example", "client-123").Register(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/.well-known/oauth-authorization-server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var meta struct {
+		AuthorizationEndpoint string   `json:"authorization_endpoint"`
+		TokenEndpoint         string   `json:"token_endpoint"`
+		RegistrationEndpoint  string   `json:"registration_endpoint"`
+		ScopesSupported       []string `json:"scopes_supported"`
+		CodeChallengeMethods  []string `json:"code_challenge_methods_supported"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta.AuthorizationEndpoint == "" || meta.TokenEndpoint == "" {
+		t.Fatalf("Endpunkte der Rössing-ID fehlen: %+v", meta)
+	}
+	if meta.RegistrationEndpoint != "https://api.example/oauth/register" {
+		t.Fatalf("registration_endpoint = %q", meta.RegistrationEndpoint)
+	}
+	if !contains(meta.ScopesSupported, rolesScope) {
+		t.Fatalf("Rollen-Scope fehlt: %v", meta.ScopesSupported)
+	}
+	if !contains(meta.CodeChallengeMethods, "S256") {
+		t.Fatalf("PKCE-Verfahren fehlt: %v", meta.CodeChallengeMethods)
+	}
+}
+
+// Eine öffentliche Adresse mit Schrägstrich am Ende darf sich nicht in die
+// Metadata fortpflanzen: Ressourcen-Kennungen werden zeichengenau verglichen.
+func TestPublicAddressKeepsNoTrailingSlash(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "test.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	s := New(d, stubVerifier{}, issuer, "https://api.example/", "client-123")
+	if s.Resource != "https://api.example" {
+		t.Fatalf("Resource = %q", s.Resource)
 	}
 }
 

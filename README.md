@@ -544,10 +544,46 @@ In claude.ai einbinden (Einstellungen → Connectors → Custom Connector):
 URL: https://app.xn--rssing-wxa.de/mcp
 ```
 
-Mehr nicht — claude.ai registriert sich per Dynamic Client Registration
-(das Backend spiegelt dafür die AS-Metadata von Zitadel und beantwortet
-DCR mit der festen PKCE-Client-ID). Beim Verbinden loggt man sich mit der
-Rössing-ID ein; nur Nutzer mit der Projektrolle `admin` kommen durch.
+Dieselbe Adresse steht in der Web-Verwaltung unter **„Mit Claude"**
+(`/admin/connector/`) samt Anleitung — dort steht sie richtig, denn wer den
+Connector einrichtet, sitzt ohnehin am Rechner. Sie wird dort aus `PUBLIC_URL`
+abgeleitet und nicht abgeschrieben; in der Entwicklung steht folglich die
+lokale Adresse.
+
+Mehr als die Adresse ist nicht einzutragen — insbesondere **keine Client-ID von
+Hand**. Fragt claude.ai, ob über einen festen oder einen automatisch erzeugten
+OAuth-Client verbunden werden soll, ist der **automatisch erzeugte** richtig:
+Der Server hat einen Registrierungs-Endpunkt (Dynamic Client Registration,
+RFC 7591), gibt dort die feste PKCE-Client-ID aus und spiegelt dafür die
+AS-Metadata von Zitadel. Beim Verbinden loggt man sich mit der Rössing-ID ein;
+nur Nutzer mit der Projektrolle `admin` kommen durch.
+
+Was der Server dafür veröffentlicht — und warum jedes Stück davon nötig ist:
+
+| Dokument | Zweck |
+| --- | --- |
+| `WWW-Authenticate` am 401 von `/mcp` | zeigt auf das Metadata-Dokument der Ressource. Ohne diese Kopfzeile findet ein Client den Anmeldeweg nicht |
+| `/.well-known/oauth-protected-resource/mcp` | Protected-Resource-Metadata (RFC 9728). `resource` ist die Kennung, unter der das Dokument gefunden wurde (`…/mcp`) — Clients vergleichen zeichengenau |
+| `/.well-known/oauth-authorization-server` | gespiegelte AS-Metadata (RFC 8414): Authorize- und Token-Endpunkt kommen von Zitadel, den `registration_endpoint` ergänzen wir, weil Zitadel keine DCR kann |
+| `/oauth/register` | gibt die feste PKCE-Client-ID aus, aber nur an die Rücksprung-Adressen von claude.ai |
+
+In `scopes_supported` steht `urn:zitadel:iam:org:projects:roles`, und das ist
+kein Beiwerk: Zitadel legt die Projektrollen nur dann ins Access-Token, wenn
+der Client sie anfragt — und anfragen kann er, was der Server nennt. Ohne
+Rollen läuft die Anmeldung durch und jeder Aufruf endet in `403`.
+
+Alle diese Endpunkte antworten mit CORS-Kopfzeilen und beantworten die
+`OPTIONS`-Vorabfrage; der 401 gibt `WWW-Authenticate` per
+`Access-Control-Expose-Headers` frei. Ob claude.ai die Registrierung im
+Browser oder auf seinen eigenen Servern macht, ist von hier aus nicht zu
+sehen — es ist aber die Bedingung dafür, dass ein Client im Browser den Weg
+überhaupt gehen kann. Ohne diese Kopfzeilen bricht der Browser ab, bevor die
+erste Anfrage hinausgeht, und übrig bleibt die Nachfrage nach einer
+Client-ID.
+
+Der ganze Weg — Abweisung, Metadata, Registrierung, Login an der Rössing-ID,
+Code-Tausch, Werkzeugaufruf — wird in `backend/e2e/web/tests/mcp-connector.spec.mjs`
+gegen ein echtes Zitadel durchlaufen.
 
 Tools: `orte_liste`, `ort_anlegen/aendern/loeschen`,
 `aufgabe_anlegen/aendern/loeschen` (regelmäßig mit `intervalDays`, einmalig

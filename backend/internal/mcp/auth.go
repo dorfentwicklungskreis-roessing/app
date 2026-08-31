@@ -18,6 +18,48 @@ import (
 // und schicken das JWT als Bearer-Token. MCP verlangt die Projektrolle
 // `admin` — es gibt bewusst keinen Token-Fallback.
 
+// mcpPath ist der Pfad der geschützten Ressource. Er steht hier, weil die
+// Metadata ihn zweimal braucht: als Ressourcen-Kennung (RFC 9728) und im
+// Pfad des dazugehörigen Metadata-Dokuments.
+const mcpPath = "/mcp"
+
+// rolesScope: Zitadel schreibt die Projektrollen NUR dann in das
+// Access-Token, wenn der Client sie anfragt (oder die Anwendung in der
+// Rössing-ID auf „Rollen ins Access-Token" gestellt ist — eine Einstellung,
+// die in keiner Datei dieses Repos steht und die niemand hier sehen kann).
+// Ohne Rollen ist jeder Aufruf 403, obwohl die Anmeldung geklappt hat.
+// Android, iOS und die Web-Verwaltung fragen diesen Scope ausdrücklich an;
+// claude.ai kann ihn nur anfragen, wenn er in der Metadata steht.
+const rolesScope = "urn:zitadel:iam:org:projects:roles"
+
+// setCORS erlaubt den Zugriff aus dem Browser.
+//
+// Ein Client, der im Browser läuft, geht den Anmeldeweg von dort aus:
+// Metadata holen, Dynamic Client Registration, Weiterleitung zur Rössing-ID.
+// Ein Endpunkt ohne diese Kopfzeilen ist für ihn nicht benutzbar — der
+// Browser bricht schon vor der eigentlichen Anfrage ab, und der Client kann
+// nur raten, was der Server wollte. Ob claude.ai selbst aus dem Browser
+// registriert oder von seinen Servern aus, ist von hier nicht zu sehen; die
+// Kopfzeilen kosten nichts und sind die Bedingung für den ersten Fall.
+//
+// Gefährlich ist das nicht: /mcp verlangt ein Bearer-Token, das eine fremde
+// Seite nicht hat, und Cookies werden bei „*" ohnehin nie mitgeschickt.
+func setCORS(h http.Header) {
+	h.Set("Access-Control-Allow-Origin", "*")
+	h.Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+	h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, MCP-Protocol-Version")
+	// Ohne diese Zeile kann ein Browser-Client den 401-Hinweis auf die
+	// Metadata-URL nicht lesen — und damit den OAuth-Weg nicht finden.
+	h.Set("Access-Control-Expose-Headers", "WWW-Authenticate")
+	h.Set("Access-Control-Max-Age", "86400")
+}
+
+// preflight beantwortet die OPTIONS-Vorabfrage des Browsers.
+func preflight(w http.ResponseWriter, _ *http.Request) {
+	setCORS(w.Header())
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // registerWellKnown veröffentlicht die OAuth-Metadata:
 //
 //   - Protected-Resource-Metadata (RFC 9728) — zeigt als Authorization
@@ -31,25 +73,37 @@ import (
 func (s *Server) registerWellKnown(mux *http.ServeMux) {
 	writeJSON := func(w http.ResponseWriter, status int, v any) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		setCORS(w.Header())
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(v)
 	}
 
-	resourceMeta := map[string]any{
-		"resource":                 s.Resource,
-		"authorization_servers":    []string{s.Resource},
-		"bearer_methods_supported": []string{"header"},
-		"scopes_supported":         []string{"openid", "profile", "email"},
-		"resource_name":            "Dorf-App Rössing (MCP)",
+	// resourceMeta beschreibt eine geschützte Ressource. „resource" muss die
+	// Kennung sein, unter der das Dokument gefunden wurde (RFC 9728 §3.3) —
+	// wer /.well-known/oauth-protected-resource/mcp liest, erwartet dort
+	// „…/mcp" und nicht die nackte Basis-Adresse. Ein Client, der das prüft,
+	// verwirft ein unstimmiges Dokument und fällt auf Nachfragen zurück.
+	resourceMeta := func(resource string) map[string]any {
+		return map[string]any{
+			"resource":                 resource,
+			"authorization_servers":    []string{s.Resource},
+			"bearer_methods_supported": []string{"header"},
+			"scopes_supported":         []string{"openid", "profile", "email", rolesScope},
+			"resource_name":            "Dorf-App Rössing (MCP)",
+		}
 	}
-	resourceHandler := func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, resourceMeta)
-	}
-	mux.HandleFunc("GET /.well-known/oauth-protected-resource", resourceHandler)
-	// Pfadspezifische Variante (RFC 9728 §3.1) für Clients, die die
-	// Ressource /mcp direkt auflösen.
-	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", resourceHandler)
+	baseDoc := resourceMeta(s.Resource)
+	mcpDoc := resourceMeta(s.Resource + mcpPath)
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, baseDoc)
+	})
+	// Pfadspezifische Variante (RFC 9728 §3.1) — der Weg, den ein Client
+	// nimmt, dem die Adresse „…/mcp" gegeben wurde.
+	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, mcpDoc)
+	})
+	mux.HandleFunc("OPTIONS /.well-known/oauth-protected-resource", preflight)
+	mux.HandleFunc("OPTIONS /.well-known/oauth-protected-resource/mcp", preflight)
 
 	asHandler := func(w http.ResponseWriter, _ *http.Request) {
 		upstream, err := s.upstreamConfig()
@@ -67,13 +121,16 @@ func (s *Server) registerWellKnown(mux *http.ServeMux) {
 			"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
 			"code_challenge_methods_supported":      []string{"S256"},
 			"token_endpoint_auth_methods_supported": []string{"none"},
-			"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
+			"scopes_supported":                      []string{"openid", "profile", "email", "offline_access", rolesScope},
 		})
 	}
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", asHandler)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server/{rest...}", asHandler)
+	mux.HandleFunc("OPTIONS /.well-known/oauth-authorization-server", preflight)
+	mux.HandleFunc("OPTIONS /.well-known/oauth-authorization-server/{rest...}", preflight)
 
 	mux.HandleFunc("POST /oauth/register", s.handleRegister)
+	mux.HandleFunc("OPTIONS /oauth/register", preflight)
 }
 
 // upstreamDiscovery sind die Endpunkte des echten IdP (Zitadel).
@@ -93,7 +150,7 @@ func (s *Server) upstreamConfig() (*upstreamDiscovery, error) {
 		return s.discovery, nil
 	}
 	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Get(s.Issuer + "/.well-known/openid-configuration")
+	resp, err := client.Get(strings.TrimSuffix(s.Issuer, "/") + "/.well-known/openid-configuration")
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +198,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
+	setCORS(w.Header())
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"client_id":                  s.ClientID,
@@ -154,13 +212,18 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 func writeRegisterError(w http.ResponseWriter, code, desc string) {
 	w.Header().Set("Content-Type", "application/json")
+	setCORS(w.Header())
 	w.WriteHeader(http.StatusBadRequest)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": code, "error_description": desc})
 }
 
+// unauthorized weist ohne gültiges Token ab und sagt dabei, wo der Login-Weg
+// beschrieben steht. Verwiesen wird auf das pfadspezifische Dokument: Es
+// gehört zur Ressource „…/mcp", auf die der Client gerade gestoßen ist.
 func (s *Server) unauthorized(w http.ResponseWriter) {
+	setCORS(w.Header())
 	w.Header().Set("WWW-Authenticate",
-		fmt.Sprintf(`Bearer resource_metadata=%q`, s.Resource+"/.well-known/oauth-protected-resource"))
+		fmt.Sprintf(`Bearer resource_metadata=%q`, s.Resource+"/.well-known/oauth-protected-resource"+mcpPath))
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
 }
 
@@ -188,6 +251,7 @@ func (s *Server) withAuth(h func(http.ResponseWriter, *http.Request, auth.User))
 		case 0:
 			h(w, r, u)
 		case http.StatusForbidden:
+			setCORS(w.Header())
 			http.Error(w, "admin-Rolle erforderlich", http.StatusForbidden)
 		default:
 			s.unauthorized(w)
