@@ -90,7 +90,7 @@ func (a *App) mitgliedAufnehmen(w http.ResponseWriter, r *http.Request, s sessio
 	namen, nerr := a.db.NameResolver()
 	name := userSub
 	if nerr == nil {
-		if n := namen.Resolve(b.UserSub, ""); n != "" {
+		if n := namen.Resolve(b.UserSub, "", model.SichtVerwaltung); n != "" {
 			name = n
 		}
 	}

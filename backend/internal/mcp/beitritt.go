@@ -61,7 +61,7 @@ func (s *Server) toolListBeitritte(args json.RawMessage, _ auth.User) (any, erro
 			return nil, err
 		}
 		for _, b := range liste {
-			b.UserName = namen.Resolve(b.UserSub, "")
+			b.UserName = namen.Resolve(b.UserSub, "", model.SichtVerwaltung)
 			out = append(out, beitrittAnsicht{Beitritt: b, TraegerName: t.Name})
 		}
 	}

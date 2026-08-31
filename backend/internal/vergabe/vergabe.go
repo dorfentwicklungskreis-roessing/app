@@ -582,7 +582,8 @@ func (e *Engine) schonVergeben(a *model.Assignment) error {
 	if !a.Active() {
 		return abweisung(http.StatusConflict, "Dieser Vorgang ist schon abgeschlossen.")
 	}
-	name := nameOder(e.namen(), a.ClaimedBy, a.ClaimedByName)
+	// Diese Meldung liest, wer gerade zu spät war — jemand aus dem Dorf.
+	name := nameOder(e.namen(), a.ClaimedBy, a.ClaimedByName, model.SichtDorf)
 	if name == "" || name == unbekannt {
 		name = "jemand anderem"
 	}
@@ -888,7 +889,7 @@ func (e *Engine) Stand(taskID int64) (*Stand, error) {
 		if !s.Matches(*task) {
 			continue
 		}
-		s.UserName = nameOder(namen, s.UserSub, "")
+		s.UserName = nameOder(namen, s.UserSub, "", model.SichtVerwaltung)
 		s.PlaceName = place.Name
 		st.Angemeldete = append(st.Angemeldete, s)
 	}
@@ -900,7 +901,7 @@ func (e *Engine) Stand(taskID int64) (*Stand, error) {
 	if a == nil {
 		return st, nil
 	}
-	a.ClaimedByName = nameOder(namen, a.ClaimedBy, a.ClaimedByName)
+	a.ClaimedByName = nameOder(namen, a.ClaimedBy, a.ClaimedByName, model.SichtVerwaltung)
 	st.Vorgang = a
 	ns, err := e.db.NotificationsForAssignment(a.ID)
 	if err != nil {
@@ -910,7 +911,7 @@ func (e *Engine) Stand(taskID int64) (*Stand, error) {
 		n.PlaceName = place.Name
 		n.TaskName = task.DisplayName()
 		n.TaskKind = task.Kind
-		n.Title = nameOder(namen, n.UserSub, "")
+		n.Title = nameOder(namen, n.UserSub, "", model.SichtVerwaltung)
 		st.Zustellungen = append(st.Zustellungen, n)
 	}
 	return st, nil
@@ -923,7 +924,7 @@ func (e *Engine) AssignmentFor(taskID int64) (*model.Assignment, error) {
 	if err != nil || a == nil {
 		return nil, err
 	}
-	a.ClaimedByName = nameOder(e.namen(), a.ClaimedBy, a.ClaimedByName)
+	a.ClaimedByName = nameOder(e.namen(), a.ClaimedBy, a.ClaimedByName, model.SichtDorf)
 	return a, nil
 }
 
@@ -932,7 +933,7 @@ func (e *Engine) assignmentMitNamen(id int64) (*model.Assignment, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.ClaimedByName = nameOder(e.namen(), a.ClaimedBy, a.ClaimedByName)
+	a.ClaimedByName = nameOder(e.namen(), a.ClaimedBy, a.ClaimedByName, model.SichtDorf)
 	return a, nil
 }
 
@@ -952,11 +953,15 @@ const unbekannt = "Unbekannt"
 
 // nameOder löst den Namen auf; gespeichert ist der Rückfall (z.B. der Name,
 // der bei der Zusage galt).
-func nameOder(namen model.NameResolver, sub, gespeichert string) string {
+//
+// Die Sicht steht ausdrücklich dabei: Derselbe Vorgang wird einmal einer
+// Verwaltung gezeigt, die zuordnen können muss, und einmal jemandem im Dorf,
+// der nur sehen soll, was freigegeben ist (#80).
+func nameOder(namen model.NameResolver, sub, gespeichert string, sicht model.Namenssicht) string {
 	if sub == "" {
 		return ""
 	}
-	if n := namen.Resolve(sub, gespeichert); n != "" {
+	if n := namen.Resolve(sub, gespeichert, sicht); n != "" {
 		return n
 	}
 	return unbekannt

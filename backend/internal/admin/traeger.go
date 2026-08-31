@@ -286,7 +286,7 @@ func (a *App) zeigeTraeger(w http.ResponseWriter, r *http.Request, status int,
 	offen := []model.BefaehigungsAntrag{}
 	entschieden := []model.BefaehigungsAntrag{}
 	for _, antrag := range alleAntraege {
-		antrag.UserName = namen.Resolve(antrag.UserSub, "")
+		antrag.UserName = namen.Resolve(antrag.UserSub, "", model.SichtVerwaltung)
 		if antrag.UserName == "" {
 			antrag.UserName = antrag.UserSub
 		}
@@ -317,7 +317,7 @@ func (a *App) zeigeTraeger(w http.ResponseWriter, r *http.Request, status int,
 	offeneBeitritte := []model.Beitritt{}
 	mitglieder := []model.Beitritt{}
 	for _, b := range alleBeitritte {
-		b.UserName = namen.Resolve(b.UserSub, "")
+		b.UserName = namen.Resolve(b.UserSub, "", model.SichtVerwaltung)
 		if b.UserName == "" {
 			b.UserName = b.UserSub
 		}

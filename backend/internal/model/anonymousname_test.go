@@ -131,17 +131,17 @@ func TestSpitznameFuelltDieRangliste(t *testing.T) {
 	sub := "888888888888888888"
 	namen := NameResolver{sub: {UserSub: sub}}
 
-	if got := namen.Resolve(sub, ""); got != AnonymousName(sub) {
+	if got := namen.Resolve(sub, "", SichtDorf); got != AnonymousName(sub) {
 		t.Errorf("Rangliste = %q, erwartet den Spitznamen %q", got, AnonymousName(sub))
 	}
 	// Eine von der Verwaltung nachgetragene Meldung läuft unter fremdem
 	// Namen; der bleibt stehen (siehe MatchesStoredName).
-	if got := namen.Resolve(sub, "Karl Nachbar"); got != "Karl Nachbar" {
+	if got := namen.Resolve(sub, "Karl Nachbar", SichtDorf); got != "Karl Nachbar" {
 		t.Errorf("Nachtrag = %q, erwartet den eingefrorenen Namen", got)
 	}
 	// Wer gar kein Profil hat, bekommt keinen Spitznamen: Über ihn ist
 	// nichts bekannt, nicht einmal, dass er die App je geöffnet hat.
-	if got := namen.Resolve("fremde-kennung", "Alte Meldung"); got != "Alte Meldung" {
+	if got := namen.Resolve("fremde-kennung", "Alte Meldung", SichtDorf); got != "Alte Meldung" {
 		t.Errorf("ohne Profil = %q, erwartet den gespeicherten Namen", got)
 	}
 }
