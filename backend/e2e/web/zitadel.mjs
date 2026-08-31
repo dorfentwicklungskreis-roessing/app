@@ -158,11 +158,16 @@ export async function bootstrap({ issuer, keyPath, redirectUri }) {
   // Die Anwendung des Claude-Connectors: Web-App, PKCE, kein Secret — genau
   // die Bauart, die der Registrierungs-Endpunkt an claude.ai ausgibt.
   //
-  // accessTokenRoleAssertion bleibt bewusst AUS. In der Rössing-ID ist das ein
-  // Haken in einer Weboberfläche, den niemand hier sehen kann; steht der
-  // Anmeldeweg nur deshalb, weil ihn jemand einmal gesetzt hat, ist er nicht
-  // geprüft, sondern geraten. So muss der Server die Rollen selbst anfordern —
-  // über den Scope in seiner Metadata.
+  // accessTokenRoleAssertion ist AN, und das ist ein Messergebnis, keine
+  // Bequemlichkeit: Zuerst stand hier AUS, in der Annahme, der Rollen-Scope
+  // aus der Metadata reiche. Er reicht nicht. Der Durchlauf kam mit einem
+  // echten Token bis zum Werkzeugaufruf und bekam dort „admin-Rolle
+  // erforderlich" — der Scope besorgt die Rollen für ID-Token und Userinfo,
+  // ins ACCESS-Token legt Zitadel sie nur mit diesem Schalter der Anwendung.
+  //
+  // Damit prüft dieser Test die Produktionskonfiguration mit: Wird der
+  // Schalter in der Rössing-ID je abgeschaltet, hört der Connector auf zu
+  // arbeiten — und genau das würde hier rot.
   const mcpApp = await zapi(issuer, token, 'POST', `/management/v1/projects/${projectId}/apps/oidc`, {
     name: 'Claude-MCP-Connector E2E',
     redirectUris: [CLAUDE_RUECKSPRUNG],
@@ -171,7 +176,7 @@ export async function bootstrap({ issuer, keyPath, redirectUri }) {
     appType: 'OIDC_APP_TYPE_WEB',
     authMethodType: 'OIDC_AUTH_METHOD_TYPE_NONE',
     accessTokenType: 'OIDC_TOKEN_TYPE_JWT',
-    accessTokenRoleAssertion: false,
+    accessTokenRoleAssertion: true,
     idTokenRoleAssertion: false,
   });
 

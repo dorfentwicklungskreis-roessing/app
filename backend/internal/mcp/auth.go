@@ -23,13 +23,17 @@ import (
 // Pfad des dazugehörigen Metadata-Dokuments.
 const mcpPath = "/mcp"
 
-// rolesScope: Zitadel schreibt die Projektrollen NUR dann in das
-// Access-Token, wenn der Client sie anfragt (oder die Anwendung in der
-// Rössing-ID auf „Rollen ins Access-Token" gestellt ist — eine Einstellung,
-// die in keiner Datei dieses Repos steht und die niemand hier sehen kann).
-// Ohne Rollen ist jeder Aufruf 403, obwohl die Anmeldung geklappt hat.
-// Android, iOS und die Web-Verwaltung fragen diesen Scope ausdrücklich an;
-// claude.ai kann ihn nur anfragen, wenn er in der Metadata steht.
+// rolesScope ist der Scope, mit dem ein Client die Projektrollen anfordert.
+// Android, iOS und die Web-Verwaltung fragen ihn ausdrücklich an; claude.ai
+// kann das nur, wenn er in der Metadata steht — deshalb steht er dort.
+//
+// Er allein genügt allerdings NICHT: Gemessen im Durchlauf
+// (backend/e2e/web/tests/mcp-connector.spec.mjs) besorgt der Scope die Rollen
+// für ID-Token und Userinfo, ins Access-Token legt Zitadel sie erst, wenn die
+// Anwendung auf „Rollen ins Access-Token" steht (accessTokenRoleAssertion).
+// Fehlt dieser Schalter, läuft die Anmeldung durch und jeder Aufruf endet in
+// 403 — der Schalter ist damit Voraussetzung des Betriebs, nicht Beiwerk.
+// Der E2E setzt ihn wie in der Produktion und prüft ihn dadurch mit.
 const rolesScope = "urn:zitadel:iam:org:projects:roles"
 
 // setCORS erlaubt den Zugriff aus dem Browser.

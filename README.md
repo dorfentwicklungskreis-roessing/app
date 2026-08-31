@@ -567,10 +567,22 @@ Was der Server dafür veröffentlicht — und warum jedes Stück davon nötig is
 | `/.well-known/oauth-authorization-server` | gespiegelte AS-Metadata (RFC 8414): Authorize- und Token-Endpunkt kommen von Zitadel, den `registration_endpoint` ergänzen wir, weil Zitadel keine DCR kann |
 | `/oauth/register` | gibt die feste PKCE-Client-ID aus, aber nur an die Rücksprung-Adressen von claude.ai |
 
-In `scopes_supported` steht `urn:zitadel:iam:org:projects:roles`, und das ist
-kein Beiwerk: Zitadel legt die Projektrollen nur dann ins Access-Token, wenn
-der Client sie anfragt — und anfragen kann er, was der Server nennt. Ohne
-Rollen läuft die Anmeldung durch und jeder Aufruf endet in `403`.
+In `scopes_supported` steht `urn:zitadel:iam:org:projects:roles` — der Scope,
+mit dem ein Client die Projektrollen anfordert. Anfragen kann er nur, was der
+Server nennt; Android, iOS und die Web-Verwaltung tun dasselbe.
+
+**Der Scope allein genügt aber nicht.** Das ist gemessen, nicht vermutet: Mit
+Scope, aber ohne den Schalter **„Rollen ins Access-Token"**
+(`accessTokenRoleAssertion`) an der Anwendung in der Rössing-ID kommt der
+Durchlauf mit einem echten Token bis zum Werkzeugaufruf und bekommt dort
+`403 admin-Rolle erforderlich`. Der Scope besorgt die Rollen für ID-Token und
+Userinfo; ins **Access**-Token legt Zitadel sie erst mit diesem Schalter.
+
+Er ist damit Betriebsvoraussetzung der Anwendung `385946294599876803` und
+steht in keiner Datei dieses Repos — er lebt in der Weboberfläche der
+Rössing-ID. Wer ihn abschaltet, legt den Connector still, ohne dass sich am
+Quelltext etwas ändert. Der E2E setzt ihn wie in der Produktion und würde rot,
+wenn diese Kopplung zerbräche.
 
 Alle diese Endpunkte antworten mit CORS-Kopfzeilen und beantworten die
 `OPTIONS`-Vorabfrage; der 401 gibt `WWW-Authenticate` per

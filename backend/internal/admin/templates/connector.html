@@ -59,7 +59,9 @@
     </ul>
     <p class="text-base-content/80">Kommt beim Werkzeugaufruf ein Fehler über eine fehlende
       <code class="rounded bg-base-200 px-1">admin</code>-Rolle, dann hat die Anmeldung geklappt
-      und nur die Rolle fehlt: Sie wird in der Rössing-ID vergeben, nicht hier.</p>
+      und nur die Rolle fehlt. Sie wird in der Rössing-ID vergeben, nicht hier — und dort muss
+      an der Anwendung „Rollen ins Access-Token“ eingeschaltet sein, sonst kommt die Rolle
+      zwar an, aber nicht im Token.</p>
   </div>
 </div>
 {{end}}
