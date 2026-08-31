@@ -44,6 +44,15 @@ settings:
     OIDC_REDIRECT_URI: de.roessing.app:/oauth2redirect
     OIDC_LOGOUT_REDIRECT_URI: de.roessing.app:/logout
     MAP_STYLE_URL: https://tiles.openfreemap.org/styles/liberty
+    # Die Mietplattform („Maschinchenring") ist ein eigener Dienst neben dem
+    # Backend — die App spricht unmittelbar mit ihr (docs/mietplattform-in-den-apps.md,
+    # AP 4). Deshalb eine zweite Adresse, und deshalb steht sie hier und nicht
+    # im Quelltext.
+    RENTAL_BASE_URL: https://mieten.xn--rssing-wxa.de
+    # Zitadel-Projekt „Mietplattform". Es muss als Empfänger im Token stehen,
+    # sonst weist die Mietplattform jedes Token dieser App ab (AP 2). Die
+    # Kennung wird zum Scope urn:zitadel:iam:org:project:id:<id>:aud.
+    RENTAL_PROJECT_ID: "377276525071827047"
     # Entwickler-Login (ohne Zitadel) — nur zusammen mit einem Backend im
     # AUTH_MODE=insecure-dev. In Release-Builds hart aus, siehe Konfiguration.swift.
     DEV_AUTH: "0"

@@ -13,8 +13,30 @@ import Foundation
 /// Android-App — siehe README, Abschnitt „Identität".
 let ROLLEN_SCOPE = "urn:zitadel:iam:org:projects:roles"
 
+/// The scope that puts another Zitadel project into the token's `aud`.
+///
+/// A token is only valid for the project it was issued for. The rental
+/// platform („Maschinchenring") is a project of its own, so it rejects our
+/// token with 401 unless we ask for it here. Zitadel spells that wish as
+/// `urn:zitadel:iam:org:project:id:<id>:aud` (see README, „Identität").
+///
+/// A plain function so it can be checked without touching the build settings.
+func projectAudienceScope(_ projectId: String) -> String {
+    "urn:zitadel:iam:org:project:id:\(projectId):aud"
+}
+
 /// `offline_access` hält die Sitzung über den Neustart hinweg.
-let ANMELDE_SCOPES = ["openid", "profile", "email", "offline_access", ROLLEN_SCOPE]
+///
+/// Careful when rolling this out: a device that is already signed in keeps
+/// its token set across an app update, so it keeps getting tokens **without**
+/// the rental platform's audience. That is why `RentalError.signInOutdated`
+/// exists — the rental area asks for a fresh sign-in instead of showing an
+/// empty list. Browsing the catalogue is unaffected: those routes are public
+/// and go out without a token at all.
+let ANMELDE_SCOPES = [
+    "openid", "profile", "email", "offline_access", ROLLEN_SCOPE,
+    projectAudienceScope(Konfiguration.rentalProjectId),
+]
 
 enum Sitzungszustand: Equatable, Sendable {
     case laedt

@@ -79,6 +79,10 @@
 	<string>$(OIDC_LOGOUT_REDIRECT_URI)</string>
 	<key>DorfMapStyleUrl</key>
 	<string>$(MAP_STYLE_URL)</string>
+	<key>DorfRentalBaseUrl</key>
+	<string>$(RENTAL_BASE_URL)</string>
+	<key>DorfRentalProjectId</key>
+	<string>$(RENTAL_PROJECT_ID)</string>
 	<key>DorfDevAuth</key>
 	<string>$(DEV_AUTH)</string>
 </dict>

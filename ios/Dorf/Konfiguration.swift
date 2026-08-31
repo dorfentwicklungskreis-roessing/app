@@ -22,6 +22,16 @@ nonisolated enum Konfiguration {
     static let oidcAbmeldeRuecksprung = text("DorfOidcLogoutRedirectUri", vorgabe: "de.roessing.app:/logout")
     static let kartenstil = url("DorfMapStyleUrl", vorgabe: "https://tiles.openfreemap.org/styles/liberty")
 
+    /// The rental platform („Maschinchenring"). A service of its own next to
+    /// the backend: the app talks to it directly, the Go backend knows
+    /// nothing about it (`docs/mietplattform-in-den-apps.md`, AP 4).
+    static let rentalBaseUrl = url("DorfRentalBaseUrl", vorgabe: "https://mieten.xn--rssing-wxa.de")
+
+    /// The rental platform's Zitadel project. It has to appear as an audience
+    /// in our access token, otherwise every call is answered with 401 — see
+    /// `rentalAudienceScope` in `Anmeldung.swift`.
+    static let rentalProjectId = text("DorfRentalProjectId", vorgabe: "377276525071827047")
+
     /// Der Entwickler-Login (ohne Rössing-ID) — nur im Debug-Build und nur,
     /// wenn er ausdrücklich eingeschaltet wurde. In einer ausgelieferten App
     /// gibt es ihn nicht, auch nicht versehentlich.

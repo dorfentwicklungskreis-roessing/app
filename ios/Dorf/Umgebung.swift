@@ -14,6 +14,13 @@ final class AppUmgebung: ObservableObject {
     let anmeldung: Anmeldung
     let api: DorfApi
 
+    /// Der Weg zum Verleih („Maschinchenring") — ein **zweiter** Dienst neben
+    /// dem Backend, mit eigener Adresse und eigenem Client. Das Go-Backend
+    /// ist kein Weiterleiter und weiß von der Mietplattform nichts; die Regel
+    /// „genau ein Weg zum Backend" meint `mieten.…` deshalb nicht
+    /// (`docs/mietplattform-in-den-apps.md`, AP 4).
+    let rental: RentalClient
+
     /// Die Orte des Dorfes — **ein** Modell für alle, die sie brauchen.
     ///
     /// Die Startseite zeigt daraus nur eine Zahl („3 Orte warten auf dich")
@@ -45,6 +52,12 @@ final class AppUmgebung: ObservableObject {
         })
         self.anmeldung = anmeldung
         self.api = api
+        // Derselbe Tokengeber, ein anderer Dienst: Das Token gilt für den
+        // Verleih nur, wenn sein Zitadel-Projekt in der `aud` steht — siehe
+        // `ANMELDE_SCOPES`.
+        self.rental = RentalClient(tokenProvider: { [anmeldung] in
+            await anmeldung.frischesToken()
+        })
         self.orte = OrteModell(api: api)
         // Die Benachrichtigungen brauchen denselben Zugang: Sie melden die
         // Gerätekennung an und beim Abmelden wieder ab. Gefragt wird damit
@@ -54,9 +67,13 @@ final class AppUmgebung: ObservableObject {
     }
 
     /// Für Vorschauen und Tests: eine Umgebung, die nichts abruft.
-    init(anmeldung: Anmeldung, api: DorfApi, ich: Ich?, orte: OrteModell? = nil) {
+    init(anmeldung: Anmeldung, api: DorfApi, ich: Ich?, orte: OrteModell? = nil,
+         rental: RentalClient? = nil) {
         self.anmeldung = anmeldung
         self.api = api
+        self.rental = rental ?? RentalClient(tokenProvider: { [anmeldung] in
+            await anmeldung.frischesToken()
+        })
         self.orte = orte ?? OrteModell(api: api)
         self.ich = ich
         kinderWeiterreichen()
