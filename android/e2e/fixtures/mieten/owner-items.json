@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "id": "as-585-km-kreiselmaeher",
+      "name": "AS 585 KM Kreiselmäher",
+      "description": "Kreiselmäher für hohes Gras und Böschungen.",
+      "pricePerDay": 25,
+      "pricePerWeekend": 40,
+      "pricePerWeek": 120,
+      "deposit": 100,
+      "tags": ["garten", "motorgeraet"],
+      "thumbnailUrl": "https://cdn.example.invalid/sIgn/resize:fill:600:450/plain/local:///items/as-585-km-kreiselmaeher/front.jpg",
+      "productUrl": null,
+      "webUrl": "https://mieten.example.invalid/geraete/as-585-km-kreiselmaeher/",
+      "active": true
+    },
+    {
+      "id": "018f2c1a-7b3d-4e91-9a0c-2f5d8e6b4a11",
+      "name": "Rasenwalze",
+      "description": null,
+      "pricePerDay": 8,
+      "pricePerWeekend": null,
+      "pricePerWeek": null,
+      "deposit": null,
+      "tags": ["garten"],
+      "thumbnailUrl": null,
+      "productUrl": null,
+      "webUrl": "https://mieten.example.invalid/geraete/018f2c1a-7b3d-4e91-9a0c-2f5d8e6b4a11/",
+      "active": false
+    }
+  ]
+}

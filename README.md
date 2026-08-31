@@ -290,7 +290,16 @@ keine der beiden Apps noch einmal.
   belegte Zeiträume und Verfügbarkeit sind drüben öffentlich, so wie auf ihrer
   Webseite) — der Bereich ist deshalb auch vom Anmeldeschirm aus erreichbar.
   Mit der Rössing-ID kommen die eigenen Buchungen dazu: anfragen, ansehen,
-  stornieren. **Die App enthält keine Regeln des Verleihs**: Ob ein Zeitraum
+  stornieren. Dahinter liegen zwei weitere Seiten: **„Mein Profil im
+  Maschinchenring"** (Telefon und Adresse für die Übergabe, dazu „ich möchte
+  auch verleihen") und, wenn die Plattform `lenderStatus: "approved"` meldet,
+  **„Meine Vermietung"** — Anfragen auf den eigenen Geräten mit Name und
+  Nummer für die Übergabe, zusagen und absagen, die eigenen Geräte samt der
+  abgeschalteten, Zeiträume sperren und Sperren aufheben. **Sets** stehen zum
+  Ansehen daneben; gebucht werden sie drüben, weil der Server eine
+  Set-Buchung noch nicht bestätigen oder stornieren kann. Beide Fassungen
+  können das Gleiche — alle 19 Routen des Vertrags.
+  **Die App enthält keine Regeln des Verleihs**: Ob ein Zeitraum
   frei ist, sagt `GET /api/v1/availability`; ob storniert werden darf, sagt
   `canCancel`. Die Tarife stehen einzeln da und werden **nicht** zu einer
   Summe verrechnet — welcher bei welcher Dauer gilt, legt die Mietplattform

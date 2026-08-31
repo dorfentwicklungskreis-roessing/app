@@ -1,0 +1,30 @@
+{
+  "bookings": [
+    {
+      "id": "8f14c2b0-91ae-4c77-b1b2-0a3d5e7c9f01",
+      "deviceId": "as-585-km-kreiselmaeher",
+      "deviceName": "AS 585 KM Kreiselmäher",
+      "startDate": "2026-09-05",
+      "endDate": "2026-09-07",
+      "status": "pending",
+      "renterName": "Erika Musterfrau",
+      "renterPhone": "+49 5069 123456",
+      "notes": "Hole ich Samstag früh ab.",
+      "canDecide": true,
+      "canCancel": true
+    },
+    {
+      "id": "1c9e77a3-1234-4bb8-9a0e-77ce31d2a456",
+      "deviceId": "018f2c1a-7b3d-4e91-9a0c-2f5d8e6b4a11",
+      "deviceName": "Rasenwalze",
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-03",
+      "status": "approved",
+      "renterName": "Heinz Beispiel",
+      "renterPhone": null,
+      "notes": null,
+      "canDecide": false,
+      "canCancel": true
+    }
+  ]
+}

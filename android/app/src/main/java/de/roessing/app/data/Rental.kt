@@ -203,6 +203,107 @@ data class RentalProfile(
 )
 
 /**
+ * A set: several devices at one daily price (route 4).
+ *
+ * Unlike a device's description this one is **plain text**, not Markdown. A
+ * set has no picture of its own — it is shown with the names of its devices.
+ *
+ * Sets can be booked over there, but cancelling, confirming and turning one
+ * down is not implemented on the server yet. So the app shows them and does
+ * not offer a booking; that is the contract's own advice, not caution of ours.
+ */
+data class RentalSet(
+    val id: String,
+    val name: String,
+    val description: String?,
+    val pricePerDay: Double?,
+    val deposit: Double?,
+    /** The devices of the set, by their id in route 1. */
+    val itemIds: List<String>,
+)
+
+/**
+ * One of my own devices (route 16) — with the one field route 1 does not
+ * have: whether it is switched on at all.
+ *
+ * Creating and changing devices is **not** part of the contract, here or
+ * anywhere. That happens in the chat and the web version of the platform.
+ */
+data class RentalOwnerDevice(val device: RentalDevice, val active: Boolean)
+
+/**
+ * A request on one of my devices (route 13).
+ *
+ * [renterName] and [renterPhone] are here because the handover has to be
+ * arranged. They belong in no other view and in no cache that outlives this
+ * one — the same rule as for [RentalPickup], seen from the other side.
+ */
+data class RentalOwnerBooking(
+    val id: String,
+    val deviceId: String?,
+    val deviceName: String,
+    val period: RentalPeriod,
+    val status: BookingStatus,
+    /** What the server literally wrote, for a state we do not know. */
+    val rawStatus: String,
+    val renterName: String?,
+    val renterPhone: String?,
+    val notes: String?,
+    /** Whether confirming or turning down has a prospect. The server decides. */
+    val canDecide: Boolean,
+    val canCancel: Boolean,
+)
+
+/**
+ * A stretch the lender keeps for themselves (route 17).
+ *
+ * For everybody else it looks like any other taken period — without a reason
+ * and without a name.
+ */
+data class RentalBlock(
+    val id: String,
+    val deviceId: String?,
+    val deviceName: String,
+    val period: RentalPeriod,
+    val reason: String?,
+)
+
+/**
+ * What is to change in the own profile (route 8).
+ *
+ * Only fields that carry something go out: the platform changes exactly what
+ * it is given, and an empty value in a sent field is a `bad_request`, not a
+ * way to clear it. The e-mail address is missing on purpose — it comes from
+ * the Rössing-ID and is the link to the account over there.
+ */
+data class ProfilePatch(
+    val name: String? = null,
+    val phone: String? = null,
+    val addressStreet: String? = null,
+    val addressZip: String? = null,
+    val addressCity: String? = null,
+) {
+    /** Nothing to send is nothing to do. */
+    val empty: Boolean
+        get() = listOfNotNull(name, phone, addressStreet, addressZip, addressCity).isEmpty()
+}
+
+/**
+ * The receipt for „ich möchte auch verleihen" (route 9).
+ *
+ * It is a receipt, not a permission: somebody decides that by hand, in the
+ * web version. [message] is German and written over there.
+ */
+data class LenderRequest(val lenderStatus: LenderStatus, val message: String?)
+
+/** A new block on one of my devices (route 18). Sets cannot be blocked. */
+data class BlockRequest(
+    val deviceId: String,
+    val period: RentalPeriod,
+    val reason: String? = null,
+)
+
+/**
  * A booking request.
  *
  * The three personal fields are the exception, not the rule: normally the
@@ -272,9 +373,13 @@ class RentalApiException(
  * well, which is what lets the area work before anybody signs in. Only the
  * personal calls carry a token.
  *
- * The lender's side of the contract (routes 13 to 19) is deliberately absent:
- * creating and maintaining devices happens in the chat and the web version of
- * the rental platform, and it is meant to stay there.
+ * All nineteen routes of the contract are here, and the same nineteen are in
+ * the iOS app: the two are one product in two versions, and whoever holds the
+ * other telephone must not see something else.
+ *
+ * One thing is deliberately **not** here, on either side: creating and
+ * changing devices. That happens in the chat and the web version of the
+ * rental platform, and the contract has no route for it.
  */
 interface RentalRepository {
     /** All active devices, sorted by name. No sign-in. */
@@ -303,6 +408,43 @@ interface RentalRepository {
 
     /** Withdraw one of my bookings. Signed in. */
     suspend fun cancel(bookingId: String)
+
+    /** The sets. Shown, not booked — see [RentalSet]. No sign-in. */
+    suspend fun sets(): List<RentalSet>
+
+    /** Change telephone and address over there. Signed in. */
+    suspend fun updateProfile(patch: ProfilePatch): RentalProfile
+
+    /** Ask to become a lender. A receipt, not a permission. Signed in. */
+    suspend fun requestLender(): LenderRequest
+
+    // --- The lender's side. The platform decides who sees it ---------------
+    //
+    // Every one of these is shown only after route 7 answered
+    // `lenderStatus: "approved"`. That is an answer of the server, not a check
+    // of the app's own — and the calls themselves are refused over there with
+    // `not_a_lender` if somebody gets here anyway.
+
+    /** Requests on my devices, with name and number for the handover. */
+    suspend fun ownerBookings(): List<RentalOwnerBooking>
+
+    /** Confirm a request. From then on the renter sees the pickup address. */
+    suspend fun approve(bookingId: String)
+
+    /** Turn a request down. No reason is recorded. */
+    suspend fun reject(bookingId: String)
+
+    /** My own devices, including the switched-off ones. */
+    suspend fun ownerDevices(): List<RentalOwnerDevice>
+
+    /** The stretches I keep for myself. */
+    suspend fun blocks(): List<RentalBlock>
+
+    /** Keep a stretch. An existing booking is never pushed aside. */
+    suspend fun addBlock(request: BlockRequest): RentalBlock
+
+    /** Lift one of my blocks. */
+    suspend fun removeBlock(blockId: String)
 }
 
 /**
@@ -332,6 +474,32 @@ object NoRental : RentalRepository {
         throw RentalApiException(RentalErrorCode.UNAUTHORIZED, null)
 
     override suspend fun cancel(bookingId: String) =
+        throw RentalApiException(RentalErrorCode.UNAUTHORIZED, null)
+
+    override suspend fun sets(): List<RentalSet> = emptyList()
+
+    override suspend fun updateProfile(patch: ProfilePatch): RentalProfile =
+        throw RentalApiException(RentalErrorCode.UNAUTHORIZED, null)
+
+    override suspend fun requestLender(): LenderRequest =
+        throw RentalApiException(RentalErrorCode.UNAUTHORIZED, null)
+
+    override suspend fun ownerBookings(): List<RentalOwnerBooking> = emptyList()
+
+    override suspend fun approve(bookingId: String) =
+        throw RentalApiException(RentalErrorCode.UNAUTHORIZED, null)
+
+    override suspend fun reject(bookingId: String) =
+        throw RentalApiException(RentalErrorCode.UNAUTHORIZED, null)
+
+    override suspend fun ownerDevices(): List<RentalOwnerDevice> = emptyList()
+
+    override suspend fun blocks(): List<RentalBlock> = emptyList()
+
+    override suspend fun addBlock(request: BlockRequest): RentalBlock =
+        throw RentalApiException(RentalErrorCode.UNAUTHORIZED, null)
+
+    override suspend fun removeBlock(blockId: String) =
         throw RentalApiException(RentalErrorCode.UNAUTHORIZED, null)
 }
 

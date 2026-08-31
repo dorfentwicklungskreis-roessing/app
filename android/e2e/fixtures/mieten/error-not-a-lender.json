@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "not_a_lender",
+    "message": "Diese Handlung ist nur für freigeschaltete Vermieter"
+  }
+}

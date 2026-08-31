@@ -1,0 +1,14 @@
+{
+  "profile": {
+    "name": "Erika Musterfrau",
+    "email": "erika@example.invalid",
+    "phone": "+49 5069 123456",
+    "addressStreet": "Hauptstraße 1",
+    "addressZip": "31171",
+    "addressCity": "Nordstemmen",
+    "lender": true,
+    "lenderStatus": "approved",
+    "profileComplete": true,
+    "missingFields": []
+  }
+}
