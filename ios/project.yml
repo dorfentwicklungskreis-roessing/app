@@ -67,11 +67,11 @@ targets:
         INFOPLIST_FILE: Dorf/Info.plist
         CURRENT_PROJECT_VERSION: "1"
         # Beide Apps tragen dieselbe Nummer: Sie sind ein Produkt in zwei
-        # Fassungen, und "Rössing 0.1.10" soll auf beiden Telefonen
+        # Fassungen, und "Rössing 0.1.11" soll auf beiden Telefonen
         # dasselbe bedeuten (siehe CLAUDE.md, "Android und iOS bleiben auf
         # demselben Stand"). Die Buildnummer bleibt davon unberührt —
         # sie zählt Auslieferungen, nicht Stände.
-        MARKETING_VERSION: "0.1.10"
+        MARKETING_VERSION: "0.1.11"
         TARGETED_DEVICE_FAMILY: "1,2"
         # Ohne Apple-Entwicklerkonto lässt sich für den Simulator bauen; für
         # Gerät und TestFlight trägt DEVELOPMENT_TEAM die Team-ID nach.

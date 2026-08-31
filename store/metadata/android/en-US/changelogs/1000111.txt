@@ -1,0 +1,3 @@
+Events: an event from the village now shows its details inside the app — when, where, who is hosting, what it is about. Until now every tap opened the browser, even though all of it was already in the app. Only events belonging to an outside host still lead to their own page; telling the same thing twice would mean one of the two is eventually wrong.
+
+The address now also appears on the event card in the list.
