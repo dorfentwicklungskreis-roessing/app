@@ -45,27 +45,34 @@ data class StatusFarben(
     val gruen: Color,
     val gelb: Color,
     val rot: Color,
+    /** Außer Dienst: grau. Was nicht ansteht, fordert zu nichts auf. */
+    val ruhend: Color,
     val gruenFlaeche: Color,
     val gelbFlaeche: Color,
     val rotFlaeche: Color,
+    val ruhendFlaeche: Color,
 )
 
 private val StatusHell = StatusFarben(
     gruen = Color(0xFF1B5E20),
     gelb = Color(0xFF7A5200),
     rot = Color(0xFFB3261E),
+    ruhend = Color(0xFF4A4E52),
     gruenFlaeche = Color(0xFFD7F0D3),
     gelbFlaeche = Color(0xFFFDECC8),
     rotFlaeche = Color(0xFFFCDAD6),
+    ruhendFlaeche = Color(0xFFE6E8EA),
 )
 
 private val StatusDunkel = StatusFarben(
     gruen = Color(0xFF9BE3A2),
     gelb = Color(0xFFFFD479),
     rot = Color(0xFFFFB4AB),
+    ruhend = Color(0xFFC4C8CC),
     gruenFlaeche = Color(0xFF23422A),
     gelbFlaeche = Color(0xFF4A3A12),
     rotFlaeche = Color(0xFF5C2420),
+    ruhendFlaeche = Color(0xFF34383C),
 )
 
 val LocalStatusFarben = staticCompositionLocalOf { StatusHell }

@@ -12,6 +12,10 @@ extension Ampel {
         case .green: return Color(red: 0.18, green: 0.56, blue: 0.24)
         case .yellow: return Color(red: 0.92, green: 0.65, blue: 0.08)
         case .red: return Color(red: 0.78, green: 0.20, blue: 0.16)
+        // Außer Dienst ist kein Zustand, der zum Handeln auffordert —
+        // deshalb grau und nicht grün. Grün hieße „alles gut", und das ist
+        // eine Aussage über etwas, das gerade gar nicht ansteht.
+        case .dormant: return Color(red: 0.55, green: 0.56, blue: 0.58)
         }
     }
 
@@ -26,6 +30,9 @@ extension Ampel {
         case (.red, "giessen"): return "Dringend gießen!"
         case (.red, "jaeten"): return "Dringend jäten!"
         case (.red, _): return "Dringend!"
+        case (.dormant, "giessen"): return "Wird jetzt nicht gegossen"
+        case (.dormant, "jaeten"): return "Wird jetzt nicht gejätet"
+        case (.dormant, _): return "Außer Dienst"
         }
     }
 
@@ -35,6 +42,7 @@ extension Ampel {
         case .green: return "Status grün"
         case .yellow: return "Status gelb"
         case .red: return "Status rot"
+        case .dormant: return "Außer Dienst"
         }
     }
 
@@ -44,6 +52,8 @@ extension Ampel {
         case .red: return 0
         case .yellow: return 1
         case .green: return 2
+        // Ganz nach hinten: Was gerade nicht ansteht, steht auch nicht oben.
+        case .dormant: return 3
         }
     }
 }

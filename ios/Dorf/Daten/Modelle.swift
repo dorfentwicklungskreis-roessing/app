@@ -20,8 +20,15 @@ nonisolated extension KeyedDecodingContainer {
 
 /// Ampel-Status — die Werte kommen unverändert vom Backend.
 nonisolated enum Ampel: String, Codable, Sendable {
-    case green, yellow, red
+    /// `dormant` heißt: außer Dienst. Die Aufgabe fällt zu dieser Jahreszeit
+    /// nicht an — das Beet wird im Winter nicht gejätet. Sie ist dann weder
+    /// fällig noch gelb noch rot, und es fragt auch niemand nach Helfern.
+    case green, yellow, red, dormant
 
+    /// Ein unbekannter Zustand fällt auf grün zurück statt die Antwort zu
+    /// kosten. Das ist Absicht — ein neuer Wert vom Server darf eine ältere
+    /// App nicht lahmlegen —, kostet aber Genauigkeit: Genau so hat diese App
+    /// `dormant` eine Zeitlang als „Alles gut" angezeigt.
     init(roh: String) { self = Ampel(rawValue: roh) ?? .green }
 }
 

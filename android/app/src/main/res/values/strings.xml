@@ -64,6 +64,9 @@
     <string name="status_green">Alles gut</string>
     <string name="status_yellow">Bitte erledigen</string>
     <string name="status_red">Dringend!</string>
+    <string name="status_dormant">Außer Dienst</string>
+    <string name="status_dormant_watering">Wird jetzt nicht gegossen</string>
+    <string name="status_dormant_weeding">Wird jetzt nicht gejätet</string>
     <string name="status_yellow_watering">Bitte gießen</string>
     <string name="status_red_watering">Dringend gießen!</string>
     <string name="status_yellow_weeding">Bitte jäten</string>
