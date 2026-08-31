@@ -71,6 +71,9 @@
           {{end}}
         </li>
         <li>
+          <a href="/admin/connector/" {{if eq .Nav "connector"}}class="menu-active"{{end}}>Mit Claude</a>
+        </li>
+        <li>
           <a href="/admin/dorfbewohner/" {{if eq .Nav "dorfbewohner"}}class="menu-active"{{end}}>Dorfbewohner</a>
           {{if eq .Nav "dorfbewohner"}}
           <ul>

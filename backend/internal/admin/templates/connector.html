@@ -1,0 +1,65 @@
+{{/* Bereich „Mit Claude“: die Adresse des MCP-Connectors und was damit zu tun
+     ist. Die Seite verwaltet nichts — sie beantwortet die eine Frage, die
+     sonst nur im Quelltext steht. Die Adressen kommen aus PUBLIC_URL, damit
+     hier in der Entwicklung nicht die Produktion angeboten wird. */}}
+{{define "seite"}}
+<h1 class="text-2xl font-bold" id="seitentitel">Mit Claude</h1>
+<p class="mt-1 text-base-content/70">
+  Orte und Aufgaben anlegen, Erledigungen nachtragen, Ideen sichten — dasselbe wie hier im
+  Browser, nur im Gespräch. Dafür wird die Dorf-App einmal als Connector in claude.ai
+  eingetragen.
+</p>
+
+<div class="mt-6 card bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title">Adresse des Connectors</h2>
+    <p class="text-base-content/70">Genau diese Adresse wird in claude.ai eingetragen:</p>
+    {{/* select-all markiert beim ersten Klick die ganze Adresse — der Ersatz
+         für einen Kopierknopf, den es ohne JavaScript nicht gibt. */}}
+    <code class="mt-1 block select-all break-all rounded-lg bg-base-200 p-3 font-mono text-lg"
+          id="mcp-address">{{.Data.MCPAddress}}</code>
+    <p class="text-sm text-base-content/60">Ein Klick markiert die ganze Adresse.</p>
+  </div>
+</div>
+
+<div class="mt-4 card bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title">So wird verbunden</h2>
+    <ol class="list-decimal space-y-2 pl-5 text-base-content/80" id="steps">
+      <li>In claude.ai auf <strong>Einstellungen → Connectors</strong> gehen und dort einen
+        eigenen Connector anlegen.</li>
+      <li>Als Adresse die obige eintragen. <strong>Sonst nichts</strong> — insbesondere
+        keine Client-ID und kein Geheimnis von Hand.</li>
+      <li id="step-client">Fragt claude.ai, ob über einen <strong>festen</strong> oder einen
+        <strong>automatisch erzeugten</strong> OAuth-Client verbunden werden soll: den
+        <strong>automatisch erzeugten</strong>. Der Dorfserver legt den Client selbst an
+        (Dynamic Client Registration); eine feste Kennung zum Eintragen gibt es bewusst nicht.</li>
+      <li>Beim Verbinden öffnet sich die Anmeldung der <strong>Rössing-ID</strong>. Hindurch
+        kommt nur, wer dort die Rolle <code class="rounded bg-base-200 px-1">admin</code> hat.</li>
+    </ol>
+  </div>
+</div>
+
+<div role="alert" class="mt-4 alert alert-info" id="note-not-a-webpage">
+  <span>
+    Die Adresse ist keine Webseite: Wer sie im Browser öffnet, sieht nur eine Fehlermeldung.
+    Das ist richtig so — sie gehört in claude.ai, nicht in die Adresszeile.
+  </span>
+</div>
+
+<div class="mt-4 card bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title">Wenn es nicht klappt</h2>
+    <p class="text-base-content/80">Diese beiden Adressen beantwortet der Dorfserver ohne
+      Anmeldung. Wer sie im Browser öffnet, sieht, was claude.ai zu sehen bekommt: Die erste
+      beschreibt den Anmeldeweg, die zweite legt den Client an.</p>
+    <ul class="space-y-1">
+      <li><code class="select-all break-all font-mono text-sm" id="metadata-address">{{.Data.MetadataAddress}}</code></li>
+      <li><code class="select-all break-all font-mono text-sm" id="registration-address">{{.Data.RegistrationAddress}}</code></li>
+    </ul>
+    <p class="text-base-content/80">Kommt beim Werkzeugaufruf ein Fehler über eine fehlende
+      <code class="rounded bg-base-200 px-1">admin</code>-Rolle, dann hat die Anmeldung geklappt
+      und nur die Rolle fehlt: Sie wird in der Rössing-ID vergeben, nicht hier.</p>
+  </div>
+</div>
+{{end}}
