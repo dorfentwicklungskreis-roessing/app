@@ -29,9 +29,29 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // Ohne GPU braucht MapLibre die Software-Implementierung von WebGL;
-        // neuere Chromium-Versionen verlangen dafür dieses Flag.
-        launchOptions: { args: ['--enable-unsafe-swiftshader'] },
+        launchOptions: {
+          args: [
+            // Ohne GPU braucht MapLibre die Software-Implementierung von
+            // WebGL; neuere Chromium-Versionen verlangen dafür dieses Flag.
+            '--enable-unsafe-swiftshader',
+            // claude.ai gibt es für diesen Browser nicht.
+            //
+            // Der MCP-Anmeldeweg endet bei der Rücksprung-Adresse des
+            // Connectors — genau die, die der Registrierungs-Endpunkt
+            // herausgibt. Sie im Test abzufangen reicht nicht: Playwright
+            // ruft seinen Route-Handler beim LETZTEN Sprung einer fremden
+            // Weiterleitungskette nicht auf, und Chromium holte die Seite
+            // dann wirklich (nachgewiesen im ersten CI-Lauf: der Rücksprung
+            // landete bei claude.ai, das prompt weiterleitete und seine
+            // ganze Oberfläche nachlud).
+            //
+            // Hier wird der Name deshalb eine Ebene tiefer unauflösbar
+            // gemacht — vor Weiterleitung, Route-Handler und Cache. Was der
+            // Test braucht, ist die Adresse mit dem Code, und die steht schon
+            // in der Anfrage; die Antwort braucht er nie.
+            '--host-resolver-rules=MAP claude.ai ~NOTFOUND',
+          ],
+        },
       },
     },
   ],

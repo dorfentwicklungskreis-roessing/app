@@ -36,9 +36,10 @@ export default async function globalSetup() {
   console.log('→ Warte auf Zitadel …');
   await waitFor(`${ISSUER}/.well-known/openid-configuration`, 120_000);
 
-  console.log('→ Bootstrap in Zitadel (Projekt, Rollen, PKCE-App, Nutzer) …');
+  console.log('→ Bootstrap in Zitadel (Projekt, Rollen, PKCE-Apps, Nutzer) …');
   const boot = await bootstrap({ issuer: ISSUER, keyPath, redirectUri: `${BASE_URL}/admin/` });
-  console.log(`   Client-ID ${boot.clientId}, Admin ${boot.admin.userName}, Mitglied ${boot.member.userName}`);
+  console.log(`   Client-ID ${boot.clientId}, MCP-Client-ID ${boot.mcpClientId}, ` +
+    `Admin ${boot.admin.userName}, Mitglied ${boot.member.userName}`);
 
   console.log('→ Backend-Binary bauen …');
   const outDir = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || '/tmp', 'dorf-e2e-'));
@@ -61,9 +62,13 @@ export default async function globalSetup() {
       // die steht hier. Dieser Test ist damit der Nachweis, dass die
       // Produktionskonfiguration (Client-IDs in AUTH_AUDIENCE) trägt: Fiele die
       // Client-ID nicht in den aud-Claim, käme hier keine Anmeldung mehr durch.
-      AUTH_AUDIENCE: boot.clientId,
+      // Der Connector kommt mit einer eigenen Anwendung; ohne deren Client-ID
+      // in der Liste wiese das Backend jedes Token von claude.ai ab.
+      AUTH_AUDIENCE: `${boot.clientId},${boot.mcpClientId}`,
       PUBLIC_URL: BASE_URL,
       ADMIN_CLIENT_ID: boot.clientId,
+      // Diese ID gibt der Registrierungs-Endpunkt (/oauth/register) heraus.
+      MCP_CLIENT_ID: boot.mcpClientId,
       SEED: '1',
       // Ideen-Eingang: erlaubtes Weiterleitungsziel wie in Produktion. Die
       // Zugriffsgrenze wird hochgesetzt, weil der Browser-Test in Folge

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,7 +51,11 @@ type tool struct {
 }
 
 func New(database *db.DB, verifier auth.Verifier, issuer, resource, clientID string) *Server {
-	s := &Server{DB: database, Verifier: verifier, Issuer: issuer, Resource: resource, ClientID: clientID}
+	// Ein Schrägstrich am Ende der öffentlichen Adresse würde sich in jede
+	// Metadata-URL fortpflanzen ("…de//mcp"); Clients vergleichen die
+	// Ressourcen-Kennung zeichengenau.
+	s := &Server{DB: database, Verifier: verifier, Issuer: issuer,
+		Resource: strings.TrimSuffix(resource, "/"), ClientID: clientID}
 	s.registerTools()
 	return s
 }
@@ -68,11 +73,14 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.registerWellKnown(mux)
 	// GET (SSE-Stream) wird nicht unterstützt — sauber ablehnen.
 	mux.HandleFunc("GET /mcp", func(w http.ResponseWriter, _ *http.Request) {
+		setCORS(w.Header())
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	})
 	mux.HandleFunc("DELETE /mcp", func(w http.ResponseWriter, _ *http.Request) {
+		setCORS(w.Header())
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("OPTIONS /mcp", preflight)
 }
 
 // --- JSON-RPC ---------------------------------------------------------------
@@ -141,6 +149,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request, u auth.User)
 
 func writeRPC(w http.ResponseWriter, resp rpcResponse) {
 	w.Header().Set("Content-Type", "application/json")
+	setCORS(w.Header())
 	_ = json.NewEncoder(w).Encode(resp)
 }
 

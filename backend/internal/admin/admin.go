@@ -67,9 +67,13 @@ type Config struct {
 
 // App hält den Zustand der Verwaltung.
 type App struct {
-	db            *db.DB
-	verifier      auth.Verifier
-	clientID      string
+	db       *db.DB
+	verifier auth.Verifier
+	clientID string
+	// publicURL ist die öffentliche Basis-URL ohne Schrägstrich am Ende. Der
+	// Bereich „Mit Claude“ leitet daraus die Adresse des MCP-Connectors ab —
+	// hier steht keine, damit die Entwicklung nicht auf die Produktion zeigt.
+	publicURL     string
 	redirectURI   string
 	secureCookies bool
 	signer        *signer
@@ -90,6 +94,7 @@ func newApp(cfg Config) *App {
 		db:            cfg.DB,
 		verifier:      cfg.Verifier,
 		clientID:      cfg.ClientID,
+		publicURL:     base,
 		redirectURI:   base + "/admin/",
 		secureCookies: strings.HasPrefix(base, "https://"),
 		signer:        newSigner(cfg.SessionKey),
@@ -128,6 +133,7 @@ func (a *App) register(mux *http.ServeMux) {
 	a.registerTraeger(mux)
 	a.registerIdeen(mux)
 	a.registerDorfbewohner(mux)
+	a.registerConnector(mux)
 }
 
 // cacheAssets markiert die mitgelieferten Assets als cachebar.

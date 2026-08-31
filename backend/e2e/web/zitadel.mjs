@@ -112,6 +112,14 @@ export async function menschAnlegen({ issuer, token, projectId, userName, passwo
 }
 
 /**
+ * Rücksprung-Adresse des Claude-Connectors. Genau diese gibt der
+ * Registrierungs-Endpunkt des Backends heraus, also muss die Anwendung in der
+ * Rössing-ID auch genau diese führen. Angefasst wird claude.ai dabei nie: Der
+ * Test fängt den Rücksprung im Browser ab (siehe tests/mcp-connector.spec.mjs).
+ */
+export const CLAUDE_RUECKSPRUNG = 'https://claude.ai/api/mcp/auth_callback';
+
+/**
  * Legt Projekt, Rollen, eine User-Agent-App mit PKCE und zwei menschliche
  * Nutzer (mit Passwort) an. Gibt Client-ID und Zugangsdaten zurück.
  */
@@ -147,6 +155,31 @@ export async function bootstrap({ issuer, keyPath, redirectUri }) {
     idTokenRoleAssertion: true,
   });
 
+  // Die Anwendung des Claude-Connectors: Web-App, PKCE, kein Secret — genau
+  // die Bauart, die der Registrierungs-Endpunkt an claude.ai ausgibt.
+  //
+  // accessTokenRoleAssertion ist AN, und das ist ein Messergebnis, keine
+  // Bequemlichkeit: Zuerst stand hier AUS, in der Annahme, der Rollen-Scope
+  // aus der Metadata reiche. Er reicht nicht. Der Durchlauf kam mit einem
+  // echten Token bis zum Werkzeugaufruf und bekam dort „admin-Rolle
+  // erforderlich" — der Scope besorgt die Rollen für ID-Token und Userinfo,
+  // ins ACCESS-Token legt Zitadel sie nur mit diesem Schalter der Anwendung.
+  //
+  // Damit prüft dieser Test die Produktionskonfiguration mit: Wird der
+  // Schalter in der Rössing-ID je abgeschaltet, hört der Connector auf zu
+  // arbeiten — und genau das würde hier rot.
+  const mcpApp = await zapi(issuer, token, 'POST', `/management/v1/projects/${projectId}/apps/oidc`, {
+    name: 'Claude-MCP-Connector E2E',
+    redirectUris: [CLAUDE_RUECKSPRUNG],
+    responseTypes: ['OIDC_RESPONSE_TYPE_CODE'],
+    grantTypes: ['OIDC_GRANT_TYPE_AUTHORIZATION_CODE', 'OIDC_GRANT_TYPE_REFRESH_TOKEN'],
+    appType: 'OIDC_APP_TYPE_WEB',
+    authMethodType: 'OIDC_AUTH_METHOD_TYPE_NONE',
+    accessTokenType: 'OIDC_TOKEN_TYPE_JWT',
+    accessTokenRoleAssertion: true,
+    idTokenRoleAssertion: false,
+  });
+
   const newHuman = (userName, password, roleKeys) =>
     menschAnlegen({ issuer, token, projectId, userName, password, roleKeys });
 
@@ -154,5 +187,5 @@ export async function bootstrap({ issuer, keyPath, redirectUri }) {
   const admin = await newHuman(`test-dorf-${stamp}`, 'Test-Dorf-2026!', ['admin']);
   const member = await newHuman(`test-mitglied-${stamp}`, 'Test-Dorf-2026!', ['member']);
 
-  return { projectId, clientId: app.clientId, admin, member };
+  return { projectId, clientId: app.clientId, mcpClientId: mcpApp.clientId, admin, member };
 }

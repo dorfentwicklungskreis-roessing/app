@@ -60,13 +60,14 @@ export const test = base.extend({
 export { expect };
 
 /**
- * Fährt den ECHTEN Zitadel-Login durch. Der Code-Tausch passiert danach im
- * Backend; im Browser landet nur ein HttpOnly-Session-Cookie.
- * Funktioniert auch in Kontexten ohne JavaScript.
+ * Fährt die Anmeldemaske der Rössing-ID durch — Benutzername, Passwort und
+ * die Zwischenseiten, die Zitadel je nach Version einschiebt.
+ *
+ * `fertig()` sagt, woran das Ende zu erkennen ist. Das ist nicht immer die
+ * Verwaltung: Der MCP-Connector landet am Ende bei seiner eigenen
+ * Rücksprung-Adresse, geht aber durch dieselbe Maske.
  */
-export async function anmelden(page, user, passwort) {
-  await page.goto('/admin/');
-  await page.locator('#anmelden').click();
+export async function anmeldemaskeDurchlaufen(page, user, passwort, fertig) {
   await page.waitForURL(/\/ui\//, { timeout: 60_000 });
 
   const benutzerfeld = page
@@ -84,13 +85,24 @@ export async function anmelden(page, user, passwort) {
   // Zitadel schiebt je nach Version „Zwei-Faktor einrichten" oder
   // „Passkey einrichten" dazwischen — solche Seiten überspringen wir.
   const frist = Date.now() + 45_000;
-  while (!/\/admin\//.test(page.url()) && Date.now() < frist) {
+  while (!fertig() && Date.now() < frist) {
     if (!(await ueberspringenFallsNoetig(page))) await page.waitForTimeout(500);
   }
-  if (!/\/admin\//.test(page.url())) {
+  if (!fertig()) {
     const text = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 400);
     throw new Error(`Login blieb bei der Rössing-ID hängen.\nURL: ${page.url()}\nSeite: ${text}`);
   }
+}
+
+/**
+ * Fährt den ECHTEN Zitadel-Login durch. Der Code-Tausch passiert danach im
+ * Backend; im Browser landet nur ein HttpOnly-Session-Cookie.
+ * Funktioniert auch in Kontexten ohne JavaScript.
+ */
+export async function anmelden(page, user, passwort) {
+  await page.goto('/admin/');
+  await page.locator('#anmelden').click();
+  await anmeldemaskeDurchlaufen(page, user, passwort, () => /\/admin\//.test(page.url()));
   await page.waitForURL(/\/admin\//, { timeout: 30_000 });
 }
 
