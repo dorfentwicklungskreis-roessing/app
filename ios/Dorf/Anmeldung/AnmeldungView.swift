@@ -10,6 +10,15 @@ struct AnmeldungView: View {
     @State private var fehler: String?
 
     var body: some View {
+        // Ein Stapel, damit der Blick in den Maschinchenring von hier aus
+        // möglich ist: Die Geräteliste ist öffentlich, und wer noch keine
+        // Rössing-ID hat, soll sich erst umsehen dürfen.
+        NavigationStack {
+            inhalt
+        }
+    }
+
+    private var inhalt: some View {
         VStack(spacing: 24) {
             Spacer()
 
@@ -51,6 +60,17 @@ struct AnmeldungView: View {
             .disabled(laeuft)
             .padding(.horizontal, 32)
             .accessibilityIdentifier("anmeldung-knopf")
+
+            // Umsehen geht ohne Konto: Die Geräteliste des Maschinchenrings
+            // ist öffentlich. Zum Buchen fragt der Bereich selbst nach der
+            // Rössing-ID — an der Stelle, an der sie wirklich gebraucht wird.
+            NavigationLink {
+                RentalCatalogView()
+            } label: {
+                Label("Erst einmal umsehen: Maschinchenring", systemImage: "wrench.and.screwdriver")
+                    .font(.subheadline)
+            }
+            .accessibilityIdentifier("anmeldung-maschinchenring")
 
             if Konfiguration.entwicklerLoginErlaubt {
                 VStack(spacing: 4) {

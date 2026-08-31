@@ -10,6 +10,7 @@ enum Ziel: Hashable {
     case profil
     case dorfbewohner
     case veranstaltungen
+    case rental
     case ideen
     case anfragen
     case einstellungen
@@ -28,6 +29,7 @@ extension View {
             case .profil: ProfilView()
             case .dorfbewohner: DorfbewohnerView()
             case .veranstaltungen: VeranstaltungenView()
+            case .rental: RentalCatalogView()
             case .ideen: IdeenView()
             case .anfragen: VergabeView()
             case .einstellungen: EinstellungenView()

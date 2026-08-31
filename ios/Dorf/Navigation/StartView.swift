@@ -63,6 +63,11 @@ struct StartView: View {
                         untertitel: "Termine aus dem Dorf."
                     )
                     Bereichskachel(
+                        ziel: .rental, symbol: "wrench.and.screwdriver.fill",
+                        titel: "Maschinchenring",
+                        untertitel: "Geräte aus dem Dorf leihen."
+                    )
+                    Bereichskachel(
                         ziel: .rangliste, symbol: "trophy.fill", titel: "Rangliste",
                         untertitel: "Wer wie viel geschafft hat."
                     )

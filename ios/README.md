@@ -40,7 +40,7 @@ Wer eine Datei hinzufügt, ruft danach `make projekt` auf.
 
 `make testen` setzt alle vier Adressen auf den eigenen Rechner um — dieselben
 Werte wie `.github/workflows/ios.yml`. Der letzte grüne CI-Lauf meldet
-**154 Tests in 10 Suiten**.
+**228 Tests in 15 Suiten**.
 
 ### Zwei Fallstricke, die Zeit gekostet haben
 
@@ -109,7 +109,8 @@ viele Orte gerade warten, und bei Hitze einen Hinweis.
 |---|---|
 | **Mithelfen** | Orte als Karte oder Liste, Ampel je Aufgabe, Ortsdetail mit Plan, letzter Erledigung und Historie; melden nach Rückfrage, zurücknehmen; „Ich helfe hier mit" trägt als Helfer:in ein |
 | **Dorfkarte** (keine eigene Seite, sondern Teil von „Mithelfen") | MapLibre mit den Orten als Ampel-Nadeln, eigener Standort, Tipp auf eine Nadel öffnet den Ort |
-| **Was ist los in Rössing** | Termine aus `events.json` der Website — der einzige Abruf **ohne** Zugangstoken |
+| **Was ist los in Rössing** | Termine aus `events.json` der Website — ein Abruf **ohne** Zugangstoken |
+| **Maschinchenring** | Der Verleih des Dorfes (`mieten.…`, ein **zweiter** Dienst neben dem Backend): Geräte durchsehen und suchen ohne Anmeldung, Belegung sehen, mit Rössing-ID buchen, eigene Buchungen sehen und zurückziehen, Profil dort pflegen; für Freigeschaltete die Vermieteransicht (zusagen, absagen, Zeiträume sperren). Geräte anlegen bleibt beim Maschinchenring selbst |
 | **Rangliste** | Was das Dorf geschafft hat, wer wie viel, wo man selbst steht; fünf Zeiträume. Ohne Punkte und ohne Abzeichen für Versäumtes |
 | **Anfragen und Hinweise** | Die Vergabe: wer gerade gefragt ist, zusagen und wieder abgeben, Hinweise bestätigen |
 | **Mein Profil** | Eigene Angaben mit Sichtbarkeitsschaltern, die in Worten sagen, wer ein Feld sieht. Telefon, E-Mail und Notiz sind vorbelegt **nicht** öffentlich |
@@ -158,6 +159,21 @@ Angefordert wird beim Login zusätzlich der Scope
 `urn:zitadel:iam:org:projects:roles` („projects", Plural). Ohne ihn stellt
 Zitadel ein Token **ganz ohne Rollen** aus — dann ist niemand Verwaltung.
 
+Dazu kommt der **Empfänger-Scope der Mietplattform**:
+`urn:zitadel:iam:org:project:id:<RENTAL_PROJECT_ID>:aud`. Ein Token gilt nur
+für die Projekte, die in seiner `aud` stehen; ohne diesen Scope antwortet
+`mieten.…` auf jede angemeldete Route mit `401 token_audience`. Die
+Projekt-Kennung steht in `project.yml` (`RENTAL_PROJECT_ID`), nicht im
+Quelltext.
+
+**Der Stolperstein dabei:** Ein Gerät, das schon angemeldet ist, behält
+seinen Tokensatz über die Aktualisierung hinweg — es bekommt also weiter
+Token *ohne* den neuen Empfänger, und eine Erneuerung ändert daran nichts;
+Zitadel legt Empfänger nur bei der Autorisierung fest. Deshalb erkennt der
+Bereich `token_audience` am Code (nicht am Text, nicht am Status) und bietet
+eine **neue Anmeldung** an, statt eine leere Liste zu zeigen. Der Katalog ist
+davon unberührt: Er kommt ohne Token.
+
 `offline_access` hält die Sitzung über den Neustart hinweg; die Tokens liegen
 im Schlüsselbund. Der Entwickler-Login ohne Zitadel gibt es nur im
 Debug-Build und nur mit `DEV_AUTH=1` — in einem Release-Build ist er hart
@@ -176,8 +192,21 @@ jeder Bereich seinen eigenen Transport gebaut, und Fristen, Kopfzeilen und
 Fehlerübersetzung liefen auseinander. Wer einen Endpunkt ergänzt, benutzt
 die Helfer und schreibt das DTO zu den übrigen in `Modelle.swift`.
 
-Einzige Ausnahme ist der Terminfeed: `events.json` der Website ist öffentlich
-und wird ohne Zugangstoken gelesen.
+Ausgenommen sind die **anderen Dienste** — und nur die. „Genau ein Weg zum
+Backend" heißt: zum Dorf-Backend. Was nicht dort wohnt, hat einen eigenen
+kleinen Client, sonst müsste `DorfApi` fremde Fehlerformen und fremde
+Anmeldungen mitschleppen:
+
+| Dienst | Client | Token |
+|---|---|---|
+| Website (`events.json`) | `Bereiche/Veranstaltungen/Veranstaltungen.swift` | nein — die Seite ist öffentlich |
+| Maschinchenring (`mieten.…`) | `Bereiche/Rental/RentalClient.swift` | nur auf den Routen, die eines verlangen |
+
+Beim Maschinchenring ist das keine Sparsamkeit: Katalog, Suche, Sets,
+Verfügbarkeit und Belegung sind dort öffentlich. Ginge das Token überall
+mit, bräche das Umsehen genau für die, die schon angemeldet sind — nämlich
+für jedes Gerät, dessen Token die Mietplattform noch nicht als Empfänger
+kennt (siehe unten).
 
 ## Push-Benachrichtigungen
 
