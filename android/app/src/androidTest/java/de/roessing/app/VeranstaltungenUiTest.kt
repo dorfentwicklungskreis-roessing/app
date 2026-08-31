@@ -1,6 +1,9 @@
 package de.roessing.app
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -29,6 +32,7 @@ import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.ProfileViewModel
 import de.roessing.app.ui.VeranstaltungenViewModel
 import de.roessing.app.ui.theme.DorfAppTheme
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -103,9 +107,23 @@ class VeranstaltungenUiTest {
         url = "https://xn--rssing-wxa.de/events/2026-08-20-grillen",
     )
 
+    /**
+     * Wohin die App hinausgeführt hat. Der echte UriHandler würde den Browser
+     * starten — die App wäre im Hintergrund und der Test fände seine Oberfläche
+     * nicht mehr wieder. Hier wird nur mitgeschrieben.
+     */
+    private val hinausgefuehrt = mutableListOf<String>()
+
+    private val notizbuch = object : UriHandler {
+        override fun openUri(uri: String) {
+            hinausgefuehrt += uri
+        }
+    }
+
     private fun zeigeApp(repo: VeranstaltungenRepository) {
         compose.setContent {
             DorfAppTheme {
+                CompositionLocalProvider(LocalUriHandler provides notizbuch) {
                 HomeScreen(
                     viewModel = PlacesViewModel(FakePlaces(), FakeVergabeRepo()),
                     leaderboardViewModel = LeaderboardViewModel(FakeStats()),
@@ -117,6 +135,7 @@ class VeranstaltungenUiTest {
                     ),
                     onLogout = {},
                 )
+                }
             }
         }
         compose.waitForIdle()
@@ -200,6 +219,7 @@ class VeranstaltungenUiTest {
         // Keine zweite Fassung in der App — der Tipp geht nach draußen.
         compose.onNodeWithTag("termin-detail").assertDoesNotExist()
         compose.onNodeWithTag("veranstaltungen").assertIsDisplayed()
+        assertEquals(listOf("https://nordstemmen.example/kreisfest"), hinausgefuehrt)
     }
 
     @Test

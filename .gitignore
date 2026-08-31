@@ -36,3 +36,6 @@ backend/internal/admin/node_modules/
 # Python
 __pycache__/
 *.pyc
+
+# Arbeitsverzeichnisse paralleler Agenten — gehoeren niemandem sonst.
+.claude/
