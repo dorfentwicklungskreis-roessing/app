@@ -74,6 +74,20 @@ interface DorfApi {
     @POST("api/v1/ideen")
     suspend fun idee(@Body input: IdeeInput): IdeeDto
 
+    // --- Chat ----------------------------------------------------------------
+
+    /** Ob der Chat eingerichtet ist — und wenn nicht, warum. */
+    @GET("api/v1/chat")
+    suspend fun chatStand(): ChatStandDto
+
+    /**
+     * Stellt eine Frage. Der Verlauf geht mit, das Backend haelt keine
+     * Sitzung. Diese eine Anfrage darf laenger dauern als alle anderen —
+     * siehe LANGE_ANTWORT_PFAD.
+     */
+    @POST("api/v1/chat")
+    suspend fun chatFragen(@Body input: ChatFrageInput): ChatAntwortDto
+
     // --- Gerät für Push-Benachrichtigungen ----------------------------------
 
     @POST("api/v1/me/devices")
@@ -85,6 +99,23 @@ interface DorfApi {
     suspend fun unregisterDevice(@Body input: DeviceInput)
 
     companion object {
+        /**
+         * Der Pfad, der laenger dauern darf als der Rest.
+         *
+         * Hinter ihm steht ein Sprachmodell, das nachdenkt und dabei mehrere
+         * Werkzeuge des Dorfservers befragt; das Backend gibt sich dafuer
+         * selbst bis zu 50 Sekunden. Die 20 Sekunden, die fuer jede andere
+         * Anfrage reichlich sind, waeren hier ein Abbruch mitten in der
+         * Antwort — und zwar reproduzierbar.
+         *
+         * Angehoben wird die Frist deshalb genau fuer diesen einen Pfad und
+         * nicht fuer den Client: Eine Ortsliste, die nach 20 Sekunden nicht
+         * da ist, kommt auch nach 70 nicht mehr, und so lange soll niemand
+         * auf eine Fehlermeldung warten.
+         */
+        private const val LANGE_ANTWORT_PFAD = "/api/v1/chat"
+        private const val LANGE_ANTWORT_SEKUNDEN = 70
+
         private val json = Json {
             ignoreUnknownKeys = true
             coerceInputValues = true
@@ -125,7 +156,13 @@ interface DorfApi {
                     // OkHttp-Interceptoren sind synchron; der Tokenabruf ist
                     // lokal (Cache/Refresh) und läuft auf dem IO-Dispatcher.
                     val token = runBlocking { tokenProvider() }
-                    chain.proceed(autorisiert(chain.request(), token))
+                    val anfrage = autorisiert(chain.request(), token)
+                    if (anfrage.url.encodedPath.endsWith(LANGE_ANTWORT_PFAD)) {
+                        chain.withReadTimeout(LANGE_ANTWORT_SEKUNDEN, TimeUnit.SECONDS)
+                            .proceed(anfrage)
+                    } else {
+                        chain.proceed(anfrage)
+                    }
                 }
                 .build()
             return Retrofit.Builder()

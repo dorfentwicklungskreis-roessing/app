@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
@@ -68,6 +69,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import de.roessing.app.R
 import de.roessing.app.data.DeviceLocation
+import de.roessing.app.data.KeinChat
 import de.roessing.app.data.KeineVeranstaltungen
 import de.roessing.app.push.Geraeteanmeldung
 import de.roessing.app.push.PushZiel
@@ -87,6 +89,9 @@ fun HomeScreen(
     leaderboardViewModel: LeaderboardViewModel,
     profileViewModel: ProfileViewModel,
     ideenViewModel: IdeenViewModel,
+    // Vorgabe: ein abgeschalteter Chat — aus demselben Grund wie beim
+    // leeren Kalender darunter.
+    chatViewModel: ChatViewModel = remember { ChatViewModel(KeinChat) },
     // Vorgabe: ein leerer Kalender. So bleiben Oberflächen-Tests gültig, die
     // mit den Veranstaltungen nichts zu tun haben.
     veranstaltungenViewModel: VeranstaltungenViewModel = remember {
@@ -100,6 +105,7 @@ fun HomeScreen(
     val leaderboard by leaderboardViewModel.state.collectAsState()
     val profil by profileViewModel.state.collectAsState()
     val ideen by ideenViewModel.state.collectAsState()
+    val chat by chatViewModel.state.collectAsState()
     val veranstaltungen by veranstaltungenViewModel.state.collectAsState()
     var bereich by rememberSaveable { mutableStateOf(Bereich.START) }
     val snackbar = remember { SnackbarHostState() }
@@ -284,6 +290,11 @@ fun HomeScreen(
     LaunchedEffect(bereich) {
         if (bereich == Bereich.DORFBEWOHNER) profileViewModel.loadMembers()
     }
+    // Ob der Chat eingerichtet ist, wird beim ersten Öffnen einmal erfragt —
+    // das ViewModel merkt es sich, ein zweiter Besuch fragt nicht erneut.
+    LaunchedEffect(bereich) {
+        if (bereich == Bereich.CHAT) chatViewModel.standPruefen()
+    }
     // Name und E-Mail im Ideen-Formular kommen aus dem Profil. Sie werden
     // nur nachgetragen, wenn die Felder noch leer sind — wer schon getippt
     // hat, verliert nichts (siehe IdeenViewModel.vorbelegen).
@@ -327,6 +338,7 @@ fun HomeScreen(
                                 stringResource(R.string.events_title)
                             }
                             Bereich.IDEEN -> stringResource(R.string.ideas_title)
+                            Bereich.CHAT -> stringResource(R.string.chat_title)
                             Bereich.START -> stringResource(R.string.home_title)
                         },
                     )
@@ -348,6 +360,21 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    // Das Gespraech von vorn. Der bisherige Verlauf geht bei
+                    // jeder Frage mit und kostet dann mit — deshalb steht der
+                    // Knopf dort, wo man ihn sucht, und nicht im Menue. Er
+                    // erscheint erst, wenn es etwas wegzuraeumen gibt.
+                    if (bereich == Bereich.CHAT && chat.zuege.isNotEmpty()) {
+                        IconButton(
+                            onClick = chatViewModel::neuBeginnen,
+                            modifier = Modifier.testTag("chat-neu"),
+                        ) {
+                            Icon(
+                                Icons.Filled.RestartAlt,
+                                contentDescription = stringResource(R.string.chat_reset),
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = {
                             viewModel.refresh()
@@ -518,6 +545,13 @@ fun HomeScreen(
                     onName = ideenViewModel::setName,
                     onEmail = ideenViewModel::setEmail,
                     onSenden = ideenViewModel::absenden,
+                )
+
+                Bereich.CHAT -> ChatScreen(
+                    state = chat,
+                    modifier = Modifier.padding(padding),
+                    onEingabe = chatViewModel::setEingabe,
+                    onSenden = chatViewModel::absenden,
                 )
 
                 Bereich.MITHELFEN -> Column(Modifier.padding(padding)) {

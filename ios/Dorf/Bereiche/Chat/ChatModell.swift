@@ -38,16 +38,19 @@ final class ChatModell: ObservableObject {
             && entwurf.count <= Self.maxFrage
     }
 
-    /// Fragt den Bereichsstand ab. Scheitert das, gilt der Chat als nicht
-    /// eingerichtet — lieber ein ehrlicher Hinweis als ein Eingabefeld, das
-    /// beim ersten Absenden auf einen Fehler läuft.
+    /// Fragt den Bereichsstand ab.
+    ///
+    /// Scheitert schon diese Frage — kein Netz —, gilt der Chat als
+    /// verfügbar: Dann sagt der erste Versuch die Wahrheit, statt dass ein
+    /// Aussetzer der Leitung wie eine dauerhafte Abschaltung aussieht. „Noch
+    /// nicht eingerichtet" sagt der Bereich nur, wenn das Backend es sagt.
     func standLaden(api: DorfApi) async {
         do {
             stand = try await api.chatstand()
             hinweis = nil
         } catch {
             if Task.isCancelled { return }
-            stand = Chatstand(verfuegbar: false)
+            stand = Chatstand(verfuegbar: true)
             hinweis = (error as? DorfFehler)?.klartext ?? "Unerwarteter Fehler."
         }
     }
@@ -68,15 +71,18 @@ final class ChatModell: ObservableObject {
                 text = "Darauf habe ich keine Antwort gefunden. Frag es gern anders."
             }
             verlauf.append(Gespraechszug(rolle: Gespraechszug.rolleApp, text: text,
-                                         werkzeuge: antwort.werkzeuge))
+                                         werkzeuge: antwort.werkzeuge,
+                                         abgebrochen: antwort.abgebrochen))
         } catch {
             if Task.isCancelled {
                 laeuft = false
                 return
             }
-            // Der Satz kommt aus dem Backend, wo die Prüfung sitzt. Die Frage
-            // bleibt im Verlauf stehen: Sie wurde gestellt, und ohne sie
-            // ergäbe der Hinweis darunter keinen Sinn.
+            // Der Satz kommt aus dem Backend, wo die Prüfung sitzt. Die
+            // Frage wandert zurück ins Eingabefeld und verschwindet wieder
+            // aus dem Verlauf: Ein zweiter Versuch ist dann ein Tipp und
+            // kein Abtippen, und im Gespräch bleibt keine Frage stehen, auf
+            // die nie eine Antwort kam.
             hinweis = (error as? DorfFehler)?.klartext ?? "Unerwarteter Fehler."
             entwurf = frage
             verlauf.removeLast()

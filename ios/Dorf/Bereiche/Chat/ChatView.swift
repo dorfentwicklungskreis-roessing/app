@@ -17,7 +17,7 @@ struct ChatView: View {
                 eingabe
             }
         }
-        .navigationTitle("Chat")
+        .navigationTitle("Frag die App")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !modell.verlauf.isEmpty {
@@ -93,7 +93,9 @@ struct ChatView: View {
             Text("Frag einfach")
                 .font(.title2.bold())
                 .accessibilityAddTraits(.isHeader)
-            Text("„Was steht diese Woche an?“, „Wer hat den Kasten am Kirchplatz zuletzt gegossen?“, „Ich habe gerade gegossen.“ — schreib es, wie du es sagen würdest.")
+            Text("Schreib in normalem Deutsch, was du wissen oder tun willst — was ansteht, wer zuletzt gegossen hat, oder trag gleich eine Erledigung ein.")
+            Text("Zum Beispiel: „Was muss diese Woche gegossen werden?“ · „Wer war zuletzt am Kirchplatz?“ · „Ich habe gerade gegossen.“")
+                .font(.subheadline)
             Text("Der Chat sieht genau das, was du auch sonst siehst, und tut nur, was du auch sonst tun darfst.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -111,7 +113,7 @@ struct ChatView: View {
             } icon: {
                 Image(systemName: "bubble.left.and.exclamationmark.bubble.right")
             }
-            Text("Alles andere in der App geht weiter wie gewohnt.")
+            Text("Sobald der Dorfentwicklungskreis ihn freischaltet, kannst du hier fragen. Alles andere in der App funktioniert weiter.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -121,7 +123,7 @@ struct ChatView: View {
     private var denktNach: some View {
         HStack(spacing: 8) {
             ProgressView()
-            Text("Ich sehe nach …")
+            Text("Ich schaue im Dorf nach …")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -134,7 +136,7 @@ struct ChatView: View {
         VStack(spacing: 0) {
             Divider()
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("Was möchtest du wissen?", text: $modell.entwurf, axis: .vertical)
+                TextField("Deine Frage …", text: $modell.entwurf, axis: .vertical)
                     .lineLimit(1 ... 5)
                     .textFieldStyle(.plain)
                     .focused($amTippen)
@@ -174,6 +176,12 @@ private struct Blase: View {
                 .background(zug.vonMir ? Color.accentColor.opacity(0.15) : Color(.secondarySystemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .textSelection(.enabled)
+            if zug.abgebrochen {
+                Text("Das hat zu lange gedauert — die Antwort ist unvollständig.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("chat-unvollstaendig")
+            }
             if !zug.werkzeuge.isEmpty {
                 Text("Nachgesehen in: " + zug.werkzeuge.joined(separator: ", "))
                     .font(.caption2)

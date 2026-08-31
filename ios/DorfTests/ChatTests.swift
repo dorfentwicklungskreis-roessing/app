@@ -132,6 +132,20 @@ struct ChatTests {
         #expect(modell.absendbar == false)
     }
 
+    /// Ein Aussetzer der Leitung beim Öffnen ist keine dauerhafte
+    /// Abschaltung: Der Bereich bleibt bedienbar, und der erste Versuch sagt
+    /// dann die Wahrheit. „Noch nicht eingerichtet" sagt er nur, wenn das
+    /// Backend es sagt.
+    @MainActor
+    @Test func einNetzausfallSchaltetDenBereichNichtAb() async throws {
+        Chatablage.antwort = (500, Data())
+        let modell = ChatModell()
+        await modell.standLaden(api: Self.api())
+        #expect(modell.eingerichtet)
+        modell.entwurf = "Moin"
+        #expect(modell.absendbar)
+    }
+
     @MainActor
     @Test func leeresUndZuLangesGehtNichtHinaus() async throws {
         Chatablage.antwort = (200, Data(#"{"verfuegbar":true}"#.utf8))

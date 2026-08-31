@@ -797,6 +797,9 @@ nonisolated struct Gespraechszug: Codable, Identifiable, Hashable, Sendable {
     /// Zahl aus dem Dorfserver kommt und nicht aus dem Gedächtnis eines
     /// Modells.
     var werkzeuge: [String] = []
+    /// Die Rundengrenze war erreicht, bevor eine Antwort stand — die Antwort
+    /// ist unvollständig, und das steht auch darunter.
+    var abgebrochen = false
 
     enum CodingKeys: String, CodingKey { case rolle, text }
 
@@ -806,10 +809,11 @@ nonisolated struct Gespraechszug: Codable, Identifiable, Hashable, Sendable {
         text = c.wert(.text, "")
     }
 
-    init(rolle: String, text: String, werkzeuge: [String] = []) {
+    init(rolle: String, text: String, werkzeuge: [String] = [], abgebrochen: Bool = false) {
         self.rolle = rolle
         self.text = text
         self.werkzeuge = werkzeuge
+        self.abgebrochen = abgebrochen
     }
 
     var vonMir: Bool { rolle == Gespraechszug.rolleIch }
