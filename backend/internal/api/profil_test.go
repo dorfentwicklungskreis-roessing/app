@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 )
 
 // Tests der Profilverwaltung: eigenes Profil, Sichtbarkeit gegenüber anderen
@@ -458,5 +460,55 @@ func TestHistorieNutztProfilnamen(t *testing.T) {
 	letzte := orte.Places[0].Tasks[0].LastCompletion
 	if letzte == nil || letzte.UserName != "Gießmeisterin" {
 		t.Fatalf("letzte Erledigung = %+v, erwartet den Nickname", letzte)
+	}
+}
+
+// TestRanglisteZeigtSpitznameStattLeerstelle baut den Zustand nach, der in
+// der Produktion aufgefallen ist: ein Konto ohne jeden Namen — die Rössing-ID
+// liefert weder „name“ noch „preferred_username“, also ist auch der bei der
+// Meldung eingefrorene Name leer. Die Zeile stand mit Punkten, Litern und
+// Auszeichnungen in der Rangliste, nur eben ohne Namen.
+//
+// Der Umweg über die Datenbank ist Absicht: Der Dev-Verifier kann kein Token
+// ohne Namen ausstellen (er setzt notfalls die Kennung ein), der echte
+// OIDC-Verifier sehr wohl.
+func TestRanglisteZeigtSpitznameStattLeerstelle(t *testing.T) {
+	ts, srv := newTestServer(t)
+	_, taskID := createPlaceWithTask(t, ts)
+
+	const namenlos = "namenlose-kennung"
+	if err := srv.DB.UpsertProfile(&model.Profile{
+		UserSub: namenlos, Visibility: model.DefaultVisibility(), UpdatedAt: srv.now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	liter := 20.0
+	if err := srv.DB.InsertCompletion(&model.Completion{
+		TaskID: taskID, UserSub: namenlos, Liters: &liter, DoneAt: srv.now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	liste := rangliste(t, ts, profilKarl)
+	if len(liste.Entries) == 0 {
+		t.Fatal("die Rangliste ist leer")
+	}
+	eintrag := liste.Entries[0]
+	if eintrag.UserSub != namenlos {
+		t.Fatalf("Platz 1 = %+v, erwartet die namenlose Kennung", eintrag)
+	}
+	if eintrag.UserName == "" {
+		t.Fatal("Platz 1 steht weiterhin ohne Namen in der Rangliste")
+	}
+	if got, want := eintrag.UserName, model.AnonymousName(namenlos); got != want {
+		t.Fatalf("Platz 1 heißt %q, erwartet den Spitznamen %q", got, want)
+	}
+
+	// Im Verzeichnis der Dorfbewohner ändert sich dagegen nichts: Wer keinen
+	// Namen freigegeben hat, erscheint dort weiterhin nicht.
+	for _, m := range mitglieder(t, ts, profilKarl).Members {
+		if m.UserSub == namenlos {
+			t.Fatalf("der Spitzname holt jemanden ins Verzeichnis: %+v", m)
+		}
 	}
 }

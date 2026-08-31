@@ -74,15 +74,23 @@ type Profile struct {
 }
 
 // EffectiveName ist der Name, unter dem die Person im Dorf auftritt:
-// Nickname, sonst Anzeigename, sonst der Name aus der Rössing-ID.
+// Nickname, sonst Anzeigename, sonst der Name aus der Rössing-ID — und wenn
+// nichts davon da ist, der Spitzname (siehe AnonymousName).
+//
+// Der Spitzname steht ausdrücklich am Ende: Er ersetzt keinen Namen, er
+// vertritt ihn nur dort, wo sonst eine Leerstelle stünde. Genau das war der
+// Fall — die Rangliste zeigte Zeilen mit Punkten, Litern und Auszeichnungen,
+// aber ohne Namen.
 func (p Profile) EffectiveName() string {
 	switch {
 	case p.Nickname != "":
 		return p.Nickname
 	case p.DisplayName != "":
 		return p.DisplayName
-	default:
+	case p.TokenName != "":
 		return p.TokenName
+	default:
+		return AnonymousName(p.UserSub)
 	}
 }
 
@@ -174,6 +182,16 @@ func (p Profile) AsMember(istVerwaltung bool) (Member, bool) {
 	}
 	// Der angezeigte Name folgt derselben Regel wie in der Rangliste, nutzt
 	// aber nur die freigegebenen Felder.
+	//
+	// Hier greift der Spitzname bewusst NICHT. In der Rangliste steht die
+	// Person ohnehin schon, nur ohne Namen — dort füllt er eine Leerstelle.
+	// Im Verzeichnis dagegen fehlt sie ganz, und zwar weil sie weder
+	// Anzeigenamen noch Nickname freigegeben hat. Sie als „Lustiger Lurch“
+	// aufzunehmen wäre keine Kosmetik, sondern ein neuer Eintrag: Er verriete,
+	// dass es dieses Konto gibt, und machte aus einer Entscheidung gegen die
+	// Liste eine Aufnahme in sie. Ein Eintrag ohne Namen und ohne Kontaktdaten
+	// nützt dem Verzeichnis („wer macht mit, wie erreiche ich sie“) auch
+	// nichts.
 	switch {
 	case m.Nickname != "":
 		m.Name = m.Nickname
