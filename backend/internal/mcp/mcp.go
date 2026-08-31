@@ -324,7 +324,10 @@ func (s *Server) registerTools() {
 		{
 			Name: "orte_liste",
 			Description: "Listet alle Pflege-Orte (Blumenkästen, Beete, …) mit ihren Aufgaben, " +
-				"letzter Erledigung und Ampel-Status (green/yellow/red).",
+				"letzter Erledigung und Ampel-Status (green/yellow/red/dormant). " +
+				"Betreibersicht: Enthalten sind auch Aufgaben, die ein Träger als " +
+				"sichtbarkeit=nur_mitglieder eingestellt hat — die gehen nur seine " +
+				"Mitglieder etwas an und sollten nicht weitergetragen werden.",
 			Schema:  obj(nil, map[string]any{}),
 			Handler: s.toolListPlaces,
 		},
@@ -497,6 +500,23 @@ func (s *Server) registerTools() {
 	s.tools = append(s.tools, s.beitrittTools()...)
 }
 
+// toolListPlaces zeigt die **Betreibersicht**: alle Orte aller Träger, auch
+// deren interne Aufgaben.
+//
+// Das ist kein Leck, sondern eine Folge davon, wer hier ankommt: withAuth
+// verlangt für jede Anfrage die globale admin-Rolle, und dieselben Daten
+// stehen für diese Person ohnehin in der Web-Verwaltung. Es entsteht kein
+// Zugang, den es nicht gäbe.
+//
+// **Wer den Endpunkt je für Träger-Admins öffnet, muss vorher hier auf
+// api.AssemblePlacesFuer umstellen** — und bei der Rangliste entsprechend auf
+// AssembleLeaderboardFuer. Sonst geht mit der Öffnung ein Weg an der
+// Sichtbarkeit vorbei auf (#35, #32).
+//
+// Die Sichtbarkeit jeder Aufgabe steht in der Antwort. Das ist Absicht: Wer
+// im Gespräch mit Claude eine interne Aufgabe eines fremden Vereins vor sich
+// hat, soll es sehen können — es ist eine Vertrauensfrage gegenüber den
+// Trägern, nicht bloß eine Frage der Zugriffsrechte.
 func (s *Server) toolListPlaces(json.RawMessage, auth.User) (any, error) {
 	places, factor, err := api.AssemblePlaces(s.DB, s.now())
 	if err != nil {

@@ -256,3 +256,72 @@ func TestZuletztErledigtUeberMCP(t *testing.T) {
 		t.Error("ein Datum in der Zukunft wurde angenommen")
 	}
 }
+
+// --- Betreibersicht ----------------------------------------------------------
+
+// Der MCP-Endpunkt zeigt die Betreibersicht: alle Orte aller Träger, auch
+// deren interne Aufgaben. Das ist kein Leck — wer hier ankommt, hat die
+// globale admin-Rolle und sieht dieselben Daten in der Web-Verwaltung.
+//
+// Damit man im Gespräch mit Claude aber *erkennt*, was intern ist, muss die
+// Sichtbarkeit in der Antwort stehen. Sie steht dort heute, weil sie zum
+// Datensatz gehört — dieser Test hält es fest, damit sie nicht eines Tages
+// stillschweigend herausfällt (#35).
+func TestOrteListeNenntDieSichtbarkeit(t *testing.T) {
+	ts, d := serverMitDB(t)
+
+	text, _ := callTool(t, ts, "ort_anlegen", map[string]any{
+		"name": "Vereinsgarten", "lat": 52.18, "lon": 9.81,
+	})
+	var ort model.Place
+	if err := json.Unmarshal([]byte(text), &ort); err != nil {
+		t.Fatalf("Ort nicht lesbar: %v — %s", err, text)
+	}
+	if _, fehler := callTool(t, ts, "aufgabe_anlegen", map[string]any{
+		"placeId": ort.ID, "kind": "jaeten", "intervalDays": 21, "redAfterDays": 35,
+		"sichtbarkeit": "nur_mitglieder",
+	}); fehler {
+		t.Fatal("interne Aufgabe konnte nicht angelegt werden")
+	}
+
+	text, fehler := callTool(t, ts, "orte_liste", map[string]any{})
+	if fehler {
+		t.Fatalf("orte_liste: %s", text)
+	}
+	var antwort struct {
+		Places []struct {
+			Tasks []struct {
+				Sichtbarkeit string `json:"sichtbarkeit"`
+			} `json:"tasks"`
+		} `json:"places"`
+	}
+	if err := json.Unmarshal([]byte(text), &antwort); err != nil {
+		t.Fatalf("Antwort nicht lesbar: %v — %s", err, text)
+	}
+	var gefunden bool
+	for _, p := range antwort.Places {
+		for _, a := range p.Tasks {
+			if a.Sichtbarkeit == "nur_mitglieder" {
+				gefunden = true
+			}
+		}
+	}
+	if !gefunden {
+		t.Fatalf("die interne Aufgabe steht ohne erkennbare Sichtbarkeit da: %s", text)
+	}
+
+	// Und sie ist wirklich intern — der Test prüft nicht bloß ein Wort.
+	aufgaben, err := d.ListTasks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var intern int
+	for _, a := range aufgaben {
+		if a.PlaceID == ort.ID && a.Sichtbarkeit == model.AufgabeNurMitglieder {
+			intern++
+		}
+	}
+	if intern != 1 {
+		t.Fatalf("in der Datenbank steht etwas anderes: %+v", aufgaben)
+	}
+}
