@@ -382,6 +382,31 @@ jobs:
           python3 store/asc.py beta-info \
             || echo "::warning::Beta-Angaben konnten nicht gesetzt werden — von Hand unter TestFlight → Test Information nachtragen."
 
+      # Ein hochgeladener Build ist noch kein ausgelieferter Build. Die Gruppe
+      # „Dorf" ist **extern** — das ist der Grund für den öffentlichen Link,
+      # mit dem ein Link ins Dorf reicht statt einer Einladung je Adresse. Für
+      # externe Tester prüft Apple jeden ersten Build einer Versionsnummer, und
+      # diese Prüfung stößt niemand von selbst an. Ohne diesen Schritt liegt
+      # der Build in TestFlight und wartet, während im Dorf niemand etwas sieht.
+      #
+      # Der Schritt wartet, bis Apple den Build verarbeitet hat (5 bis 30
+      # Minuten), deshalb das großzügige Zeitlimit. Er ist wiederholbar: ein
+      # schon eingereichter Build wird gemeldet, nicht doppelt angemeldet.
+      #
+      # Nur eine Warnung, wenn er scheitert: Der Build ist dann trotzdem oben,
+      # und die Einreichung lässt sich jederzeit mit
+      # `python3 store/asc.py beta-einreichen` nachholen.
+      - name: Zur Beta App Review anmelden
+        if: env.SIGNIEREN == 'ja' && env.APP_DA == 'ja' && (github.event_name != 'workflow_dispatch' || inputs.hochladen)
+        timeout-minutes: 40
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -uo pipefail
+          python3 store/asc.py beta-einreichen \
+            || echo '::warning::Beta App Review nicht angemeldet — später von Hand nachholen mit: python3 store/asc.py beta-einreichen'
+
       # Der Upload-Bericht ist das Einzige, woran sich später nachvollziehen
       # lässt, welche Buildnummer wann oben angekommen ist — und Apples
       # Fehlermeldungen (ITMS-…) stehen ausschließlich darin.

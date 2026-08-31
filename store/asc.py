@@ -509,6 +509,137 @@ def testflight_gruppe() -> None:
     print("Der Link trägt erst, wenn ein Build die Beta App Review bestanden hat.")
 
 
+def _neuester_build(app_id: str) -> dict:
+    """Der zuletzt hochgeladene Build der App.
+
+    Nach Uploaddatum absteigend, ein Treffer. Eine Buildnummer als Filter wäre
+    genauer, aber der Workflow kennt sie nicht mehr, wenn dieser Schritt
+    läuft — `altool` gibt sie nicht zurück.
+    """
+    antwort = anfrage(
+        "GET",
+        f"/v1/builds?filter[app]={app_id}&sort=-uploadedDate&limit=1",
+    )
+    daten = antwort.get("data", [])
+    if not daten:
+        raise SystemExit(
+            "Zu dieser App ist noch kein Build in App Store Connect.\n"
+            "Erst hochladen (.github/workflows/ios-release.yml), dann "
+            "einreichen. Es wurde nichts geändert."
+        )
+    return daten[0]
+
+
+def _auf_verarbeitung_warten(build: dict, frist: int = 1800) -> dict:
+    """Warten, bis Apple den Build verarbeitet hat.
+
+    Ein frisch hochgeladener Build steht auf PROCESSING und lässt sich weder
+    einer Gruppe zuordnen noch einreichen. Das dauert erfahrungsgemäß 5 bis 30
+    Minuten — deshalb die halbe Stunde Frist und nicht fünf Minuten.
+
+    INVALID ist ein Abbruch und keine Geduldsfrage: Der Build ist unbrauchbar,
+    und Apple sagt den Grund in App Store Connect.
+    """
+    kennung = build["id"]
+    while True:
+        stand = build.get("attributes", {}).get("processingState")
+        if stand == "VALID":
+            return build
+        if stand in ("INVALID", "FAILED"):
+            raise SystemExit(
+                f"Build {build['attributes'].get('version')} ist {stand} — "
+                "Apple hat ihn abgewiesen. Der Grund steht in App Store "
+                "Connect unter TestFlight. Es wurde nichts eingereicht."
+            )
+        if PROBE:
+            print(f"[Trockenlauf] Warten auf Verarbeitung entfällt (Stand {stand}).")
+            return build
+        if frist <= 0:
+            raise SystemExit(
+                f"Build steht nach der Wartezeit immer noch auf {stand}. "
+                "Das ist kein Fehler, nur langsam: später erneut "
+                "`python3 store/asc.py beta-einreichen` aufrufen."
+            )
+        print(f"  Build ist {stand} — in 60 s noch einmal nachsehen "
+              f"(noch {frist // 60} Minuten Geduld).")
+        time.sleep(60)
+        frist -= 60
+        build = anfrage("GET", f"/v1/builds/{kennung}")["data"]
+
+
+def beta_einreichen() -> None:
+    """Den neuesten Build der externen Gruppe geben und zur Beta App Review anmelden.
+
+    Interne Tester bekommen einen Build sofort. Die Gruppe „Dorf“ ist aber
+    **extern** — das ist der Grund für den öffentlichen Link, mit dem ein Link
+    ins Dorf reicht statt einer Einladung je Adresse. Extern heißt: Apple prüft
+    den ersten Build und jede neue Versionsnummer, bevor jemand ihn laden kann.
+
+    Diese Prüfung stößt niemand von selbst an. Ohne diesen Schritt liegt der
+    Build in TestFlight und wartet — und niemand im Dorf sieht ihn.
+
+    Der Aufruf ist wiederholbar: Ein bereits eingereichter Build wird nicht
+    doppelt angemeldet, sondern gemeldet.
+    """
+    app = app_datensatz()
+    build = _auf_verarbeitung_warten(_neuester_build(app["id"]))
+    eigenschaften = build.get("attributes", {})
+    print(f"Build {eigenschaften.get('version')} "
+          f"(hochgeladen {eigenschaften.get('uploadedDate')}), Stand "
+          f"{eigenschaften.get('processingState')}.")
+
+    # Die Gruppe muss es geben — sie anzulegen ist ein eigener Befehl, damit
+    # dieser hier nicht nebenbei etwas erschafft.
+    gruppen = anfrage("GET", f"/v1/apps/{app['id']}/betaGroups?limit=200")
+    gruppe = next(
+        (e for e in gruppen.get("data", [])
+         if e.get("attributes", {}).get("name") == TESTFLIGHT_GRUPPE),
+        None,
+    )
+    if gruppe is None:
+        raise SystemExit(
+            f"Die Tester-Gruppe „{TESTFLIGHT_GRUPPE}“ gibt es nicht.\n"
+            "Erst anlegen: python3 store/asc.py testflight-gruppe\n"
+            "Es wurde nichts eingereicht."
+        )
+
+    # 409 heißt hier „liegt schon in der Gruppe“ — kein Grund für Rot.
+    antwort = anfrage(
+        "POST", f"/v1/betaGroups/{gruppe['id']}/relationships/builds",
+        {"data": [{"type": "builds", "id": build["id"]}]},
+        dulden=(409,),
+    )
+    if antwort.get("__status") == 409:
+        print(f"Build liegt bereits in der Gruppe „{TESTFLIGHT_GRUPPE}“.")
+    else:
+        print(f"Build der Gruppe „{TESTFLIGHT_GRUPPE}“ zugeordnet.")
+
+    vorhanden = anfrage(
+        "GET",
+        f"/v1/betaAppReviewSubmissions?filter[build]={build['id']}&limit=1",
+    )
+    if vorhanden.get("data"):
+        stand = vorhanden["data"][0].get("attributes", {}).get("betaReviewState")
+        print(f"Dieser Build ist bereits zur Beta App Review angemeldet "
+              f"(Stand: {stand}). Es wurde nichts doppelt eingereicht.")
+        return
+
+    anfrage("POST", "/v1/betaAppReviewSubmissions", {
+        "data": {
+            "type": "betaAppReviewSubmissions",
+            "relationships": {
+                "build": {"data": {"type": "builds", "id": build["id"]}},
+            },
+        },
+    })
+    print("Zur Beta App Review angemeldet. Apple antwortet in aller Regel "
+          "innerhalb eines Tages; bis dahin steht der Build in TestFlight auf "
+          "„Waiting for Review“.")
+    print("Wichtig: Ohne hinterlegtes Prüfkonto samt Passwort wird die Prüfung "
+          "abgelehnt — die App kommt ohne Anmeldung nicht über den ersten "
+          "Bildschirm hinaus (store/ios-veroeffentlichung.md).")
+
+
 def beta_info() -> None:
     """Beta-Angaben je Sprache setzen (betaAppLocalizations).
 
@@ -1361,6 +1492,7 @@ BEFEHLE = {
     "app-zeigen": app_zeigen,
     "testflight-gruppe": testflight_gruppe,
     "beta-info": beta_info,
+    "beta-einreichen": beta_einreichen,
     "kategorien": kategorien,
     "alterseinstufung": alterseinstufung,
     "pruefangaben": pruefangaben,

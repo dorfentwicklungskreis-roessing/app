@@ -1,0 +1,3 @@
+Termine: Ein Termin des Dorfes zeigt seine Einzelheiten jetzt in der App — Wann, Wo und von wem, worum es geht. Bisher führte jeder Tipp in den Browser, obwohl alles davon schon in der App lag. Nur Termine, die einem fremden Veranstalter gehören, führen weiterhin auf dessen Seite; dieselbe Sache zweimal zu erzählen hieße, dass eine der beiden irgendwann falsch ist.
+
+Dazu steht die Adresse jetzt auch auf der Terminkarte in der Liste.
