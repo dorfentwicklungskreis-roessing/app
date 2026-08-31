@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Cookie-Namen. Alle Cookies sind HttpOnly und SameSite=Lax; „Secure“ wird
@@ -17,6 +18,23 @@ const (
 	cookieSession = "dorf_admin_session"
 	cookieFlow    = "dorf_admin_flow"
 	cookieFlash   = "dorf_admin_flash"
+)
+
+// Wie lange eine Anmeldung in der Verwaltung hält, und ab wann sie beim
+// nächsten Aufruf verlängert wird.
+//
+// Dreißig Tage klingen lang. Sie sind es auch — und zwar mit Absicht: Die
+// Verwaltung benutzen ein paar Leute im Dorf nebenbei, oft alle paar Tage
+// einmal. Wer sich dabei jedes Mal neu anmelden muss, benutzt sie irgendwann
+// nicht mehr. Getragen wird das Cookie von HttpOnly, Secure und SameSite=Lax,
+// und es öffnet nichts, was die Rolle in der Rössing-ID nicht ohnehin öffnet.
+//
+// Verlängert wird gleitend, aber höchstens einmal am Tag: Wer die Verwaltung
+// benutzt, bleibt angemeldet; wer sie einen Monat nicht anfasst, fliegt
+// heraus. Die Schwelle spart das Neu-Setzen des Cookies bei jedem Klick.
+const (
+	sitzungsdauer     = 30 * 24 * time.Hour
+	sitzungsauffrisch = 24 * time.Hour
 )
 
 // session ist der Inhalt des Session-Cookies. Es enthält bewusst KEIN
@@ -135,6 +153,26 @@ func (a *App) sessionOf(r *http.Request) (session, bool) {
 		return session{}, false
 	}
 	return s, true
+}
+
+// sitzungAuffrischen schiebt das Ablaufdatum nach vorn, wenn seit der letzten
+// Auffrischung ein Tag vergangen ist. So bleibt angemeldet, wer die
+// Verwaltung benutzt — ohne bei jedem Klick ein Cookie neu zu setzen.
+//
+// Schlägt das Signieren fehl, passiert nichts: Die bestehende Sitzung gilt
+// weiter, sie läuft nur irgendwann ab. Ein Fehler beim Verlängern darf
+// niemanden hinauswerfen.
+func (a *App) sitzungAuffrischen(w http.ResponseWriter, s session) {
+	frisch := a.now().Add(sitzungsdauer)
+	if time.Unix(s.Exp, 0).After(frisch.Add(-sitzungsauffrisch)) {
+		return
+	}
+	s.Exp = frisch.Unix()
+	value, err := a.signer.encode(cookieSession, s)
+	if err != nil {
+		return
+	}
+	a.setCookie(w, cookieSession, value, int(sitzungsdauer.Seconds()))
 }
 
 // --- Flash-Nachrichten ------------------------------------------------------

@@ -172,14 +172,14 @@ func (a *App) handleCallback(w http.ResponseWriter, r *http.Request) {
 		Sub: user.Sub, Name: user.Name, Email: user.Email, Admin: user.IsAdmin(),
 		Rollen:  rollenListe(user),
 		IDToken: tok.IDToken,
-		Exp:     a.now().Add(8 * time.Hour).Unix(),
+		Exp:     a.now().Add(sitzungsdauer).Unix(),
 	}
 	value, err := a.signer.encode(cookieSession, s)
 	if err != nil {
 		a.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
-	a.setCookie(w, cookieSession, value, 8*60*60)
+	a.setCookie(w, cookieSession, value, int(sitzungsdauer.Seconds()))
 	a.setFlash(w, "success", "Angemeldet als "+anzeigeName(s))
 	http.Redirect(w, r, ziel, http.StatusSeeOther)
 }

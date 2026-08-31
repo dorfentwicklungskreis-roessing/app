@@ -175,7 +175,7 @@ func main() {
 		admin.Register(mux, admin.Config{
 			DB: database, Verifier: verifier, Issuer: issuer,
 			ClientID: clientID, PublicURL: publicURL,
-			SessionKey: []byte(os.Getenv("SESSION_KEY")),
+			SessionKey: sessionKey(database),
 			Mitglieder: mitglieder,
 		})
 		if clientID != "" {
@@ -469,4 +469,33 @@ func envInt64(key string, def int64) int64 {
 		return def
 	}
 	return n
+}
+
+// sessionKey liefert den Schlüssel, mit dem die Web-Verwaltung ihre Cookies
+// signiert.
+//
+// SESSION_KEY aus der Umgebung hat Vorrang — ausdrücklich schlägt
+// stillschweigend. Ohne ihn kommt der Schlüssel aus der Datenbank, die auf
+// einem PVC liegt und Rollouts überlebt; beim ersten Start entsteht er dort
+// von selbst.
+//
+// Der Grund für den Umbau: Vorher hieß „SESSION_KEY nicht gesetzt“ still
+// „bei jedem Start ein neuer Zufallsschlüssel“ — und damit war nach jedem
+// Rollout jede Anmeldung in der Verwaltung ungültig. An einem Tag mit
+// mehreren Auslieferungen musste man sich alle paar Stunden neu anmelden,
+// ohne dass irgendwo stand, warum.
+func sessionKey(database *db.DB) []byte {
+	if v := os.Getenv("SESSION_KEY"); v != "" {
+		return []byte(v)
+	}
+	key, err := database.SessionKey()
+	if err != nil {
+		// Kein Grund, den Server nicht zu starten: Die Verwaltung bekommt
+		// dann einen Zufallsschlüssel und verlangt nach dem nächsten Start
+		// eine neue Anmeldung. Laut gesagt wird es trotzdem.
+		slog.Warn("Session-Schlüssel nicht aus der Datenbank lesbar — "+
+			"Anmeldungen in der Verwaltung überleben keinen Neustart", "fehler", err)
+		return nil
+	}
+	return key
 }
