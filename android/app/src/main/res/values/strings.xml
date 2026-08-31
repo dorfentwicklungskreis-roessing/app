@@ -334,4 +334,77 @@
         <item quantity="one">%1$d Tag</item>
         <item quantity="other">%1$d Tage</item>
     </plurals>
+
+    <!-- Sets: mehrere Geraete zu einem eigenen Tagespreis. Gebucht werden sie
+         drueben; in der App stehen sie zum Ansehen. -->
+    <string name="rental_sets_title">Sets</string>
+    <string name="rental_sets_note">Sets werden im Maschinchenring selbst gebucht — in der App stehen sie zum Ansehen.</string>
+    <plurals name="rental_set_items">
+        <item quantity="one">%1$d Gerät</item>
+        <item quantity="other">%1$d Geräte</item>
+    </plurals>
+
+    <!-- Das eigene Profil im Maschinchenring. Es liegt drueben, nicht im
+         Dorf-Backend: Es ist das, was der Verleiher bei der Uebergabe sieht. -->
+    <string name="rental_profile_entry">Mein Profil im Maschinchenring</string>
+    <string name="rental_profile_entry_body">Telefon und Adresse für die Übergabe — und der Weg zum Verleihen.</string>
+    <string name="rental_profile_title">Mein Profil im Maschinchenring</string>
+    <string name="rental_profile_loading">Profil wird geholt …</string>
+    <string name="rental_profile_section">Deine Angaben</string>
+    <string name="rental_profile_email">E-Mail: %1$s</string>
+    <string name="rental_profile_save">Speichern</string>
+    <string name="rental_profile_saving">Wird gespeichert …</string>
+    <string name="rental_profile_saved">Gespeichert.</string>
+    <string name="rental_profile_note">Deine E-Mail-Adresse kommt aus der Rössing-ID und lässt sich hier nicht ändern. Telefon und Adresse braucht der Verleiher für die Übergabe.</string>
+    <string name="rental_profile_missing">Zum Buchen fehlt dem Maschinchenring noch: %1$s.</string>
+
+    <!-- Die Feldnamen der Mietplattform heissen englisch; gelesen wird deutsch. -->
+    <string name="rental_field_name">Name</string>
+    <string name="rental_field_phone">Telefonnummer</string>
+    <string name="rental_field_street">Straße und Hausnummer</string>
+    <string name="rental_field_zip">Postleitzahl</string>
+    <string name="rental_field_city">Ort</string>
+
+    <!-- Verleihen: ueber die Freischaltung entscheidet die Verwaltung des
+         Maschinchenrings von Hand, in der Webfassung. -->
+    <string name="rental_lender_title">Verleihen</string>
+    <string name="rental_lender_none">Du verleihst noch nichts.</string>
+    <string name="rental_lender_pending">Deine Anfrage als Verleiher liegt vor.</string>
+    <string name="rental_lender_approved">Du bist als Verleiher freigeschaltet.</string>
+    <string name="rental_lender_unknown">Unbekannter Stand.</string>
+    <string name="rental_lender_ask">Ich möchte auch verleihen</string>
+    <string name="rental_lender_asking">Wird gesendet …</string>
+    <string name="rental_lender_note">Über die Freischaltung entscheidet die Verwaltung des Maschinchenrings von Hand. Du bekommst eine E-Mail, sobald es so weit ist.</string>
+
+    <!-- Meine Vermietung: Anfragen entscheiden, eigene Geraete, eigene Sperren. -->
+    <string name="rental_owner_entry">Meine Vermietung</string>
+    <string name="rental_owner_title">Meine Vermietung</string>
+    <string name="rental_owner_loading">Anfragen werden geholt …</string>
+    <string name="rental_owner_offline">Gerade keine Verbindung zum Maschinchenring — die Listen sind möglicherweise nicht mehr aktuell.</string>
+    <string name="rental_owner_requests">Anfragen</string>
+    <string name="rental_owner_requests_open">Anfragen (%1$d offen)</string>
+    <string name="rental_owner_requests_note">Sobald du zusagst, bekommt der Mieter deine Abholadresse per E-Mail — vorher nicht.</string>
+    <string name="rental_owner_no_bookings">Für deine Geräte liegt gerade nichts vor.</string>
+    <string name="rental_owner_renter">Mieter: %1$s</string>
+    <string name="rental_owner_phone">Telefon: %1$s</string>
+    <string name="rental_owner_note">Nachricht: %1$s</string>
+    <string name="rental_approve">Zusagen</string>
+    <string name="rental_reject">Absagen</string>
+    <string name="rental_owner_cancel">Stornieren</string>
+    <string name="rental_approved">Zugesagt — der Mieter bekommt deine Abholadresse.</string>
+    <string name="rental_rejected">Abgesagt.</string>
+    <string name="rental_owner_devices">Meine Geräte</string>
+    <string name="rental_owner_no_devices">Du hast noch kein Gerät eingestellt.</string>
+    <string name="rental_owner_devices_note">Geräte anlegen und ändern geht im Maschinchenring selbst — in der App bewusst nicht.</string>
+    <string name="rental_owner_inactive">Abgeschaltet — für andere unsichtbar.</string>
+    <string name="rental_owner_blocks">Meine Sperren</string>
+    <string name="rental_owner_no_blocks">Keine Sperre eingetragen.</string>
+    <string name="rental_unblock">Sperre aufheben</string>
+
+    <!-- Zeitraum sperren: der Verleiher braucht sein Geraet selbst. -->
+    <string name="rental_block">Sperren</string>
+    <string name="rental_block_title">Zeitraum sperren</string>
+    <string name="rental_block_reason">Grund (freiwillig)</string>
+    <string name="rental_block_note">Für andere sieht die Sperre aus wie jeder belegte Zeitraum — ohne Grund und ohne Namen. Eine bestehende Buchung verdrängt sie nicht.</string>
+    <string name="rental_block_saving">Wird gesperrt …</string>
 </resources>

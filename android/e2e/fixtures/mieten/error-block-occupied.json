@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "occupied",
+    "message": "In diesem Zeitraum liegt schon eine Buchung oder eine Sperre"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "blocks": [
+    {
+      "id": "b1f0c9a2-33aa-4d10-8e77-5c2b1a9f0e33",
+      "deviceId": "as-585-km-kreiselmaeher",
+      "deviceName": "AS 585 KM Kreiselmäher",
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-08",
+      "reason": "Eigener Einsatz"
+    }
+  ]
+}

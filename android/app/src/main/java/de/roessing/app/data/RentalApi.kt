@@ -12,8 +12,10 @@ import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Headers
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -72,6 +74,12 @@ data class ItemDto(
     val score: Double? = null,
     /** Only in the detail route. */
     val images: List<ImageDto> = emptyList(),
+    /**
+     * Only in the lender's route 16: `false` means the device is switched off
+     * and invisible to everybody else. The public routes never send it, and
+     * what they do not send is on.
+     */
+    val active: Boolean = true,
 )
 
 @Serializable
@@ -166,6 +174,99 @@ data class BookingInputDto(
     val notes: String? = null,
 )
 
+/** Route 4. `description` is plain text here, not Markdown. */
+@Serializable
+data class SetDto(
+    val id: String = "",
+    val name: String = "",
+    val description: String? = null,
+    val pricePerDay: Double? = null,
+    val deposit: Double? = null,
+    val itemIds: List<String> = emptyList(),
+)
+
+@Serializable
+data class SetsDto(val sets: List<SetDto> = emptyList())
+
+/**
+ * The body of route 8. Null fields are left out, not sent as null — the
+ * platform changes exactly what it is given.
+ */
+@Serializable
+data class ProfilePatchDto(
+    val name: String? = null,
+    val phone: String? = null,
+    val addressStreet: String? = null,
+    val addressZip: String? = null,
+    val addressCity: String? = null,
+)
+
+/** Route 9. `message` is German and meant to be shown. */
+@Serializable
+data class LenderRequestDto(
+    val lenderStatus: String = "none",
+    val message: String = "",
+)
+
+/** Route 13. Carries the two fields no public route ever carries. */
+@Serializable
+data class OwnerBookingDto(
+    val id: String = "",
+    val deviceId: String? = null,
+    val deviceName: String = "",
+    val startDate: String = "",
+    val endDate: String = "",
+    val status: String = "",
+    val renterName: String? = null,
+    val renterPhone: String? = null,
+    val notes: String? = null,
+    val canDecide: Boolean = false,
+    val canCancel: Boolean = false,
+)
+
+@Serializable
+data class OwnerBookingsDto(val bookings: List<OwnerBookingDto> = emptyList())
+
+/**
+ * The answer of routes 12, 14 and 15: `{"status": "approved"}`.
+ *
+ * It is read rather than ignored for a plain reason — a call with no return
+ * type at all leaves the converter to guess what an empty answer is, and the
+ * platform does send a body.
+ */
+@Serializable
+data class StatusDto(val status: String = "")
+
+/** Route 19: `{"deleted": true}`. */
+@Serializable
+data class DeletedDto(val deleted: Boolean = false)
+
+/** Route 17 and 18. `reason` may be null. */
+@Serializable
+data class BlockDto(
+    val id: String = "",
+    val deviceId: String? = null,
+    val deviceName: String = "",
+    val startDate: String = "",
+    val endDate: String = "",
+    val reason: String? = null,
+)
+
+@Serializable
+data class BlocksDto(val blocks: List<BlockDto> = emptyList())
+
+@Serializable
+data class BlockEnvelopeDto(val block: BlockDto = BlockDto())
+
+/** The body of route 18. Sets cannot be blocked, only single devices. */
+@Serializable
+data class BlockInputDto(
+    val deviceId: String,
+    val startDate: String,
+    val endDate: String,
+    val reason: String? = null,
+)
+
 /** Every error of the platform has this shape. */
 @Serializable
 data class ApiErrorEnvelopeDto(val error: ApiErrorDataDto = ApiErrorDataDto())
@@ -216,7 +317,47 @@ interface MietenApi {
 
     @Headers("$AUTH_MARKER: required")
     @POST("api/v1/bookings/{id}/cancel")
-    suspend fun cancel(@Path("id") bookingId: String)
+    suspend fun cancel(@Path("id") bookingId: String): StatusDto
+
+    @GET("api/v1/sets")
+    suspend fun sets(): SetsDto
+
+    @Headers("$AUTH_MARKER: required")
+    @PATCH("api/v1/me")
+    suspend fun updateMe(@Body patch: ProfilePatchDto): ProfileEnvelopeDto
+
+    /** Route 9 takes no body; the receipt comes back. */
+    @Headers("$AUTH_MARKER: required")
+    @POST("api/v1/me/lender-request")
+    suspend fun requestLender(): LenderRequestDto
+
+    @Headers("$AUTH_MARKER: required")
+    @GET("api/v1/owner/bookings")
+    suspend fun ownerBookings(): OwnerBookingsDto
+
+    @Headers("$AUTH_MARKER: required")
+    @POST("api/v1/bookings/{id}/approve")
+    suspend fun approve(@Path("id") bookingId: String): StatusDto
+
+    @Headers("$AUTH_MARKER: required")
+    @POST("api/v1/bookings/{id}/reject")
+    suspend fun reject(@Path("id") bookingId: String): StatusDto
+
+    @Headers("$AUTH_MARKER: required")
+    @GET("api/v1/owner/items")
+    suspend fun ownerItems(): ItemsDto
+
+    @Headers("$AUTH_MARKER: required")
+    @GET("api/v1/owner/blocks")
+    suspend fun blocks(): BlocksDto
+
+    @Headers("$AUTH_MARKER: required")
+    @POST("api/v1/owner/blocks")
+    suspend fun addBlock(@Body input: BlockInputDto): BlockEnvelopeDto
+
+    @Headers("$AUTH_MARKER: required")
+    @DELETE("api/v1/owner/blocks/{id}")
+    suspend fun removeBlock(@Path("id") blockId: String): DeletedDto
 
     companion object {
         private val json = Json {
@@ -354,6 +495,72 @@ class MietenRentalRepository(
 
     override suspend fun cancel(bookingId: String) = personal {
         api.cancel(bookingId)
+        Unit
+    }
+
+    override suspend fun sets(): List<RentalSet> = translate {
+        api.sets().sets.mapNotNull { it.asSet() }
+    }
+
+    override suspend fun updateProfile(patch: ProfilePatch): RentalProfile = personal {
+        api.updateMe(
+            ProfilePatchDto(
+                // Only what carries something goes out: the platform changes
+                // exactly what it is given, and an empty value in a sent field
+                // is a refusal, not a way to clear it.
+                name = patch.name.orNullIfBlank(),
+                phone = patch.phone.orNullIfBlank(),
+                addressStreet = patch.addressStreet.orNullIfBlank(),
+                addressZip = patch.addressZip.orNullIfBlank(),
+                addressCity = patch.addressCity.orNullIfBlank(),
+            ),
+        ).profile.asProfile()
+    }
+
+    override suspend fun requestLender(): LenderRequest = personal {
+        val answer = api.requestLender()
+        LenderRequest(
+            lenderStatus = lenderStatusOf(answer.lenderStatus),
+            message = answer.message.orNullIfBlank(),
+        )
+    }
+
+    override suspend fun ownerBookings(): List<RentalOwnerBooking> = personal {
+        api.ownerBookings().bookings.mapNotNull { it.asOwnerBooking() }
+    }
+
+    override suspend fun approve(bookingId: String) = personal {
+        api.approve(bookingId)
+        Unit
+    }
+
+    override suspend fun reject(bookingId: String) = personal {
+        api.reject(bookingId)
+        Unit
+    }
+
+    override suspend fun ownerDevices(): List<RentalOwnerDevice> = personal {
+        api.ownerItems().items.map { RentalOwnerDevice(it.asDevice(), it.active) }
+    }
+
+    override suspend fun blocks(): List<RentalBlock> = personal {
+        api.blocks().blocks.mapNotNull { it.asBlock() }
+    }
+
+    override suspend fun addBlock(request: BlockRequest): RentalBlock = personal {
+        api.addBlock(
+            BlockInputDto(
+                deviceId = request.deviceId,
+                startDate = request.period.start.toString(),
+                endDate = request.period.end.toString(),
+                reason = request.reason.orNullIfBlank(),
+            ),
+        ).block.asBlock() ?: throw RentalApiException(RentalErrorCode.INTERNAL, null)
+    }
+
+    override suspend fun removeBlock(blockId: String) = personal {
+        api.removeBlock(blockId)
+        Unit
     }
 
     /**
@@ -495,13 +702,7 @@ internal fun MietenBookingDto.asBooking(): RentalBooking? {
         // Even a period the server wrote back to front must not turn into a
         // negative number of days on screen.
         period = RentalPeriod(from, if (to.isAfter(from)) to else from.plusDays(1)),
-        status = when (status) {
-            "pending" -> BookingStatus.PENDING
-            "approved" -> BookingStatus.APPROVED
-            "rejected" -> BookingStatus.REJECTED
-            "cancelled" -> BookingStatus.CANCELLED
-            else -> BookingStatus.UNKNOWN
-        },
+        status = bookingStatusOf(status),
         rawStatus = status,
         notes = notes.orNullIfBlank(),
         canCancel = canCancel,
@@ -513,6 +714,68 @@ internal fun MietenBookingDto.asBooking(): RentalBooking? {
     )
 }
 
+internal fun SetDto.asSet(): RentalSet? {
+    if (id.isBlank()) return null
+    return RentalSet(
+        id = id,
+        name = name,
+        // Plain text here, unlike a device's description — no conversion.
+        description = description.orNullIfBlank(),
+        pricePerDay = pricePerDay,
+        deposit = deposit,
+        itemIds = itemIds.filter { it.isNotBlank() },
+    )
+}
+
+internal fun OwnerBookingDto.asOwnerBooking(): RentalOwnerBooking? {
+    val from = date(startDate) ?: return null
+    val to = date(endDate) ?: return null
+    return RentalOwnerBooking(
+        id = id,
+        deviceId = deviceId.orNullIfBlank(),
+        deviceName = deviceName,
+        period = RentalPeriod(from, if (to.isAfter(from)) to else from.plusDays(1)),
+        status = bookingStatusOf(status),
+        rawStatus = status,
+        // The renter's name and number are here for the handover and are kept
+        // nowhere else — see `docs/mieten-api.md`, route 13.
+        renterName = renterName.orNullIfBlank(),
+        renterPhone = renterPhone.orNullIfBlank(),
+        notes = notes.orNullIfBlank(),
+        canDecide = canDecide,
+        canCancel = canCancel,
+    )
+}
+
+internal fun BlockDto.asBlock(): RentalBlock? {
+    val from = date(startDate) ?: return null
+    val to = date(endDate) ?: return null
+    if (!to.isAfter(from)) return null
+    return RentalBlock(
+        id = id,
+        deviceId = deviceId.orNullIfBlank(),
+        deviceName = deviceName,
+        period = RentalPeriod(from, to),
+        reason = reason.orNullIfBlank(),
+    )
+}
+
+/** The four states of the contract, and one bucket for a fifth. */
+internal fun bookingStatusOf(status: String): BookingStatus = when (status) {
+    "pending" -> BookingStatus.PENDING
+    "approved" -> BookingStatus.APPROVED
+    "rejected" -> BookingStatus.REJECTED
+    "cancelled" -> BookingStatus.CANCELLED
+    else -> BookingStatus.UNKNOWN
+}
+
+internal fun lenderStatusOf(status: String): LenderStatus = when (status) {
+    "none" -> LenderStatus.NONE
+    "pending" -> LenderStatus.PENDING
+    "approved" -> LenderStatus.APPROVED
+    else -> LenderStatus.UNKNOWN
+}
+
 internal fun ProfileDataDto.asProfile() = RentalProfile(
     name = name.orNullIfBlank(),
     email = email.orNullIfBlank(),
@@ -521,12 +784,7 @@ internal fun ProfileDataDto.asProfile() = RentalProfile(
     addressZip = addressZip.orNullIfBlank(),
     addressCity = addressCity.orNullIfBlank(),
     lender = lender,
-    lenderStatus = when (lenderStatus) {
-        "none" -> LenderStatus.NONE
-        "pending" -> LenderStatus.PENDING
-        "approved" -> LenderStatus.APPROVED
-        else -> LenderStatus.UNKNOWN
-    },
+    lenderStatus = lenderStatusOf(lenderStatus),
     profileComplete = profileComplete,
     missingFields = missingFields.filter { it.isNotBlank() },
 )

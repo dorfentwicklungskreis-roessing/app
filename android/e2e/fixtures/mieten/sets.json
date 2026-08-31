@@ -1,0 +1,24 @@
+{
+  "sets": [
+    {
+      "id": "gartenset",
+      "name": "Gartenset",
+      "description": "Vertikutierer, Rasenwalze und Streuwagen zusammen.",
+      "pricePerDay": 30,
+      "deposit": 150,
+      "itemIds": [
+        "018f2c1a-7b3d-4e91-9a0c-2f5d8e6b4a11",
+        "vertikutierer",
+        "streuwagen"
+      ]
+    },
+    {
+      "id": "malerset",
+      "name": "Malerset",
+      "description": null,
+      "pricePerDay": 12,
+      "deposit": null,
+      "itemIds": ["leiter", "farbrolle"]
+    }
+  ]
+}

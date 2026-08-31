@@ -3,17 +3,24 @@ package de.roessing.app.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.roessing.app.auth.RentalSignIn
+import de.roessing.app.data.BlockRequest
 import de.roessing.app.data.BookingRequest
+import de.roessing.app.data.LenderStatus
+import de.roessing.app.data.ProfilePatch
 import de.roessing.app.data.RentalApiException
 import de.roessing.app.data.RentalAvailability
+import de.roessing.app.data.RentalBlock
 import de.roessing.app.data.RentalBooking
 import de.roessing.app.data.RentalDevice
 import de.roessing.app.data.RentalErrorCode
 import de.roessing.app.data.RentalImage
 import de.roessing.app.data.RentalOccupancy
+import de.roessing.app.data.RentalOwnerBooking
+import de.roessing.app.data.RentalOwnerDevice
 import de.roessing.app.data.RentalPeriod
 import de.roessing.app.data.RentalProfile
 import de.roessing.app.data.RentalRepository
+import de.roessing.app.data.RentalSet
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
@@ -34,6 +41,16 @@ import kotlinx.coroutines.launch
 data class RentalNotice(val code: RentalErrorCode, val text: String?)
 
 /**
+ * Which page of the area is on screen.
+ *
+ * The area is one screen with two rooms behind it, not three areas: the
+ * catalogue is what people come for, the profile is reached from it, and the
+ * lender's side from the profile — and only when the platform said
+ * `lenderStatus: "approved"`.
+ */
+enum class RentalPage { CATALOG, PROFILE, OWNER }
+
+/**
  * State of the area "Maschinchenring".
  *
  * [offline] does not mean "nothing there", it means "not reachable right
@@ -49,6 +66,9 @@ data class RentalNotice(val code: RentalErrorCode, val text: String?)
 data class RentalUiState(
     val query: String = "",
     val devices: List<RentalDevice> = emptyList(),
+    /** Shown, not booked — the server cannot yet decide a set booking. */
+    val sets: List<RentalSet> = emptyList(),
+    val page: RentalPage = RentalPage.CATALOG,
     val loading: Boolean = false,
     val offline: Boolean = false,
     /** Somebody is signed in and the token counts for the rental platform. */
@@ -75,6 +95,22 @@ data class RentalUiState(
      * normal case — it takes name and telephone from the profile itself.
      */
     val missingFields: List<String> = emptyList(),
+    // --- The own profile over there ---------------------------------------
+    val savingProfile: Boolean = false,
+    val askingToLend: Boolean = false,
+    /** What the platform answered to "I would like to lend, too". Its words. */
+    val lenderMessage: String? = null,
+    // --- The lender's side ------------------------------------------------
+    val ownerBookings: List<RentalOwnerBooking> = emptyList(),
+    val ownerDevices: List<RentalOwnerDevice> = emptyList(),
+    val blocks: List<RentalBlock> = emptyList(),
+    val ownerLoading: Boolean = false,
+    val ownerOffline: Boolean = false,
+    /** Which requests are being decided right now. */
+    val deciding: Set<String> = emptySet(),
+    val blocking: Boolean = false,
+    /** The device a new block is being drawn for, or null. */
+    val blockDeviceId: String? = null,
 ) {
     /** Nothing there, nothing on its way, nothing broken — then it is empty. */
     val empty: Boolean get() = devices.isEmpty() && !loading && !offline
@@ -90,6 +126,21 @@ data class RentalUiState(
             period?.isValid == true &&
             availability?.available == true &&
             !booking
+
+    /**
+     * Whether the lender's side is shown at all.
+     *
+     * **The platform's answer**, nothing else: `approved`. The app does not
+     * work this out, and it does not fall back to [RentalProfile.lender] —
+     * the contract names one field for this question.
+     */
+    val showsLenderArea: Boolean get() = profile?.lenderStatus == LenderStatus.APPROVED
+
+    /** Whether asking to become a lender is worth offering at all. */
+    val canAskToLend: Boolean get() = profile?.lenderStatus == LenderStatus.NONE
+
+    /** How many requests wait for a yes or a no. */
+    val waitingRequests: Int get() = ownerBookings.count { it.canDecide }
 }
 
 /** One-off events of the area. */
@@ -98,6 +149,15 @@ sealed interface RentalEvent {
     data object Booked : RentalEvent
 
     data object Cancelled : RentalEvent
+
+    /** Telephone and address are stored over there. */
+    data object ProfileSaved : RentalEvent
+
+    /** A request on one of my devices was confirmed. */
+    data object Approved : RentalEvent
+
+    /** A request on one of my devices was turned down. */
+    data object Rejected : RentalEvent
 }
 
 /**
@@ -162,6 +222,10 @@ class RentalViewModel(
     }
 
     private fun fetch(query: String) {
+        // Sets are shown next to the devices, so they are fetched with them —
+        // but only for the whole catalogue: a search asks the server about
+        // devices, and its answer says nothing about sets.
+        if (query.isBlank()) loadSets()
         viewModelScope.launch {
             _state.update { it.copy(loading = true) }
             runCatching {
@@ -180,6 +244,20 @@ class RentalViewModel(
         }
     }
 
+    /**
+     * The sets — an addition, not the point of the screen.
+     *
+     * If they cannot be had, the devices are still there and nothing is said
+     * about it: a missing section is better than a hint nobody can act on.
+     */
+    private fun loadSets() {
+        viewModelScope.launch {
+            runCatching { repo.sets() }.onSuccess { list ->
+                _state.update { it.copy(sets = list) }
+            }
+        }
+    }
+
     /** Looks at the sign-in and, if it counts, fetches profile and bookings. */
     private suspend fun refreshSignIn() {
         val signedIn = runCatching { signIn() }.getOrDefault(RentalSignIn.UNREACHABLE)
@@ -191,6 +269,12 @@ class RentalViewModel(
                 // keep on screen either.
                 bookings = if (signedIn == RentalSignIn.VALID) it.bookings else emptyList(),
                 profile = if (signedIn == RentalSignIn.VALID) it.profile else null,
+                // The lender's side carries other people's names and numbers.
+                // Whoever is not signed in must not still see them.
+                ownerBookings = if (signedIn == RentalSignIn.VALID) it.ownerBookings else emptyList(),
+                ownerDevices = if (signedIn == RentalSignIn.VALID) it.ownerDevices else emptyList(),
+                blocks = if (signedIn == RentalSignIn.VALID) it.blocks else emptyList(),
+                page = if (signedIn == RentalSignIn.VALID) it.page else RentalPage.CATALOG,
             )
         }
         if (signedIn == RentalSignIn.VALID) {
@@ -241,6 +325,247 @@ class RentalViewModel(
                     }
                 }
         }
+    }
+
+    // --- The pages of the area -----------------------------------------------
+
+    /** Back to the devices. */
+    fun showCatalog() = _state.update {
+        it.copy(page = RentalPage.CATALOG, notice = null, blockDeviceId = null)
+    }
+
+    /**
+     * „Mein Profil im Maschinchenring".
+     *
+     * The profile is fetched again on opening: it lives over there, somebody
+     * may have changed it in the web version, and a stale form is worse than
+     * a moment's wait.
+     */
+    fun showProfile() {
+        _state.update { it.copy(page = RentalPage.PROFILE, notice = null, lenderMessage = null) }
+        loadProfile()
+    }
+
+    /**
+     * „Meine Vermietung".
+     *
+     * Reached only where the platform said `approved`
+     * ([RentalUiState.showsLenderArea]). That is the server's answer, and the
+     * calls behind this page are refused over there with `not_a_lender`
+     * anyway — the app checks nothing of its own.
+     */
+    fun showOwner() {
+        _state.update { it.copy(page = RentalPage.OWNER, notice = null) }
+        loadOwner()
+    }
+
+    // --- The own profile over there -------------------------------------------
+
+    /**
+     * Stores telephone and address in the rental platform.
+     *
+     * Only fields that carry something go out. An empty field is **not** a way
+     * to clear a value — the platform answers `bad_request` to that — so a
+     * blank one is left out and whatever stands over there stays.
+     */
+    fun saveProfile(
+        name: String,
+        phone: String,
+        addressStreet: String,
+        addressZip: String,
+        addressCity: String,
+    ) {
+        if (_state.value.savingProfile) return
+        val patch = ProfilePatch(
+            name = name.trim().takeIf { it.isNotEmpty() },
+            phone = phone.trim().takeIf { it.isNotEmpty() },
+            addressStreet = addressStreet.trim().takeIf { it.isNotEmpty() },
+            addressZip = addressZip.trim().takeIf { it.isNotEmpty() },
+            addressCity = addressCity.trim().takeIf { it.isNotEmpty() },
+        )
+        // An empty form is nothing to send. Saying so would be a rule of the
+        // app about a request the platform never sees.
+        if (patch.empty) return
+        _state.update { it.copy(savingProfile = true, notice = null) }
+        viewModelScope.launch {
+            runCatching { repo.updateProfile(patch) }
+                .onSuccess { fresh ->
+                    _state.update {
+                        it.copy(
+                            savingProfile = false,
+                            profile = fresh,
+                            // What a booking was missing is the server's list.
+                            // If it now says the profile is complete, the old
+                            // refusal has nothing left to ask for.
+                            missingFields = if (fresh.profileComplete) {
+                                emptyList()
+                            } else {
+                                fresh.missingFields
+                            },
+                        )
+                    }
+                    _events.emit(RentalEvent.ProfileSaved)
+                }
+                .onFailure { failure ->
+                    // What was typed stays on screen; nobody fills in an
+                    // address twice because the connection hiccuped.
+                    _state.update { it.copy(savingProfile = false).after(failure) }
+                }
+        }
+    }
+
+    /**
+     * „Ich möchte auch verleihen".
+     *
+     * The answer is a receipt, not a permission: somebody decides that by hand
+     * in the web version. Its sentence is German and is shown as it stands.
+     */
+    fun askToLend() {
+        if (_state.value.askingToLend) return
+        _state.update { it.copy(askingToLend = true, notice = null, lenderMessage = null) }
+        viewModelScope.launch {
+            runCatching { repo.requestLender() }
+                .onSuccess { receipt ->
+                    _state.update { it.copy(askingToLend = false, lenderMessage = receipt.message) }
+                    // The status moved. What counts is the platform's own
+                    // answer, so it is fetched rather than patched together.
+                    loadProfile()
+                }
+                .onFailure { failure ->
+                    _state.update { it.copy(askingToLend = false).after(failure) }
+                }
+        }
+    }
+
+    // --- The lender's side ----------------------------------------------------
+
+    /** Requests, own devices and own blocks — the three lists of that page. */
+    fun loadOwner() {
+        viewModelScope.launch {
+            _state.update { it.copy(ownerLoading = true) }
+            runCatching {
+                Triple(repo.ownerBookings(), repo.ownerDevices(), repo.blocks())
+            }
+                .onSuccess { (bookings, devices, blocks) ->
+                    _state.update {
+                        it.copy(
+                            ownerLoading = false,
+                            ownerOffline = false,
+                            ownerBookings = bookings,
+                            ownerDevices = devices,
+                            blocks = blocks,
+                        )
+                    }
+                }
+                .onFailure { failure ->
+                    _state.update { state ->
+                        val quiet = state.copy(ownerLoading = false)
+                        when (failure.rentalCode()) {
+                            RentalErrorCode.TOKEN_AUDIENCE -> quiet.asStale()
+                            RentalErrorCode.UNAUTHORIZED -> quiet.asSignedOut()
+                            // A failed call never quietly empties a list.
+                            else -> quiet.copy(ownerOffline = true)
+                        }
+                    }
+                }
+        }
+    }
+
+    /** Confirms a request. From then on the renter sees the pickup address. */
+    fun approve(bookingId: String) = decide(bookingId, RentalEvent.Approved) {
+        repo.approve(bookingId)
+    }
+
+    /** Turns a request down. No reason is recorded. */
+    fun reject(bookingId: String) = decide(bookingId, RentalEvent.Rejected) {
+        repo.reject(bookingId)
+    }
+
+    /**
+     * Withdraws a booking on one of my own devices — allowed for both sides
+     * while it is `pending` or `approved`. The button follows `canCancel`.
+     */
+    fun cancelOwnerBooking(bookingId: String) = decide(bookingId, RentalEvent.Cancelled) {
+        repo.cancel(bookingId)
+    }
+
+    private fun decide(bookingId: String, done: RentalEvent, step: suspend () -> Unit) {
+        if (bookingId in _state.value.deciding) return
+        // As with booking: note it first, then send — otherwise a second tap
+        // gets past the same check.
+        _state.update { it.copy(deciding = it.deciding + bookingId, notice = null) }
+        viewModelScope.launch {
+            runCatching { step() }
+                .onSuccess {
+                    _state.update { it.copy(deciding = it.deciding - bookingId) }
+                    _events.emit(done)
+                }
+                .onFailure { failure ->
+                    _state.update { it.copy(deciding = it.deciding - bookingId).after(failure) }
+                }
+            // The platform's list is the truth about what just happened — and
+            // after a refusal it knows better than the screen does.
+            reloadOwnerBookings()
+        }
+    }
+
+    /** Opens the sheet for a new block on one of my devices. */
+    fun openBlock(deviceId: String) = _state.update {
+        it.copy(blockDeviceId = deviceId, notice = null)
+    }
+
+    fun closeBlock() = _state.update { it.copy(blockDeviceId = null, notice = null) }
+
+    /**
+     * Keeps a stretch on the open device.
+     *
+     * An existing booking is never pushed aside: the platform answers
+     * `occupied`, and whoever wants the days anyway cancels the booking first.
+     * The sheet closes only when the platform took the block.
+     */
+    fun addBlock(period: RentalPeriod, reason: String? = null) {
+        val deviceId = _state.value.blockDeviceId ?: return
+        if (_state.value.blocking) return
+        if (!period.isValid) return
+        _state.update { it.copy(blocking = true, notice = null) }
+        viewModelScope.launch {
+            runCatching { repo.addBlock(BlockRequest(deviceId, period, reason)) }
+                .onSuccess {
+                    _state.update { it.copy(blocking = false, blockDeviceId = null) }
+                    reloadBlocks()
+                }
+                .onFailure { failure ->
+                    // The sheet stays open with the refusal in it — closing it
+                    // would throw away what somebody just typed.
+                    _state.update { it.copy(blocking = false).after(failure) }
+                }
+        }
+    }
+
+    /** Lifts one of my blocks. */
+    fun removeBlock(blockId: String) {
+        if (blockId in _state.value.deciding) return
+        _state.update { it.copy(deciding = it.deciding + blockId, notice = null) }
+        viewModelScope.launch {
+            runCatching { repo.removeBlock(blockId) }
+                .onSuccess { _state.update { it.copy(deciding = it.deciding - blockId) } }
+                .onFailure { failure ->
+                    _state.update { it.copy(deciding = it.deciding - blockId).after(failure) }
+                }
+            reloadBlocks()
+        }
+    }
+
+    private suspend fun reloadOwnerBookings() {
+        runCatching { repo.ownerBookings() }
+            .onSuccess { list -> _state.update { it.copy(ownerBookings = list) } }
+            .onFailure { _state.update { it.copy(ownerOffline = true) } }
+    }
+
+    private suspend fun reloadBlocks() {
+        runCatching { repo.blocks() }
+            .onSuccess { list -> _state.update { it.copy(blocks = list) } }
+            .onFailure { _state.update { it.copy(ownerOffline = true) } }
     }
 
     // --- Detail sheet --------------------------------------------------------
@@ -454,12 +779,36 @@ class RentalViewModel(
 }
 
 /** Signed in, but with a token from before the changeover. */
-private fun RentalUiState.asStale() =
-    copy(staleSignIn = true, signedIn = false, bookings = emptyList(), profile = null)
+private fun RentalUiState.asStale() = copy(
+    staleSignIn = true,
+    signedIn = false,
+    bookings = emptyList(),
+    profile = null,
+).withoutLenderSide()
 
 /** The sign-in is gone — the ordinary way back is the login screen. */
-private fun RentalUiState.asSignedOut() =
-    copy(signedIn = false, staleSignIn = false, bookings = emptyList(), profile = null)
+private fun RentalUiState.asSignedOut() = copy(
+    signedIn = false,
+    staleSignIn = false,
+    bookings = emptyList(),
+    profile = null,
+).withoutLenderSide()
+
+/**
+ * Everything the lender's side holds, gone.
+ *
+ * Not tidiness: those lists carry other people's names and telephone numbers,
+ * and they have no business standing on a screen that nobody is signed in to.
+ * The page goes back to the catalogue for the same reason.
+ */
+private fun RentalUiState.withoutLenderSide() = copy(
+    page = RentalPage.CATALOG,
+    ownerBookings = emptyList(),
+    ownerDevices = emptyList(),
+    blocks = emptyList(),
+    blockDeviceId = null,
+    lenderMessage = null,
+)
 
 /** The platform's code, or null when the failure was not one of its answers. */
 private fun Throwable.rentalCode(): RentalErrorCode? = (this as? RentalApiException)?.code

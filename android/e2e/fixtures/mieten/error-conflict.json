@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "conflict",
+    "message": "Die Buchung ist nicht mehr offen"
+  }
+}

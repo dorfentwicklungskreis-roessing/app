@@ -306,15 +306,23 @@ fun HomeScreen(
     // Der Maschinchenring wird beim Öffnen geholt; die Anmeldung wird dabei
     // jedes Mal neu angesehen — sie kann sich zwischendurch geändert haben.
     LaunchedEffect(bereich) {
-        if (bereich == Bereich.VERLEIH) rentalViewModel.load()
+        // Wer den Bereich verlässt, kommt beim nächsten Mal wieder im Katalog
+        // an — die Unterseiten sind Wege dorthin, kein eigener Aufenthalt.
+        if (bereich == Bereich.VERLEIH) rentalViewModel.load() else rentalViewModel.showCatalog()
     }
     val gebuchtMsg = stringResource(R.string.rental_booked)
     val storniertMsg = stringResource(R.string.rental_cancelled)
+    val profilGespeichertMsg = stringResource(R.string.rental_profile_saved)
+    val zugesagtMsg = stringResource(R.string.rental_approved)
+    val abgesagtMsg = stringResource(R.string.rental_rejected)
     LaunchedEffect(Unit) {
         rentalViewModel.events.collect { event ->
             when (event) {
                 RentalEvent.Booked -> snackbar.showSnackbar(gebuchtMsg)
                 RentalEvent.Cancelled -> snackbar.showSnackbar(storniertMsg)
+                RentalEvent.ProfileSaved -> snackbar.showSnackbar(profilGespeichertMsg)
+                RentalEvent.Approved -> snackbar.showSnackbar(zugesagtMsg)
+                RentalEvent.Rejected -> snackbar.showSnackbar(abgesagtMsg)
             }
         }
     }
@@ -588,6 +596,23 @@ fun HomeScreen(
                     // eine neue Anmeldung.
                     onSignIn = null,
                     onSignInAgain = onReauthenticate,
+                    onShowCatalog = rentalViewModel::showCatalog,
+                    onShowProfile = rentalViewModel::showProfile,
+                    onShowOwner = rentalViewModel::showOwner,
+                    onSaveProfile = { name, telefon, strasse, plz, ort ->
+                        rentalViewModel.saveProfile(name, telefon, strasse, plz, ort)
+                    },
+                    onAskToLend = rentalViewModel::askToLend,
+                    onRefreshOwner = rentalViewModel::loadOwner,
+                    onApprove = rentalViewModel::approve,
+                    onReject = rentalViewModel::reject,
+                    onCancelOwnerBooking = rentalViewModel::cancelOwnerBooking,
+                    onOpenBlock = rentalViewModel::openBlock,
+                    onCloseBlock = rentalViewModel::closeBlock,
+                    onAddBlock = { zeitraum, grund ->
+                        rentalViewModel.addBlock(zeitraum, grund)
+                    },
+                    onRemoveBlock = rentalViewModel::removeBlock,
                 )
 
                 Bereich.IDEEN -> IdeenScreen(

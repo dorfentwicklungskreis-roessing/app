@@ -17,28 +17,35 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import de.roessing.app.auth.RentalSignIn
+import de.roessing.app.data.BlockRequest
 import de.roessing.app.data.BookingRequest
 import de.roessing.app.data.BookingStatus
 import de.roessing.app.data.CompletionDto
 import de.roessing.app.data.LeaderboardDto
+import de.roessing.app.data.LenderRequest
 import de.roessing.app.data.LenderStatus
 import de.roessing.app.data.MeDto
 import de.roessing.app.data.MemberDto
 import de.roessing.app.data.OccupancyStatus
+import de.roessing.app.data.ProfilePatch
 import de.roessing.app.data.PlacesRepository
 import de.roessing.app.data.PlacesResponse
 import de.roessing.app.data.ProfileDto
 import de.roessing.app.data.ProfileInput
 import de.roessing.app.data.ProfileRepository
 import de.roessing.app.data.RentalAvailability
+import de.roessing.app.data.RentalBlock
 import de.roessing.app.data.RentalBooking
 import de.roessing.app.data.RentalDevice
 import de.roessing.app.data.RentalDeviceDetail
 import de.roessing.app.data.RentalOccupancy
+import de.roessing.app.data.RentalOwnerBooking
+import de.roessing.app.data.RentalOwnerDevice
 import de.roessing.app.data.RentalPeriod
 import de.roessing.app.data.RentalPickup
 import de.roessing.app.data.RentalProfile
 import de.roessing.app.data.RentalRepository
+import de.roessing.app.data.RentalSet
 import de.roessing.app.data.StatsRepository
 import de.roessing.app.ui.HomeScreen
 import de.roessing.app.ui.IdeenViewModel
@@ -91,8 +98,18 @@ class RentalUiTest {
         private val bookings: List<RentalBooking> = emptyList(),
         private val available: Boolean = true,
         private val fehler: Boolean = false,
+        private val sets: List<RentalSet> = emptyList(),
+        /** Der Stand, den die Plattform zum Verleihen meldet. */
+        private val lenderStatus: LenderStatus = LenderStatus.NONE,
+        private val ownerBookings: List<RentalOwnerBooking> = emptyList(),
+        private val ownerDevices: List<RentalOwnerDevice> = emptyList(),
+        private val blocks: List<RentalBlock> = emptyList(),
     ) : RentalRepository {
         var letzteAnfrage: BookingRequest? = null
+        var letzteAenderung: ProfilePatch? = null
+        var letzteSperre: BlockRequest? = null
+        val zugesagt = mutableListOf<String>()
+        val abgesagt = mutableListOf<String>()
 
         override suspend fun devices(): List<RentalDevice> {
             if (fehler) throw IOException("kein Netz")
@@ -131,8 +148,8 @@ class RentalUiTest {
             addressStreet = "Kirchstraße 3",
             addressZip = "31171",
             addressCity = "Nordstemmen",
-            lender = false,
-            lenderStatus = LenderStatus.NONE,
+            lender = lenderStatus == LenderStatus.APPROVED,
+            lenderStatus = lenderStatus,
             profileComplete = true,
             missingFields = emptyList(),
         )
@@ -145,6 +162,43 @@ class RentalUiTest {
         }
 
         override suspend fun cancel(bookingId: String) = Unit
+
+        override suspend fun sets() = sets
+
+        override suspend fun updateProfile(patch: ProfilePatch): RentalProfile {
+            letzteAenderung = patch
+            return profile()
+        }
+
+        override suspend fun requestLender() =
+            LenderRequest(LenderStatus.PENDING, "Deine Anfrage wurde weitergeleitet.")
+
+        override suspend fun ownerBookings() = ownerBookings
+
+        override suspend fun approve(bookingId: String) {
+            zugesagt += bookingId
+        }
+
+        override suspend fun reject(bookingId: String) {
+            abgesagt += bookingId
+        }
+
+        override suspend fun ownerDevices() = ownerDevices
+
+        override suspend fun blocks() = blocks
+
+        override suspend fun addBlock(request: BlockRequest): RentalBlock {
+            letzteSperre = request
+            return RentalBlock(
+                id = "sperre-neu",
+                deviceId = request.deviceId,
+                deviceName = "AS 585 KM Kreiselmäher",
+                period = request.period,
+                reason = request.reason,
+            )
+        }
+
+        override suspend fun removeBlock(blockId: String) = Unit
     }
 
     private val maeher = RentalDevice(
@@ -173,6 +227,37 @@ class RentalUiTest {
         thumbnailUrl = null,
         productUrl = null,
         webUrl = null,
+    )
+
+    private val gartenset = RentalSet(
+        id = "gartenset",
+        name = "Gartenset",
+        description = "Vertikutierer, Rasenwalze und Streuwagen zusammen.",
+        pricePerDay = 30.0,
+        deposit = 150.0,
+        itemIds = listOf("rasenwalze", "vertikutierer"),
+    )
+
+    private val anfrage = RentalOwnerBooking(
+        id = "a-1",
+        deviceId = "as-585-km-kreiselmaeher",
+        deviceName = "AS 585 KM Kreiselmäher",
+        period = RentalPeriod(LocalDate.parse("2026-09-05"), LocalDate.parse("2026-09-07")),
+        status = BookingStatus.PENDING,
+        rawStatus = "pending",
+        renterName = "Erika Musterfrau",
+        renterPhone = "+49 5069 123456",
+        notes = null,
+        canDecide = true,
+        canCancel = true,
+    )
+
+    private val sperre = RentalBlock(
+        id = "s-1",
+        deviceId = "as-585-km-kreiselmaeher",
+        deviceName = "AS 585 KM Kreiselmäher",
+        period = RentalPeriod(LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-08")),
+        reason = "Eigener Einsatz",
     )
 
     private val buchung = RentalBooking(
@@ -243,6 +328,22 @@ class RentalUiTest {
         compose.onNodeWithTag("rental-list").performScrollToNode(hasTestTag("device-$id"))
         compose.onNodeWithTag("device-$id").performClick()
         compose.waitForIdle()
+    }
+
+    /** Öffnet „Mein Profil im Maschinchenring" aus dem Katalog heraus. */
+    private fun zumProfil() {
+        compose.onNodeWithTag("rental-list")
+            .performScrollToNode(hasTestTag("rental-profile-entry"))
+        compose.onNodeWithTag("rental-profile-entry").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("rental-profile").assertIsDisplayed()
+    }
+
+    /** Und von dort weiter auf die Vermieterseite. */
+    private fun zurVermietung() {
+        compose.onNodeWithTag("rental-owner-entry").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("rental-owner").assertIsDisplayed()
     }
 
     @Test
@@ -384,5 +485,125 @@ class RentalUiTest {
 
         compose.onNodeWithTag("rental-pick-period").performScrollTo().assertIsEnabled()
         compose.onNodeWithTag("rental-book").performScrollTo().assertIsNotEnabled()
+    }
+
+    /** Sets stehen unter den Geräten — angesehen, nicht gebucht. */
+    @Test
+    fun setsStehenUnterDenGeraeten() {
+        zeigeApp(FakeRental(devices = listOf(maeher), sets = listOf(gartenset)))
+        zumVerleih()
+
+        compose.onNodeWithTag("rental-list").performScrollToNode(hasTestTag("set-gartenset"))
+        compose.onNodeWithTag("set-gartenset").assertIsDisplayed()
+        compose.onNodeWithText("30 € pro Tag").assertIsDisplayed()
+    }
+
+    /** Der Weg zum eigenen Profil drüben — und wieder zurück. */
+    @Test
+    fun vomKatalogInsProfilUndZurueck() {
+        zeigeApp(FakeRental(devices = listOf(maeher)))
+        zumVerleih()
+
+        zumProfil()
+        compose.onNodeWithTag("rental-profile-phone").assertIsDisplayed()
+
+        compose.onNodeWithTag("rental-to-catalog").performClick()
+        compose.waitForIdle()
+        geraetIstDa(maeher.id)
+    }
+
+    /**
+     * Was im Formular steht, geht als Änderung hinaus — und ein leeres Feld
+     * bleibt weg, statt einen Wert drüben zu löschen.
+     */
+    @Test
+    fun dasProfilSpeichertWasImFormularSteht() {
+        val repo = FakeRental(devices = listOf(maeher))
+        zeigeApp(repo)
+        zumVerleih()
+        zumProfil()
+
+        compose.onNodeWithTag("rental-profile-save").performScrollTo().performClick()
+        compose.waitForIdle()
+
+        assertEquals("+49 5069 123456", repo.letzteAenderung?.phone)
+        assertEquals("Kirchstraße 3", repo.letzteAenderung?.addressStreet)
+    }
+
+    /**
+     * Die Vermieteransicht hängt an einer Auskunft des Servers. Ohne
+     * Freischaltung gibt es sie nicht — dafür den Weg, danach zu fragen.
+     */
+    @Test
+    fun ohneFreischaltungGibtEsKeineVermieteransicht() {
+        zeigeApp(FakeRental(devices = listOf(maeher)))
+        zumVerleih()
+        zumProfil()
+
+        compose.onNodeWithTag("rental-ask-to-lend").performScrollTo().assertIsEnabled()
+        compose.onNodeWithTag("rental-owner-entry").assertDoesNotExist()
+    }
+
+    @Test
+    fun mitFreischaltungFuehrtEinWegZurVermieteransicht() {
+        zeigeApp(
+            FakeRental(
+                devices = listOf(maeher),
+                lenderStatus = LenderStatus.APPROVED,
+                ownerBookings = listOf(anfrage),
+                ownerDevices = listOf(RentalOwnerDevice(maeher, active = false)),
+                blocks = listOf(sperre),
+            ),
+        )
+        zumVerleih()
+        zumProfil()
+
+        compose.onNodeWithTag("rental-owner-entry").performScrollTo().performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("rental-owner").assertIsDisplayed()
+        // Name und Nummer stehen hier, weil die Übergabe verabredet werden
+        // muss — und nirgends sonst in der App.
+        compose.onNodeWithText("Mieter: Erika Musterfrau").assertIsDisplayed()
+        // Ein abgeschaltetes Gerät steht nur auf der eigenen Seite.
+        compose.onNodeWithTag("rental-owner")
+            .performScrollToNode(hasTestTag("owner-device-${maeher.id}"))
+        compose.onNodeWithText("Abgeschaltet — für andere unsichtbar.").assertIsDisplayed()
+    }
+
+    /** Die Knöpfe richten sich nach `canDecide` — die App prüft nichts nach. */
+    @Test
+    fun eineAnfrageLaesstSichZusagen() {
+        val repo = FakeRental(
+            devices = listOf(maeher),
+            lenderStatus = LenderStatus.APPROVED,
+            ownerBookings = listOf(anfrage),
+        )
+        zeigeApp(repo)
+        zumVerleih()
+        zumProfil()
+        zurVermietung()
+
+        compose.onNodeWithTag("rental-approve-a-1").performScrollTo().performClick()
+        compose.waitForIdle()
+
+        assertEquals(listOf("a-1"), repo.zugesagt)
+    }
+
+    @Test
+    fun eineSperreLaesstSichAufheben() {
+        zeigeApp(
+            FakeRental(
+                devices = listOf(maeher),
+                lenderStatus = LenderStatus.APPROVED,
+                blocks = listOf(sperre),
+            ),
+        )
+        zumVerleih()
+        zumProfil()
+        zurVermietung()
+
+        compose.onNodeWithTag("rental-owner").performScrollToNode(hasTestTag("block-s-1"))
+        compose.onNodeWithTag("rental-unblock-s-1").assertIsDisplayed()
     }
 }
