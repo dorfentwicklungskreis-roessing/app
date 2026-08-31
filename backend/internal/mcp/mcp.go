@@ -272,6 +272,51 @@ func (s *Server) registerTools() {
 			Handler: s.toolTraegerZulassung,
 		},
 		{
+			Name: "befaehigungen_liste",
+			Description: "Listet die Einweisungen der Träger („Motorsense“, „Einweisung Jäten“). " +
+				"Ihre IDs braucht aufgabe_anlegen für befaehigungId.",
+			Schema: obj(nil, map[string]any{
+				"traegerId": integer("Nur die Einweisungen dieses Trägers. Ohne Angabe alle."),
+			}),
+			Handler: s.toolListBefaehigungen,
+		},
+		{
+			Name: "befaehigung_anlegen",
+			Description: "Legt eine Einweisung eines Trägers an. Hängt sie an einer Aufgabe " +
+				"(befaehigungId), kann nur zusagen, wer sie hat. Sie gehört der Person, " +
+				"nicht der Aufgabe: einmal eingewiesen heißt überall eingewiesen.",
+			Schema: obj([]string{"traegerId", "name"}, map[string]any{
+				"traegerId":    integer("ID des Trägers, dem die Einweisung gehört"),
+				"name":         str("Name, z.B. 'Einweisung Jäten' oder 'Motorsense'"),
+				"beschreibung": str("Optionale Beschreibung: was sie umfasst, wer sie gibt"),
+			}),
+			Handler: s.toolCreateBefaehigung,
+		},
+		{
+			Name:        "befaehigung_aendern",
+			Description: "Ändert Name oder Beschreibung einer Einweisung.",
+			Schema: obj([]string{"id"}, map[string]any{
+				"id":           integer("ID der Einweisung"),
+				"name":         str("Neuer Name"),
+				"beschreibung": str("Beschreibung"),
+			}),
+			Handler: s.toolUpdateBefaehigung,
+		},
+		{
+			Name: "befaehigung_erteilen",
+			Description: "Trägt eine Einweisung für eine Person ein — oder lehnt sie ab. " +
+				"Eingewiesen wird an der Maschine, nicht in der App: Wer die Einweisung " +
+				"gegeben hat, trägt sie hinterher ein, auch ohne vorherigen Antrag. " +
+				"Die Kennung (userSub) steht in der Rangliste und in jeder Erledigung.",
+			Schema: obj([]string{"befaehigungId", "userSub"}, map[string]any{
+				"befaehigungId": integer("ID der Einweisung"),
+				"userSub":       str("Kennung der Person aus der Rössing-ID"),
+				"status":        enum("erteilt (Standard) oder abgelehnt", "erteilt", "abgelehnt"),
+				"notiz":         str("Notiz zur Entscheidung, z.B. wann und durch wen eingewiesen wurde"),
+			}),
+			Handler: s.toolErteileBefaehigung,
+		},
+		{
 			Name: "orte_liste",
 			Description: "Listet alle Pflege-Orte (Blumenkästen, Beete, …) mit ihren Aufgaben, " +
 				"letzter Erledigung und Ampel-Status (green/yellow/red).",
