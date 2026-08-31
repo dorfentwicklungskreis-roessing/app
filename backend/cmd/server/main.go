@@ -52,6 +52,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/backup"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/chat"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/devmode"
@@ -165,6 +166,9 @@ func main() {
 		mcpClientID := envOr("MCP_CLIENT_ID", "385946294599876803")
 		mcp.New(database, verifier, issuer, publicURL, mcpClientID).Register(mux)
 		slog.Info("MCP-Server aktiv unter /mcp (OAuth + DCR)", "issuer", issuer)
+		// Chat: dieselben Daten in normalem Deutsch, in der Sicht der
+		// fragenden Person. Ohne ANTHROPIC_API_KEY schaltet er sich ab.
+		chat.Register(mux, auth.Middleware(verifier), chat.AusUmgebung(database, mitglieder))
 		// Startseite und Verwaltung. Ohne ADMIN_CLIENT_ID bleibt es bei der
 		// Startseite; die Verwaltungsseiten werden dann nicht registriert.
 		clientID := os.Getenv("ADMIN_CLIENT_ID")
