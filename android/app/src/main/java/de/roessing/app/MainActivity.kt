@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +30,8 @@ import de.roessing.app.ui.LeaderboardViewModel
 import de.roessing.app.ui.LoginScreen
 import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.ProfileViewModel
+import de.roessing.app.ui.PublicRentalScreen
+import de.roessing.app.ui.RentalViewModel
 import de.roessing.app.ui.VeranstaltungenViewModel
 import de.roessing.app.push.PushZiel
 import de.roessing.app.ui.theme.DorfAppTheme
@@ -77,6 +80,9 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
     val scope = rememberCoroutineScope()
     // null = kein Fehler. Ein Abbruch (Zurück-Taste) ist bewusst kein Fehler.
     var loginError by remember { mutableStateOf<String?>(null) }
+    // Der Maschinchenring ist der einzige Bereich, den man ohne Anmeldung
+    // ansehen kann — seine Geräteliste ist auch im Web öffentlich.
+    var verleihOhneAnmeldung by remember { mutableStateOf(false) }
 
     val authLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -89,24 +95,53 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
         }
     }
 
+    // Die Anmeldung anstoßen. Sie steht hier oben, weil sie an zwei Stellen
+    // gebraucht wird: auf dem Anmeldeschirm und im Maschinchenring, wo ein
+    // Token von vor der Umstellung eine *erneute* Anmeldung verlangt, ohne
+    // die bestehende vorher wegzuwerfen.
+    val anmelden = {
+        loginError = null
+        scope.launch {
+            runCatching { authLauncher.launch(container.authManager.buildLoginIntent()) }
+                .onFailure { loginError = it::class.java.simpleName }
+        }
+        Unit
+    }
+
     when (session) {
         is SessionState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
 
-        is SessionState.LoggedOut -> LoginScreen(
-            errorCode = loginError,
-            onLogin = {
-                loginError = null
-                scope.launch {
-                    runCatching { authLauncher.launch(container.authManager.buildLoginIntent()) }
-                        .onFailure { loginError = it::class.java.simpleName }
-                }
-            },
-            onDevLogin = { asAdmin ->
-                scope.launch { container.authManager.devLogin(asAdmin) }
-            },
-        )
+        is SessionState.LoggedOut -> {
+            if (verleihOhneAnmeldung) {
+                val verleihVm: RentalViewModel = viewModel(factory = viewModelFactory(container))
+                val verleih by verleihVm.state.collectAsState()
+                LaunchedEffect(Unit) { verleihVm.load() }
+                PublicRentalScreen(
+                    state = verleih,
+                    onBack = { verleihOhneAnmeldung = false },
+                    onSignIn = {
+                        verleihOhneAnmeldung = false
+                        anmelden()
+                    },
+                    onQuery = verleihVm::setQuery,
+                    onRefresh = verleihVm::refresh,
+                    onOpen = verleihVm::open,
+                    onClose = verleihVm::close,
+                    onPeriod = verleihVm::setPeriod,
+                )
+            } else {
+                LoginScreen(
+                    errorCode = loginError,
+                    onLogin = anmelden,
+                    onDevLogin = { asAdmin ->
+                        scope.launch { container.authManager.devLogin(asAdmin) }
+                    },
+                    onBrowseRental = { verleihOhneAnmeldung = true },
+                )
+            }
+        }
 
         is SessionState.LoggedIn -> {
             val factory = viewModelFactory(container)
@@ -116,6 +151,7 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
             val ideenVm: IdeenViewModel = viewModel(factory = factory)
             val chatVm: ChatViewModel = viewModel(factory = factory)
             val termineVm: VeranstaltungenViewModel = viewModel(factory = factory)
+            val verleihVm: RentalViewModel = viewModel(factory = factory)
             HomeScreen(
                 viewModel = vm,
                 leaderboardViewModel = rangVm,
@@ -123,6 +159,7 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
                 ideenViewModel = ideenVm,
                 chatViewModel = chatVm,
                 veranstaltungenViewModel = termineVm,
+                rentalViewModel = verleihVm,
                 pushZiel = pushZiel,
                 onPushZielVerbraucht = onPushZielVerbraucht,
                 onLogout = {
@@ -133,6 +170,10 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
                         container.authManager.logout()
                     }
                 },
+                // Neu anmelden, ohne die bestehende Anmeldung vorher
+                // wegzuwerfen: Bricht jemand im Browser ab, bleibt alles, wie
+                // es war.
+                onReauthenticate = anmelden,
             )
         }
     }
@@ -159,6 +200,12 @@ private fun viewModelFactory(container: AppContainer) =
 
             modelClass.isAssignableFrom(VeranstaltungenViewModel::class.java) ->
                 VeranstaltungenViewModel(container.veranstaltungenRepository) as T
+
+            modelClass.isAssignableFrom(RentalViewModel::class.java) ->
+                RentalViewModel(
+                    container.rentalRepository,
+                    signIn = { container.rentalSignIn() },
+                ) as T
 
             else -> error("Unbekanntes ViewModel: ${modelClass.name}")
         }

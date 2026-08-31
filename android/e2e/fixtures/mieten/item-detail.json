@@ -1,0 +1,27 @@
+{
+  "item": {
+    "id": "as-585-km-kreiselmaeher",
+    "name": "AS 585 KM Kreiselmäher",
+    "description": "Kreiselmäher für hohes Gras und Böschungen.\n\n- Arbeitsbreite 85 cm\n- **Benzin**, Radantrieb",
+    "pricePerDay": 25,
+    "pricePerWeekend": 40,
+    "pricePerWeek": 120,
+    "deposit": 100,
+    "tags": ["garten", "motorgeraet"],
+    "thumbnailUrl": "https://cdn.example.invalid/sIgn/resize:fill:600:450/plain/local:///items/as-585-km-kreiselmaeher/front.jpg",
+    "productUrl": "https://www.example.invalid/as-585",
+    "webUrl": "https://mieten.example.invalid/geraete/as-585-km-kreiselmaeher/",
+    "images": [
+      {
+        "id": "img-7f3a",
+        "url": "https://cdn.example.invalid/sIgn/resize:fill:600:450/plain/local:///items/as-585-km-kreiselmaeher/front.jpg",
+        "isThumbnail": true
+      },
+      {
+        "id": "img-9b21",
+        "url": "https://cdn.example.invalid/sIgn/resize:fill:600:450/plain/local:///items/as-585-km-kreiselmaeher/seite.jpg",
+        "isThumbnail": false
+      }
+    ]
+  }
+}

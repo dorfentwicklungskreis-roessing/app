@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "profile_incomplete",
+    "message": "Dein Profil ist unvollständig",
+    "missingFields": ["phone", "addressStreet", "addressZip", "addressCity"]
+  }
+}

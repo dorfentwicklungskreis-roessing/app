@@ -17,6 +17,7 @@
 #   E2E_API_BASE_URL      Backend im Dev-Login-Modus (Schritte 1 und 1b)
 #   E2E_WEBSITE_BASE_URL  lokale Ablage mit events.json
 #   E2E_MAP_STYLE_URL     lokaler Kartenstil
+#   E2E_MIETEN_BASE_URL   lokale Ablage anstelle der Mietplattform
 #   E2E_OIDC_ISSUER       lokales Zitadel aus dem docker compose (nur API 35)
 #   E2E_OIDC_CLIENT_ID    Client-ID der dort angelegten nativen App
 #   E2E_OIDC_API_BASE_URL Backend im OIDC-Modus gegen dieses Zitadel
@@ -27,6 +28,13 @@ set -euo pipefail
 API_BASE_URL="${E2E_API_BASE_URL:-http://10.0.2.2:8099}"
 WEBSITE_BASE_URL="${E2E_WEBSITE_BASE_URL:-http://10.0.2.2:8097}"
 MAP_STYLE_URL="${E2E_MAP_STYLE_URL:-http://10.0.2.2:8097/map-style.json}"
+# Die Mietplattform ist ein eigener, entfernter Dienst. Im Testlauf zeigt die
+# App auf den Runner: sonst holte der Bereich „Maschinchenring" beim ersten
+# Öffnen seine Geräteliste aus der Produktion. Die statische Ablage kennt die
+# Routen unter /api/v1/ nicht — der Bereich zeigt dann seinen Hinweis „gerade
+# nicht erreichbar", und genau das ist hier richtig: Was der Bereich mit
+# echten Antworten macht, prüfen RentalUiTest und RentalApiTest ohne Netz.
+MIETEN_BASE_URL="${E2E_MIETEN_BASE_URL:-http://10.0.2.2:8097}"
 
 # --- Beweisaufnahme ---------------------------------------------------------
 # „Instrumentation run failed due to Process crashed" sagt für sich genommen
@@ -97,6 +105,7 @@ adb emu geo fix 9.8162 52.1843 || true
   -PapiBaseUrl="$API_BASE_URL" \
   -PwebsiteBaseUrl="$WEBSITE_BASE_URL" \
   -PmapStyleUrl="$MAP_STYLE_URL" \
+  -PmietenBaseUrl="$MIETEN_BASE_URL" \
   -PdevAuth=true \
   -Pandroid.testInstrumentationRunnerArguments.e2e=true
 
@@ -160,6 +169,7 @@ if [ "${API_LEVEL:-}" = "35" ] && [ -n "${E2E_OIDC_ISSUER:-}" ] && [ -n "${E2E_O
     -PoidcClientId="$E2E_OIDC_CLIENT_ID" \
     -PwebsiteBaseUrl="$WEBSITE_BASE_URL" \
     -PmapStyleUrl="$MAP_STYLE_URL" \
+    -PmietenBaseUrl="$MIETEN_BASE_URL" \
     -Pandroid.testInstrumentationRunnerArguments.class=de.roessing.app.RealLoginE2eTest \
     -Pandroid.testInstrumentationRunnerArguments.realLoginUser="${E2E_LOGIN_USER:?E2E_LOGIN_USER fehlt}" \
     -Pandroid.testInstrumentationRunnerArguments.realLoginPassword="${E2E_LOGIN_PASSWORD:?E2E_LOGIN_PASSWORD fehlt}" \

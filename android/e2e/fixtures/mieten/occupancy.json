@@ -1,0 +1,25 @@
+{
+  "periods": [
+    {
+      "deviceId": "as-585-km-kreiselmaeher",
+      "setId": null,
+      "startDate": "2026-09-05",
+      "endDate": "2026-09-07",
+      "status": "approved"
+    },
+    {
+      "deviceId": "as-585-km-kreiselmaeher",
+      "setId": null,
+      "startDate": "2026-09-12",
+      "endDate": "2026-09-14",
+      "status": "pending"
+    },
+    {
+      "deviceId": "as-585-km-kreiselmaeher",
+      "setId": null,
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-08",
+      "status": "blocked"
+    }
+  ]
+}

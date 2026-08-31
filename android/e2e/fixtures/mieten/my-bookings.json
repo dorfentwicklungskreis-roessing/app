@@ -1,0 +1,43 @@
+{
+  "bookings": [
+    {
+      "id": "8f14c2b0-91ae-4c77-b1b2-0a3d5e7c9f01",
+      "deviceId": "as-585-km-kreiselmaeher",
+      "setId": null,
+      "deviceName": "AS 585 KM Kreiselmäher",
+      "startDate": "2026-09-05",
+      "endDate": "2026-09-07",
+      "status": "approved",
+      "notes": "Hole ich Samstag früh ab.",
+      "canCancel": true,
+      "pickup": {
+        "address": "Hauptstraße 1, 31171 Nordstemmen",
+        "phone": "+49 5069 123456"
+      }
+    },
+    {
+      "id": "1c9e77a3-1234-4bb8-9a0e-77ce31d2a456",
+      "deviceId": "018f2c1a-7b3d-4e91-9a0c-2f5d8e6b4a11",
+      "setId": null,
+      "deviceName": "Rasenwalze",
+      "startDate": "2026-10-01",
+      "endDate": "2026-10-03",
+      "status": "pending",
+      "notes": null,
+      "canCancel": true,
+      "pickup": null
+    },
+    {
+      "id": "3ab0f1de-5c22-4f88-9f10-3c7b2e5d1a90",
+      "deviceId": "fallschutzmatten",
+      "setId": null,
+      "deviceName": "Fallschutzmatten (10 Stück)",
+      "startDate": "2026-07-11",
+      "endDate": "2026-07-13",
+      "status": "rejected",
+      "notes": null,
+      "canCancel": false,
+      "pickup": null
+    }
+  ]
+}

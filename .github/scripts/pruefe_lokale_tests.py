@@ -73,6 +73,7 @@ ENDUNGEN = {".kt", ".java", ".swift", ".go", ".mjs", ".js", ".ts", ".sh", ".yml"
 VERBOTENE_DIENSTE = [
     (r"id\.xn--rssing-wxa\.de", "Produktions-Zitadel (Rössing-ID)"),
     (r"app\.xn--rssing-wxa\.de", "Produktions-Backend der Dorf-App"),
+    (r"mieten\.xn--rssing-wxa\.de", "Produktions-Mietplattform (Maschinchenring)"),
     (r"tiles\.openfreemap\.org", "fremder Kachelserver"),
     (r"fcm\.googleapis\.com", "Firebase Cloud Messaging"),
     # Beide Apple-Adressen einzeln: „api.sandbox.push.apple.com" enthält
@@ -93,7 +94,7 @@ ENDPUNKT_MUSTER = re.compile(
 FREIGABE = re.compile(r"ci-extern-ok:")
 
 # 3) Jeder Testlauf muss diese Adressen lokal setzen.
-PFLICHT_UEBERSTEUERUNGEN = ["-PapiBaseUrl", "-PwebsiteBaseUrl", "-PmapStyleUrl"]
+PFLICHT_UEBERSTEUERUNGEN = ["-PapiBaseUrl", "-PwebsiteBaseUrl", "-PmapStyleUrl", "-PmietenBaseUrl"]
 
 # Dasselbe für iOS: Die Build-Einstellungen aus `ios/project.yml` zeigen auf die
 # Produktion, jeder `xcodebuild`-Aufruf der CI muss sie übersteuern.
@@ -305,6 +306,8 @@ def selbsttest() -> int:
     faelle = [
         ("android/app/src/androidTest/Boese.kt", 'val issuer = "https://id.xn--rssing-wxa.de"', True),
         ("backend/e2e/boese.mjs", "const s = 'https://tiles.openfreemap.org/styles/liberty'", True),
+        ("android/app/src/test/Boese.kt", 'val basis = "https://mieten.xn--rssing-wxa.de"', True),
+        ("android/e2e/fixtures/mieten/gut.json", '{"webUrl": "https://mieten.example.invalid/x/"}', False),
         ("backend/e2e/boese.go", 'ziel := "https://api.push.apple.com/3/device/" + token', True),
         ("backend/e2e/boese.go", 'ziel := "https://api.sandbox.push.apple.com/3/device/" + token', True),
         ("backend/e2e/gut.go", 'ziel := srv.URL + "/3/device/" + token', False),

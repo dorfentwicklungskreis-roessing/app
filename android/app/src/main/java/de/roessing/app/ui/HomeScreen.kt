@@ -71,6 +71,7 @@ import de.roessing.app.R
 import de.roessing.app.data.DeviceLocation
 import de.roessing.app.data.KeinChat
 import de.roessing.app.data.KeineVeranstaltungen
+import de.roessing.app.data.NoRental
 import de.roessing.app.push.Geraeteanmeldung
 import de.roessing.app.push.PushZiel
 import de.roessing.app.ui.theme.DorfMotion
@@ -97,9 +98,24 @@ fun HomeScreen(
     veranstaltungenViewModel: VeranstaltungenViewModel = remember {
         VeranstaltungenViewModel(KeineVeranstaltungen)
     },
+    // Same reasoning: an empty rental platform, so that screen tests which
+    // have nothing to do with renting keep working.
+    rentalViewModel: RentalViewModel = remember { RentalViewModel(NoRental) },
     pushZiel: PushZiel? = null,
     onPushZielVerbraucht: () -> Unit = {},
     onLogout: () -> Unit,
+    /**
+     * Stößt eine erneute Anmeldung an, ohne die bestehende vorher wegzuwerfen.
+     *
+     * Gebraucht wird das für den Maschinchenring: Ein Gerät, das schon
+     * angemeldet war, behält seinen Token-Satz über die Aktualisierung hinweg
+     * — der nennt die Mietplattform nicht als Empfänger, und daran ist von
+     * hier aus nichts zu reparieren. Abmelden wäre der grobe Weg: Bricht
+     * jemand den Browser ab, stünde er ohne Anmeldung da, obwohl seine noch
+     * gilt. Also anmelden statt abmelden; misslingt es, bleibt alles, wie es
+     * war. Null heißt: Von hier führt kein Weg dorthin (Vorschau, Test).
+     */
+    onReauthenticate: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsState()
     val leaderboard by leaderboardViewModel.state.collectAsState()
@@ -107,6 +123,7 @@ fun HomeScreen(
     val ideen by ideenViewModel.state.collectAsState()
     val chat by chatViewModel.state.collectAsState()
     val veranstaltungen by veranstaltungenViewModel.state.collectAsState()
+    val verleih by rentalViewModel.state.collectAsState()
     var bereich by rememberSaveable { mutableStateOf(Bereich.START) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -286,6 +303,21 @@ fun HomeScreen(
     LaunchedEffect(bereich) {
         if (bereich == Bereich.VERANSTALTUNGEN) veranstaltungenViewModel.laden()
     }
+    // Der Maschinchenring wird beim Öffnen geholt; die Anmeldung wird dabei
+    // jedes Mal neu angesehen — sie kann sich zwischendurch geändert haben.
+    LaunchedEffect(bereich) {
+        if (bereich == Bereich.VERLEIH) rentalViewModel.load()
+    }
+    val gebuchtMsg = stringResource(R.string.rental_booked)
+    val storniertMsg = stringResource(R.string.rental_cancelled)
+    LaunchedEffect(Unit) {
+        rentalViewModel.events.collect { event ->
+            when (event) {
+                RentalEvent.Booked -> snackbar.showSnackbar(gebuchtMsg)
+                RentalEvent.Cancelled -> snackbar.showSnackbar(storniertMsg)
+            }
+        }
+    }
     // Die Dorfbewohner-Liste wird beim Öffnen frisch geholt.
     LaunchedEffect(bereich) {
         if (bereich == Bereich.DORFBEWOHNER) profileViewModel.loadMembers()
@@ -337,6 +369,7 @@ fun HomeScreen(
                             } else {
                                 stringResource(R.string.events_title)
                             }
+                            Bereich.VERLEIH -> stringResource(R.string.rental_title)
                             Bereich.IDEEN -> stringResource(R.string.ideas_title)
                             Bereich.CHAT -> stringResource(R.string.chat_title)
                             Bereich.START -> stringResource(R.string.home_title)
@@ -537,6 +570,25 @@ fun HomeScreen(
                         onTermin = { offenerTermin = it.id },
                     )
                 }
+
+                Bereich.VERLEIH -> RentalScreen(
+                    state = verleih,
+                    modifier = Modifier.padding(padding),
+                    onQuery = rentalViewModel::setQuery,
+                    onRefresh = rentalViewModel::refresh,
+                    onOpen = rentalViewModel::open,
+                    onClose = rentalViewModel::close,
+                    onPeriod = rentalViewModel::setPeriod,
+                    onBook = { notes, vorname, nachname, telefon ->
+                        rentalViewModel.book(notes, vorname, nachname, telefon)
+                    },
+                    onCancelBooking = rentalViewModel::cancel,
+                    // Wer hier steht, ist angemeldet — nur eben womöglich mit
+                    // einem Token von vor der Umstellung. Dann hilft allein
+                    // eine neue Anmeldung.
+                    onSignIn = null,
+                    onSignInAgain = onReauthenticate,
+                )
 
                 Bereich.IDEEN -> IdeenScreen(
                     state = ideen,
