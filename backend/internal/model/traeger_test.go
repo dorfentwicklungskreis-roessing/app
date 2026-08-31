@@ -246,3 +246,36 @@ func TestTraegerOhneDachIstGueltig(t *testing.T) {
 		t.Error("ohne parentId ist er kein Unter-Träger")
 	}
 }
+
+// --- Selbst entschieden ------------------------------------------------------
+
+// Wer den Träger verwaltet, darf über den eigenen Antrag entscheiden — in
+// einem Dorfverein ist der Vorstand oft eine Person, und er gibt die
+// Einweisung ohnehin selbst. Verboten ist es also nicht. Nachvollziehbar soll
+// es trotzdem sein (#34).
+func TestSelbstEntschiedenIstErkennbar(t *testing.T) {
+	selbst := BefaehigungsAntrag{UserSub: "olaf", EntschiedenVon: "olaf", Status: AntragErteilt}
+	if !selbst.SelbstEntschieden() {
+		t.Error("selbst erteilter Antrag wird nicht erkannt")
+	}
+
+	fremd := BefaehigungsAntrag{UserSub: "erna", EntschiedenVon: "olaf", Status: AntragErteilt}
+	if fremd.SelbstEntschieden() {
+		t.Error("fremd entschiedener Antrag gilt als selbst erteilt")
+	}
+
+	// Noch nicht entschieden ist nicht dasselbe wie selbst entschieden.
+	offen := BefaehigungsAntrag{UserSub: "olaf", Status: AntragBeantragt}
+	if offen.SelbstEntschieden() {
+		t.Error("ein offener Antrag gilt als selbst erteilt")
+	}
+
+	// Beim Beitritt wiegt es schwerer — erkannt wird es genauso.
+	eigen := Beitritt{UserSub: "olaf", EntschiedenVon: "olaf", Status: AntragErteilt}
+	if !eigen.SelbstEntschieden() {
+		t.Error("selbst aufgenommener Beitritt wird nicht erkannt")
+	}
+	if (Beitritt{UserSub: "erna", EntschiedenVon: "olaf"}).SelbstEntschieden() {
+		t.Error("fremd entschiedener Beitritt gilt als selbst aufgenommen")
+	}
+}

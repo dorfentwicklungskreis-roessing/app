@@ -483,3 +483,27 @@ func (z Zugriff) DarfBeitrittBeantragen(t Traeger) bool {
 // zweite Regel, sondern dieselbe: Er verwaltet jeden Träger, solange keiner
 // da ist, der es selbst tut.
 func (z Zugriff) DarfBeitrittEntscheiden(t Traeger) bool { return z.DarfVerwalten(t) }
+
+// --- Selbst entschieden ------------------------------------------------------
+
+// SelbstEntschieden sagt, ob dieselbe Person entschieden hat, die den Antrag
+// gestellt hat.
+//
+// Das ist erlaubt und für den Anfang richtig: In einem Dorfverein ist der
+// Vorstand oft eine Person, und er ist ohnehin derjenige, der die Einweisung
+// gibt. Ein erzwungenes Vier-Augen-Prinzip hieße dort, dass sich niemand
+// eine Einweisung eintragen kann und die Aufgabe für alle liegen bleibt.
+//
+// Nachvollziehbar soll es trotzdem sein — deshalb steht es in der Liste
+// dabei, statt still zu passieren (#34).
+func (a BefaehigungsAntrag) SelbstEntschieden() bool {
+	return a.EntschiedenVon != "" && a.EntschiedenVon == a.UserSub
+}
+
+// SelbstEntschieden — siehe BefaehigungsAntrag.SelbstEntschieden. Beim
+// Beitritt wiegt es etwas schwerer: Wer sich selbst aufnimmt, verschafft sich
+// eine Mitgliedschaft, nicht nur eine Einweisung. Verboten ist es trotzdem
+// nicht, aus demselben Grund — sichtbar aber sehr wohl.
+func (b Beitritt) SelbstEntschieden() bool {
+	return b.EntschiedenVon != "" && b.EntschiedenVon == b.UserSub
+}

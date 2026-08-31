@@ -166,7 +166,12 @@
               <tr>
                 <td>{{.UserName}}</td>
                 <td>{{.BefaehigungName}}</td>
-                <td><span class="badge {{antragBadge .Status}}">{{antragStatus .Status}}</span></td>
+                <td>
+                  <span class="badge {{antragBadge .Status}}">{{antragStatus .Status}}</span>
+                  {{if .SelbstEntschieden}}
+                    <span class="badge badge-ghost badge-sm" title="Dieselbe Person hat beantragt und entschieden.">selbst erteilt</span>
+                  {{end}}
+                </td>
                 <td class="whitespace-nowrap">{{datumOpt .EntschiedenAm}}</td>
                 <td>{{.Notiz}}</td>
               </tr>
@@ -257,7 +262,12 @@
             {{range .Data.Mitglieder}}
               <tr>
                 <td>{{.UserName}}</td>
-                <td><span class="badge {{antragBadge .Status}}">{{antragStatus .Status}}</span></td>
+                <td>
+                  <span class="badge {{antragBadge .Status}}">{{antragStatus .Status}}</span>
+                  {{if .SelbstEntschieden}}
+                    <span class="badge badge-ghost badge-sm" title="Dieselbe Person hat beantragt und entschieden.">selbst aufgenommen</span>
+                  {{end}}
+                </td>
                 <td class="whitespace-nowrap">{{datumOpt .EntschiedenAm}}</td>
                 <td>{{.Notiz}}</td>
               </tr>
