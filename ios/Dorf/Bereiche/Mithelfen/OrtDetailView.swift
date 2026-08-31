@@ -3,6 +3,7 @@ import SwiftUI
 /// Ein Ort mit allem, was dort ansteht: Beschreibung, Aufgaben mit Ampel,
 /// Plan bzw. Termin, letzte Erledigung, Historie — und der Knopf zum Melden.
 struct OrtDetailView: View {
+    @EnvironmentObject private var umgebung: AppUmgebung
     @ObservedObject var modell: OrteModell
     let ortId: Int64
     let meinSub: String?
@@ -67,11 +68,26 @@ struct OrtDetailView: View {
                     // außen sehen, aber nur mit Einweisung anfassen darf, ist
                     // genau das die wichtigste Angabe.
                     if !ort.traegerName.isEmpty {
-                        Label(ort.traegerName, systemImage: "person.2")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        // Von hier führt ein Weg zu ihm — aber nur, wenn der
+                        // Server ihn dieser Person überhaupt ins Verzeichnis
+                        // gestellt hat. Sonst bliebe der Weg eine Sackgasse:
+                        // Eine geschlossene Gruppe heißt hier „Eine Gruppe
+                        // aus dem Dorf", und ihre Seite gibt es für
+                        // Außenstehende nicht.
+                        if umgebung.traeger.inDirectory(ort.traegerId) {
+                            NavigationLink(value: Ziel.traegerDetail(ort.traegerId)) {
+                                Label(ort.traegerName, systemImage: "person.2")
+                                    .font(.subheadline)
+                            }
                             .accessibilityLabel("Betreut von \(ort.traegerName)")
                             .accessibilityIdentifier("ort-traeger")
+                        } else {
+                            Label(ort.traegerName, systemImage: "person.2")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel("Betreut von \(ort.traegerName)")
+                                .accessibilityIdentifier("ort-traeger")
+                        }
                     }
                     if !ort.description.isEmpty {
                         Text(ort.description)

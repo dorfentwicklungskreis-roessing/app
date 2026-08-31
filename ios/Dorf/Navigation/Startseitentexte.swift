@@ -42,4 +42,18 @@ enum Startseitentexte {
         guard giessfaktor.isFinite, giessfaktor < 1 else { return nil }
         return "Heiß — bitte großzügig gießen."
     }
+
+    /// Der Hinweis auf der Kachel „Vereine und Gruppen".
+    ///
+    /// Gezählt werden die Anfragen, die auf **meine** Entscheidung warten —
+    /// die Zahl schickt der Server nur denen mit, die den Träger verwalten.
+    /// Für alle anderen bleibt die Kachel still: Wer nichts zu entscheiden
+    /// hat, braucht keine Null.
+    static func traegerHinweis(offeneAnfragen: Int) -> String? {
+        switch offeneAnfragen {
+        case ..<1: return nil
+        case 1: return "Eine Anfrage wartet auf dich"
+        default: return "\(offeneAnfragen) Anfragen warten auf dich"
+        }
+    }
 }

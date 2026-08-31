@@ -325,10 +325,20 @@ nonisolated struct Ort: Codable, Identifiable, Hashable, Sendable {
     /// (`model.TraegerAnzeigeName`). Die App entscheidet hier nichts, sie
     /// zeigt an — sonst gäbe es die Sichtbarkeitsregel zweimal.
     var traegerName: String = ""
+    /// Die Kennung desselben Trägers — der Weg von hier zu ihm.
+    ///
+    /// Sie steht auch dann im JSON, wenn der Name verdeckt ist; das verrät
+    /// nichts, denn abgerufen wird der Träger über denselben Server, der ihn
+    /// verdeckt hat. Ob dieser Weg angeboten wird, entscheidet trotzdem
+    /// nicht die App an dieser Zahl, sondern das Verzeichnis: Steht der
+    /// Träger nicht darin, hat der Server ihn für diese Person nicht
+    /// vorgesehen.
+    var traegerId: Int64 = 0
     var tasks: [Aufgabe] = []
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description, kind, lat, lon, active, status, traegerName, tasks
+        case id, name, description, kind, lat, lon, active, status
+        case traegerName, traegerId, tasks
     }
 
     init(from decoder: Decoder) throws {
@@ -342,15 +352,17 @@ nonisolated struct Ort: Codable, Identifiable, Hashable, Sendable {
         active = c.wert(.active, true)
         status = c.wert(.status, "green")
         traegerName = c.wert(.traegerName, "")
+        traegerId = c.wert(.traegerId, 0)
         tasks = c.wert(.tasks, [])
     }
 
     init(id: Int64, name: String, description: String = "", kind: String = "blumenkasten",
          lat: Double, lon: Double, active: Bool = true, status: String = "green",
-         traegerName: String = "", tasks: [Aufgabe] = []) {
+         traegerName: String = "", traegerId: Int64 = 0, tasks: [Aufgabe] = []) {
         self.id = id; self.name = name; self.description = description; self.kind = kind
         self.lat = lat; self.lon = lon; self.active = active; self.status = status
         self.traegerName = traegerName
+        self.traegerId = traegerId
         self.tasks = tasks
     }
 
@@ -909,4 +921,177 @@ nonisolated enum RFC3339 {
         if text.isEmpty { return nil }
         return mitBruchteilen.date(from: text) ?? ohneBruchteile.date(from: text)
     }
+}
+
+// MARK: - Träger (Vereine und Gruppen)
+
+/// A Traeger — the association or working group that owns places and tasks.
+///
+/// Everything about what *this* person may see and do arrives decided from
+/// the server (`model.Zugriff`): whether joining is possible, why not, and
+/// how an own request stands. The app shows it and decides nothing itself —
+/// a second check is a second answer, and at the next special case it is the
+/// wrong one.
+///
+/// The property names follow the wire format, which is German. Renaming them
+/// would mean a `CodingKeys` entry per field and would tell nobody anything
+/// the JSON does not already say.
+nonisolated struct Traeger: Codable, Identifiable, Hashable, Sendable {
+    var id: Int64
+    var name: String = ""
+    var beschreibung: String = ""
+    /// beantragt · zugelassen · gesperrt
+    var status: String = ""
+    /// offen · geschlossen
+    var sichtbarkeit: String = ""
+    /// The roof this Traeger works under — 0 means none. Exactly one level:
+    /// association → working group. Rights travel along it in neither
+    /// direction; whoever administers the working group does not thereby
+    /// administer the association.
+    var parentId: Int64 = 0
+    var istMitglied = false
+    var darfVerwalten = false
+    /// This person can file a request right now.
+    var beitrittMoeglich = false
+    /// Why not — a finished German sentence, meant to be shown verbatim.
+    var beitrittHindernis = ""
+    /// How my own request stands: beantragt · erteilt · abgelehnt. Empty
+    /// means there is none.
+    var beitrittStatus = ""
+    /// Undecided requests — the server fills it only for those who
+    /// administer this Traeger.
+    var offeneBeitritte = 0
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, beschreibung, status, sichtbarkeit, parentId
+        case istMitglied, darfVerwalten, beitrittMoeglich, beitrittHindernis
+        case beitrittStatus, offeneBeitritte
+    }
+
+    init(id: Int64, name: String = "", beschreibung: String = "",
+         status: String = "zugelassen", sichtbarkeit: String = "offen",
+         parentId: Int64 = 0, istMitglied: Bool = false, darfVerwalten: Bool = false,
+         beitrittMoeglich: Bool = false, beitrittHindernis: String = "",
+         beitrittStatus: String = "", offeneBeitritte: Int = 0) {
+        self.id = id; self.name = name; self.beschreibung = beschreibung
+        self.status = status; self.sichtbarkeit = sichtbarkeit; self.parentId = parentId
+        self.istMitglied = istMitglied; self.darfVerwalten = darfVerwalten
+        self.beitrittMoeglich = beitrittMoeglich; self.beitrittHindernis = beitrittHindernis
+        self.beitrittStatus = beitrittStatus; self.offeneBeitritte = offeneBeitritte
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int64.self, forKey: .id)
+        name = c.wert(.name, "")
+        beschreibung = c.wert(.beschreibung, "")
+        status = c.wert(.status, "")
+        sichtbarkeit = c.wert(.sichtbarkeit, "")
+        parentId = c.wert(.parentId, 0)
+        istMitglied = c.wert(.istMitglied, false)
+        darfVerwalten = c.wert(.darfVerwalten, false)
+        beitrittMoeglich = c.wert(.beitrittMoeglich, false)
+        beitrittHindernis = c.wert(.beitrittHindernis, "")
+        beitrittStatus = c.wert(.beitrittStatus, "")
+        offeneBeitritte = c.wert(.offeneBeitritte, 0)
+    }
+
+    /// A closed group is in the directory for members only, and it takes no
+    /// requests — it takes people in itself. Whether a button does anything
+    /// is `beitrittMoeglich`; this is only for the sentence beside it.
+    var istGeschlossen: Bool { sichtbarkeit == "geschlossen" }
+}
+
+/// A request for membership in a Traeger.
+///
+/// A granted request is **not** the membership: that one lives in the
+/// Rössing-ID. Here stands the proceeding — who asked when, who decided
+/// when. Which is why granting can fail while the request stays open, and
+/// why the server's sentence about it belongs on the screen verbatim.
+nonisolated struct Beitritt: Codable, Identifiable, Hashable, Sendable {
+    var id: Int64
+    var traegerId: Int64 = 0
+    var traegerName: String = ""
+    var userSub: String = ""
+    var userName: String = ""
+    /// beantragt · erteilt · abgelehnt
+    var status: String = ""
+    var begruendung: String = ""
+    var notiz: String = ""
+    var createdAt: String = ""
+    var entschiedenAm: String = ""
+
+    enum CodingKeys: String, CodingKey {
+        case id, traegerId, traegerName, userSub, userName, status
+        case begruendung, notiz, createdAt, entschiedenAm
+    }
+
+    init(id: Int64, traegerId: Int64 = 0, traegerName: String = "", userSub: String = "",
+         userName: String = "", status: String = "beantragt", begruendung: String = "",
+         notiz: String = "", createdAt: String = "", entschiedenAm: String = "") {
+        self.id = id; self.traegerId = traegerId; self.traegerName = traegerName
+        self.userSub = userSub; self.userName = userName; self.status = status
+        self.begruendung = begruendung; self.notiz = notiz
+        self.createdAt = createdAt; self.entschiedenAm = entschiedenAm
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int64.self, forKey: .id)
+        traegerId = c.wert(.traegerId, 0)
+        traegerName = c.wert(.traegerName, "")
+        userSub = c.wert(.userSub, "")
+        userName = c.wert(.userName, "")
+        status = c.wert(.status, "")
+        begruendung = c.wert(.begruendung, "")
+        notiz = c.wert(.notiz, "")
+        createdAt = c.wert(.createdAt, "")
+        entschiedenAm = c.wert(.entschiedenAm, "")
+    }
+
+    /// The name to show. The server resolves it from the profile; the bare
+    /// identifier is the fallback, not the normal case.
+    var anzeigename: String { userName.isEmpty ? userSub : userName }
+}
+
+nonisolated struct TraegerListeAntwort: Codable, Sendable {
+    var traeger: [Traeger] = []
+    enum CodingKeys: String, CodingKey { case traeger }
+    init(traeger: [Traeger] = []) { self.traeger = traeger }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        traeger = c.wert(.traeger, [])
+    }
+}
+
+nonisolated struct TraegerAntwort: Codable, Sendable {
+    var traeger: Traeger
+}
+
+nonisolated struct BeitritteAntwort: Codable, Sendable {
+    var beitritte: [Beitritt] = []
+    enum CodingKeys: String, CodingKey { case beitritte }
+    init(beitritte: [Beitritt] = []) { self.beitritte = beitritte }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        beitritte = c.wert(.beitritte, [])
+    }
+}
+
+/// Body of `POST /api/v1/traeger/{id}/beitritt`.
+nonisolated struct BeitrittEingabe: Codable, Sendable {
+    var begruendung: String = ""
+}
+
+/// Body of `POST /api/v1/beitritte/{id}`.
+nonisolated struct BeitrittEntscheidung: Codable, Sendable {
+    var status: String
+    var notiz: String = ""
+}
+
+/// Body of `POST /api/v1/traeger/{id}/mitglieder` — the only way into a
+/// closed group.
+nonisolated struct MitgliedEingabe: Codable, Sendable {
+    var userSub: String
+    var notiz: String = ""
 }

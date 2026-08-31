@@ -32,6 +32,7 @@ import de.roessing.app.ui.PlacesViewModel
 import de.roessing.app.ui.ProfileViewModel
 import de.roessing.app.ui.PublicRentalScreen
 import de.roessing.app.ui.RentalViewModel
+import de.roessing.app.ui.TraegerViewModel
 import de.roessing.app.ui.VeranstaltungenViewModel
 import de.roessing.app.push.PushZiel
 import de.roessing.app.ui.theme.DorfAppTheme
@@ -152,6 +153,7 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
             val chatVm: ChatViewModel = viewModel(factory = factory)
             val termineVm: VeranstaltungenViewModel = viewModel(factory = factory)
             val verleihVm: RentalViewModel = viewModel(factory = factory)
+            val traegerVm: TraegerViewModel = viewModel(factory = factory)
             HomeScreen(
                 viewModel = vm,
                 leaderboardViewModel = rangVm,
@@ -160,6 +162,7 @@ private fun Root(pushZiel: PushZiel? = null, onPushZielVerbraucht: () -> Unit = 
                 chatViewModel = chatVm,
                 veranstaltungenViewModel = termineVm,
                 rentalViewModel = verleihVm,
+                traegerViewModel = traegerVm,
                 pushZiel = pushZiel,
                 onPushZielVerbraucht = onPushZielVerbraucht,
                 onLogout = {
@@ -197,6 +200,9 @@ private fun viewModelFactory(container: AppContainer) =
 
             modelClass.isAssignableFrom(ChatViewModel::class.java) ->
                 ChatViewModel(container.chatRepository) as T
+
+            modelClass.isAssignableFrom(TraegerViewModel::class.java) ->
+                TraegerViewModel(container.traegerRepository) as T
 
             modelClass.isAssignableFrom(VeranstaltungenViewModel::class.java) ->
                 VeranstaltungenViewModel(container.veranstaltungenRepository) as T

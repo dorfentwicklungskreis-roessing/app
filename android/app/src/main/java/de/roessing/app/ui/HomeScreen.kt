@@ -70,6 +70,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import de.roessing.app.R
 import de.roessing.app.data.DeviceLocation
 import de.roessing.app.data.KeinChat
+import de.roessing.app.data.KeineTraeger
 import de.roessing.app.data.KeineVeranstaltungen
 import de.roessing.app.data.NoRental
 import de.roessing.app.push.Geraeteanmeldung
@@ -101,6 +102,9 @@ fun HomeScreen(
     // Same reasoning: an empty rental platform, so that screen tests which
     // have nothing to do with renting keep working.
     rentalViewModel: RentalViewModel = remember { RentalViewModel(NoRental) },
+    // Same reasoning again: an empty directory, so that screen tests which
+    // have nothing to do with associations keep working.
+    traegerViewModel: TraegerViewModel = remember { TraegerViewModel(KeineTraeger) },
     pushZiel: PushZiel? = null,
     onPushZielVerbraucht: () -> Unit = {},
     onLogout: () -> Unit,
@@ -124,6 +128,7 @@ fun HomeScreen(
     val chat by chatViewModel.state.collectAsState()
     val veranstaltungen by veranstaltungenViewModel.state.collectAsState()
     val verleih by rentalViewModel.state.collectAsState()
+    val traeger by traegerViewModel.state.collectAsState()
     var bereich by rememberSaveable { mutableStateOf(Bereich.START) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -147,11 +152,15 @@ fun HomeScreen(
     // aus dem Bereich auf die Startseite — und erst von dort aus der App
     // heraus. Jeder Schritt einzeln, keiner übersprungen.
     BackHandler(enabled = bereich != Bereich.START || termin != null) {
-        if (termin != null) {
-            offenerTermin = null
-        } else {
-            offenerTermin = null
-            bereich = Bereich.START
+        when {
+            termin != null -> offenerTermin = null
+            // Aus einem aufgeschlagenen Träger zurück ins Verzeichnis — ein
+            // Schritt, nicht zwei auf einmal.
+            bereich == Bereich.TRAEGER && traeger.open != null -> traegerViewModel.close()
+            else -> {
+                offenerTermin = null
+                bereich = Bereich.START
+            }
         }
     }
 
@@ -335,6 +344,31 @@ fun HomeScreen(
     LaunchedEffect(bereich) {
         if (bereich == Bereich.CHAT) chatViewModel.standPruefen()
     }
+    // Die Träger holt schon die Startseite: Ihre Kachel zählt die offenen
+    // Anfragen, und die Ortsansicht fragt das Verzeichnis, ob es zum Träger
+    // eines Ortes überhaupt einen Weg gibt.
+    LaunchedEffect(bereich) {
+        if (bereich == Bereich.START || bereich == Bereich.TRAEGER) traegerViewModel.load()
+        // Wer den Bereich verlässt, kommt beim nächsten Mal wieder im
+        // Verzeichnis an — ein einzelner Träger ist ein Weg dorthin, kein
+        // eigener Aufenthalt.
+        if (bereich != Bereich.TRAEGER) traegerViewModel.close()
+    }
+    val traegerJoined = stringResource(R.string.traeger_joined)
+    LaunchedEffect(Unit) {
+        traegerViewModel.events.collect { event ->
+            when (event) {
+                is TraegerEvent.Joined -> snackbar.showSnackbar(traegerJoined)
+                // Der Name steht im Ereignis, nicht im Text — deshalb erst
+                // hier eingesetzt.
+                is TraegerEvent.Granted ->
+                    snackbar.showSnackbar(context.getString(R.string.traeger_granted, event.name))
+
+                is TraegerEvent.Rejected ->
+                    snackbar.showSnackbar(context.getString(R.string.traeger_rejected, event.name))
+            }
+        }
+    }
     // Name und E-Mail im Ideen-Formular kommen aus dem Profil. Sie werden
     // nur nachgetragen, wenn die Felder noch leer sind — wer schon getippt
     // hat, verliert nichts (siehe IdeenViewModel.vorbelegen).
@@ -380,6 +414,8 @@ fun HomeScreen(
                             Bereich.VERLEIH -> stringResource(R.string.rental_title)
                             Bereich.IDEEN -> stringResource(R.string.ideas_title)
                             Bereich.CHAT -> stringResource(R.string.chat_title)
+                            Bereich.TRAEGER -> traeger.openTraeger?.name
+                                ?: stringResource(R.string.traeger_title)
                             Bereich.START -> stringResource(R.string.home_title)
                         },
                     )
@@ -389,7 +425,13 @@ fun HomeScreen(
                         IconButton(
                             onClick = {
                                 offenerTermin = null
-                                if (termin == null) bereich = Bereich.START
+                                when {
+                                    termin != null -> Unit
+                                    bereich == Bereich.TRAEGER && traeger.open != null ->
+                                        traegerViewModel.close()
+
+                                    else -> bereich = Bereich.START
+                                }
                             },
                             modifier = Modifier.testTag("zurueck"),
                         ) {
@@ -534,6 +576,7 @@ fun HomeScreen(
                     ladend = state.loading && state.places.isEmpty(),
                     isAdmin = state.me?.isAdmin == true,
                     modifier = Modifier.padding(padding),
+                    offeneTraegerAnfragen = traeger.openRequestsForMe,
                     notifications = state.notifications,
                     pendingAssignments = state.pendingAssignments,
                     meineVorgaenge = meineVorgaenge(state),
@@ -624,6 +667,26 @@ fun HomeScreen(
                     onSenden = ideenViewModel::absenden,
                 )
 
+                Bereich.TRAEGER -> TraegerScreen(
+                    state = traeger,
+                    modifier = Modifier.padding(padding),
+                    places = state.places,
+                    onOpen = traegerViewModel::open,
+                    onJoin = traegerViewModel::join,
+                    onDecide = traegerViewModel::decide,
+                    onAddMember = traegerViewModel::addMember,
+                    onLoadVillagers = traegerViewModel::loadVillagers,
+                    // Der Weg vom Träger zurück zu seinen Orten: derselbe
+                    // Ort, denselben Weg, den auch die Liste unter
+                    // „Mithelfen" nimmt.
+                    onPlace = { ortId ->
+                        bereich = Bereich.MITHELFEN
+                        tab = 1
+                        selectedPlaceId = ortId
+                    },
+                    onDismissError = traegerViewModel::dismissError,
+                )
+
                 Bereich.CHAT -> ChatScreen(
                     state = chat,
                     modifier = Modifier.padding(padding),
@@ -686,6 +749,20 @@ fun HomeScreen(
                 onSignup = { placeId, art, an -> viewModel.setSignup(placeId, art, an) },
                 onClaim = { viewModel.claim(it) },
                 onRelease = { viewModel.release(it) },
+                // Von hier zum Träger — aber nur, wenn der Server ihn dieser
+                // Person überhaupt ins Verzeichnis gestellt hat. Sonst bliebe
+                // der Weg eine Sackgasse: Eine geschlossene Gruppe heißt hier
+                // „Eine Gruppe aus dem Dorf", und ihre Seite gibt es für
+                // Außenstehende nicht.
+                onTraeger = if (traeger.inDirectory(selected.traegerId)) {
+                    {
+                        selectedPlaceId = null
+                        bereich = Bereich.TRAEGER
+                        traegerViewModel.open(selected.traegerId)
+                    }
+                } else {
+                    null
+                },
             )
         }
     }

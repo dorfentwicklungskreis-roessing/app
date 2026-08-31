@@ -63,6 +63,48 @@ interface DorfApi {
     @POST("api/v1/assignments/{id}/release")
     suspend fun release(@Path("id") assignmentId: Long): AssignmentDto
 
+    // --- Träger (Vereine und Gruppen) ---------------------------------------
+
+    /**
+     * Das Verzeichnis. Es enthält nur, was diese Person sehen darf, und je
+     * Träger gleich mit, was für sie gilt (Mitglied, Verwaltung, Beitritt).
+     * Die Regeln stehen im Server — sie in der App nachzubauen führt früher
+     * oder später zu einer anderen Antwort als der, die er gibt.
+     */
+    @GET("api/v1/traeger")
+    suspend fun traeger(): TraegerListResponse
+
+    @GET("api/v1/traeger/{id}")
+    suspend fun traegerDetail(@Path("id") id: Long): TraegerResponse
+
+    /** „Ich will mitmachen." 409 heißt: geht gerade nicht, mit Grund im Text. */
+    @POST("api/v1/traeger/{id}/beitritt")
+    suspend fun beitritt(@Path("id") id: Long, @Body input: BeitrittInput): BeitrittDto
+
+    /** Die Anträge eines Trägers — nur für die, die ihn verwalten. */
+    @GET("api/v1/traeger/{id}/beitritte")
+    suspend fun beitritte(@Path("id") id: Long): BeitritteResponse
+
+    @GET("api/v1/me/beitritte")
+    suspend fun meineBeitritte(): BeitritteResponse
+
+    /**
+     * Freigeben oder ablehnen. Die Freigabe schreibt zuerst in die
+     * Rössing-ID: 503 heißt, das Backend kann dort (noch) nichts eintragen,
+     * 502 heißt, es hat nicht geklappt. In beiden Fällen bleibt der Antrag
+     * offen, und der Satz des Servers gehört auf den Schirm.
+     */
+    @POST("api/v1/beitritte/{id}")
+    suspend fun entscheideBeitritt(
+        @Path("id") id: Long,
+        @Body input: BeitrittDecisionInput,
+    ): BeitrittDto
+
+    /** Jemanden ohne Antrag aufnehmen — bei einer geschlossenen Gruppe der
+     *  einzige Weg hinein. */
+    @POST("api/v1/traeger/{id}/mitglieder")
+    suspend fun mitgliedAufnehmen(@Path("id") id: Long, @Body input: MitgliedInput): BeitrittDto
+
     // --- Ideen-Sammlung ------------------------------------------------------
 
     /**

@@ -71,6 +71,16 @@ struct StartView: View {
                         ziel: .rangliste, symbol: "trophy.fill", titel: "Rangliste",
                         untertitel: "Wer wie viel geschafft hat."
                     )
+                    // Wem die Orte und Aufgaben gehören — und wo man sagt
+                    // „ich will mitmachen". Der Hinweis zählt, was auf eine
+                    // Entscheidung wartet: Wer im Vorstand ist, soll es
+                    // sehen, ohne erst hineinzugehen.
+                    Bereichskachel(
+                        ziel: .traeger, symbol: "person.2.fill", titel: "Vereine und Gruppen",
+                        untertitel: "Wer im Dorf was betreut — und wie du mitmachst.",
+                        hinweis: Startseitentexte.traegerHinweis(
+                            offeneAnfragen: umgebung.traeger.openRequestsForMe)
+                    )
                 }
 
                 Section("Du und das Dorf") {
@@ -127,6 +137,9 @@ struct StartView: View {
             // Die Orte gehören der Umgebung, nicht dieser Seite: „Mithelfen"
             // benutzt dasselbe Modell und lädt deshalb nicht ein zweites Mal.
             .task { await umgebung.orte.laden() }
+            // Dasselbe für die Träger: Die Kachel zählt die offenen Anfragen,
+            // die Ortsansicht fragt, ob es zum Träger einen Weg gibt.
+            .task { await umgebung.traeger.load() }
         }
     }
 }
