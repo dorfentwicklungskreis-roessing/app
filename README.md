@@ -98,6 +98,19 @@ keine der beiden Apps noch einmal.
   Betreiber-Rolle steckt im Token und bleibt davon unberührt — der Betreiber
   bleibt handlungsfähig. Kurz: Ein Ausfall macht die App vorsichtiger, nie
   großzügiger.
+- **Beitreten kann man in der App.** Wer einen offenen Träger im Verzeichnis
+  sieht, stellt dort einen Antrag; der Träger-Admin gibt frei oder lehnt ab
+  (`POST /api/v1/traeger/{id}/beitritt`, `POST /api/v1/beitritte/{id}`, in der
+  Verwaltung auf der Trägerseite, über MCP `beitritte_liste` und
+  `beitritt_entscheiden`). Die Freigabe **schreibt die Rolle `mitglied` nach
+  Zitadel zurück** — niemand muss mehr in die Konsole steigen, und die neue
+  Mitgliedschaft wirkt sofort. Ein erteilter Antrag ist dabei *nicht* die
+  Mitgliedschaft (anders als beim Befähigungsantrag): Die steht in der
+  Rössing-ID, hier steht nur der Vorgang. Klappt das Zurückschreiben nicht,
+  bleibt der Antrag offen und die Meldung nennt den Grund.
+  Eine **geschlossene** Gruppe nimmt keine Anträge entgegen — sie steht nicht
+  im Verzeichnis und holt sich ihre Leute selbst (`POST
+  /api/v1/traeger/{id}/mitglieder`, MCP `mitglied_aufnehmen`).
 - **Sichtbarkeit einer Aufgabe**: `oeffentlich` oder `nur_mitglieder`. Eine
   **geschlossene Gruppe kann sehr wohl öffentlich ausschreiben** — die
   Sichtbarkeit des Trägers betrifft nur das Verzeichnis. Umgekehrt gilt für
@@ -522,7 +535,7 @@ auf die Produktion.
 | `MCP_CLIENT_ID` | PKCE-Client für die MCP-Anbindung |
 | `SEED` | `1` → Beispieldaten anlegen, falls die DB leer ist |
 | `AUTH_AUDIENCE` | kommaseparierte Liste erlaubter Token-Empfänger — die Client-IDs der Anwendungen, die dieses Backend nutzen dürfen. **Im OIDC-Modus Pflicht:** ohne sie prüft das Backend nur Aussteller und Signatur, und ein Token für ein anderes Projekt derselben Rössing-ID käme durch. Der Server verweigert deshalb ohne diesen Wert den Start |
-| `ZITADEL_SERVICE_USER_KEY_FILE` | JSON-Schlüssel des Dienst-Nutzers, mit dem die Träger-Mitgliedschaften über die Management-API abgefragt werden. **Fehlt er, gibt es keine Träger-Rollen**: Dann verwaltet nur der Betreiber, und alle anderen sehen die öffentlichen Aufgaben. Der Betrieb läuft dabei unverändert weiter |
+| `ZITADEL_SERVICE_USER_KEY_FILE` | JSON-Schlüssel des Dienst-Nutzers, mit dem die Träger-Mitgliedschaften über die Management-API abgefragt **und bei einer Beitritts-Freigabe zurückgeschrieben** werden (dafür braucht er `user.grant.read` **und** `user.grant.write`, in Zitadel die Manager-Rolle `ORG_USER_PERMISSION_EDITOR`). **Fehlt er, gibt es keine Träger-Rollen**: Dann verwaltet nur der Betreiber, alle anderen sehen die öffentlichen Aufgaben, und eine Aufnahme scheitert mit einem Hinweis, statt still ins Leere zu laufen. Der Betrieb läuft dabei unverändert weiter |
 | `ZITADEL_ROLLEN_TTL` | Wie lange eine Mitgliedschafts-Auskunft als frisch gilt (Vorgabe `45s`) |
 | `RATE_LIMIT` | `off` schaltet die Zugriffsbegrenzung ab |
 | `RATE_LIMIT_BURST` / `RATE_LIMIT_PER_MINUTE` | Eimergröße (60) und Nachfüllrate pro Minute (120) |

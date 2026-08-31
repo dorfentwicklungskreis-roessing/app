@@ -164,7 +164,13 @@ func main() {
 		// MCP_CLIENT_ID: PKCE-Client, den Dynamic Client Registration
 		// (claude.ai) zurückbekommt.
 		mcpClientID := envOr("MCP_CLIENT_ID", "385946294599876803")
-		mcp.New(database, verifier, issuer, publicURL, mcpClientID).Register(mux)
+		mcpSrv := mcp.New(database, verifier, issuer, publicURL, mcpClientID)
+		// Damit MCP jemanden in einen Träger aufnehmen kann: Das schreibt
+		// die Rollenzuweisung in die Rössing-ID zurück (siehe
+		// internal/mitglied). Ohne Quelle sagen die Werkzeuge das und tun
+		// nichts, statt still ins Leere zu laufen.
+		mcpSrv.Mitglieder = mitglieder
+		mcpSrv.Register(mux)
 		slog.Info("MCP-Server aktiv unter /mcp (OAuth + DCR)", "issuer", issuer)
 		// Chat: dieselben Daten in normalem Deutsch, in der Sicht der
 		// fragenden Person. Ohne ANTHROPIC_API_KEY schaltet er sich ab.

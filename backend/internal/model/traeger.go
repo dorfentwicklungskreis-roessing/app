@@ -197,6 +197,43 @@ type BefaehigungsAntrag struct {
 	TraegerID       int64  `json:"traegerId,omitempty"`
 }
 
+// --- Beitritte --------------------------------------------------------------
+
+// Beitritt ist der Antrag auf Mitgliedschaft in einem Träger.
+//
+// Der Ablauf ist derselbe wie bei einer Befähigung — beantragen, freigeben
+// oder ablehnen. Ein Unterschied ist aber wesentlich, und er ist der Grund,
+// warum das hier ein eigener Typ ist und keine zweite Verwendung von
+// BefaehigungsAntrag:
+//
+// Ein erteilter Befähigungsantrag IST die Befähigung. Ein erteilter Beitritt
+// ist NICHT die Mitgliedschaft. Die steht in der Rössing-ID, und nirgends
+// sonst — hier steht nur der Vorgang: wer wann gefragt hat und wer wann
+// entschieden hat. Wäre es anders, hätte das Dorf zwei Wahrheiten darüber,
+// wer zum Verein gehört, und irgendwann widersprächen sie sich.
+//
+// Deshalb wird ein Beitritt auch erst dann auf „erteilt“ gesetzt, wenn die
+// Rollenzuweisung in Zitadel tatsächlich steht (siehe mitglied.Aufnehmer).
+type Beitritt struct {
+	ID        int64  `json:"id"`
+	TraegerID int64  `json:"traegerId"`
+	UserSub   string `json:"userSub"`
+	UserName  string `json:"userName,omitempty"`
+	// Status: beantragt, erteilt oder abgelehnt — dieselben drei Stände wie
+	// beim Befähigungsantrag, damit im Dorf nicht zwei Vokabulare gelten.
+	Status AntragStatus `json:"status"`
+	// Begruendung schreibt die antragstellende Person („ich wohne neben dem
+	// Beet und würde gern mitjäten“).
+	Begruendung string `json:"begruendung,omitempty"`
+	// Notiz schreibt der Träger-Admin bei der Entscheidung.
+	Notiz          string     `json:"notiz,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	EntschiedenAm  *time.Time `json:"entschiedenAm,omitempty"`
+	EntschiedenVon string     `json:"entschiedenVon,omitempty"`
+	// TraegerName ist ein Anzeigefeld, aus dem Träger nachgeladen.
+	TraegerName string `json:"traegerName,omitempty"`
+}
+
 // TaskSichtbarkeit steuert, wem eine Aufgabe angezeigt wird.
 type TaskSichtbarkeit string
 
@@ -396,3 +433,53 @@ func (z Zugriff) DarfZusagen(t Traeger, sicht TaskSichtbarkeit) bool {
 	}
 	return !z.Veraltet
 }
+
+// --- Beitritt ---------------------------------------------------------------
+
+// BeitrittsHindernis nennt den Grund, warum diese Person diesem Träger
+// gerade keinen Beitrittsantrag schicken kann — leer heißt: sie kann.
+//
+// Der Text ist deutsch, weil er genau so vor der Person landet. Er steht
+// hier und nicht in den Handlern, damit REST, Web-Verwaltung und MCP
+// dieselbe Antwort geben; eine zweite Prüfung daneben würde irgendwann
+// abweichen.
+func (z Zugriff) BeitrittsHindernis(t Traeger) string {
+	if z.Sub == "" {
+		return "Zum Beitreten musst du angemeldet sein."
+	}
+	if !t.Zugelassen() {
+		return "Dieser Träger ist nicht zugelassen — beitreten kann man ihm noch nicht."
+	}
+	// Ohne Zitadel-Projekt gibt es nichts, worin man Mitglied sein könnte.
+	// Eine Freigabe hätte hier nichts zurückzuschreiben.
+	if t.ProjektID == "" {
+		return "Dieser Träger hat in der Rössing-ID noch kein Projekt — " +
+			"solange es keins gibt, hat er auch keine Mitglieder."
+	}
+	if z.Mitglied.IstMitglied(t.ProjektID) {
+		return "Du gehörst schon dazu."
+	}
+	// Eine geschlossene Gruppe steht nicht im Verzeichnis. Wer sie nicht
+	// findet, kann ihr auch nichts schicken — und wer ihre Kennung errät,
+	// soll daraus nichts erfahren. Sie nimmt selbst auf, statt Anträge
+	// entgegenzunehmen (siehe Aufnahme durch den Träger-Admin).
+	if t.Sichtbarkeit != TraegerOffen {
+		return "Diese Gruppe ist geschlossen: Wer dazugehören soll, wird von ihr " +
+			"aufgenommen — Anträge nimmt sie nicht entgegen."
+	}
+	return ""
+}
+
+// DarfBeitrittBeantragen ist die Kurzform desselben.
+func (z Zugriff) DarfBeitrittBeantragen(t Traeger) bool {
+	return z.BeitrittsHindernis(t) == ""
+}
+
+// DarfBeitrittEntscheiden sagt, wer über einen Beitritt bestimmt: der
+// Träger-Admin. Ausdrücklich nicht der Plattform-Betreiber allein — der lässt
+// Träger zu, aber wer zu einem Verein gehört, entscheidet der Verein.
+//
+// Dass der Betreiber es technisch trotzdem kann (DarfVerwalten), ist keine
+// zweite Regel, sondern dieselbe: Er verwaltet jeden Träger, solange keiner
+// da ist, der es selbst tut.
+func (z Zugriff) DarfBeitrittEntscheiden(t Traeger) bool { return z.DarfVerwalten(t) }

@@ -1313,6 +1313,124 @@ func TestEndToEnd(t *testing.T) {
 			t.Error("die Aufgabe eines gesperrten Trägers ist noch sichtbar")
 		}
 	})
+
+	// --- Beitritt: beantragen, freigeben, wirklich Mitglied sein -----------
+	//
+	// Der Punkt, an dem sich entscheidet, ob das Verfahren etwas taugt: Die
+	// Freigabe muss die Rollenzuweisung in Zitadel ZURÜCKSCHREIBEN. Geprüft
+	// wird deshalb nicht die eigene Datenbank, sondern die Management-API —
+	// und danach die Wirkung mit demselben Token, ohne neue Anmeldung.
+	t.Run("Träger: Beitritt beantragen und freigeben schreibt nach Zitadel zurück", func(t *testing.T) {
+		beitrittProjekt := zapi(t, iamToken, "POST", "/management/v1/projects",
+			map[string]any{"name": fmt.Sprintf("ak2-e2e-%d", time.Now().UnixNano())})
+		beitrittProjektID := beitrittProjekt["id"].(string)
+		for _, rolle := range []map[string]any{
+			{"roleKey": "admin", "displayName": "Verwaltung"},
+			{"roleKey": "mitglied", "displayName": "Mitglied"},
+		} {
+			zapi(t, iamToken, "POST", "/management/v1/projects/"+beitrittProjektID+"/roles", rolle)
+		}
+
+		resp, traeger := request(t, "POST", "/api/v1/traeger", adminToken, map[string]any{
+			"name": "AK 2 Umwelt und Natur", "projektId": beitrittProjektID,
+			"status": "zugelassen", "sichtbarkeit": "offen",
+		})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Träger anlegen: HTTP %d: %v", resp.StatusCode, traeger)
+		}
+		traegerID := traeger["id"].(float64)
+
+		// Ein Vorstand mit der admin-Rolle des Arbeitskreises und jemand aus
+		// dem Dorf, der noch nirgends dabei ist.
+		vorstandUser := newMachine("AK2-Vorstand", nil)
+		zapi(t, iamToken, "POST", "/management/v1/users/"+vorstandUser.UserID+"/grants",
+			map[string]any{"projectId": beitrittProjektID, "roleKeys": []string{"admin"}})
+		vorstandToken := fetchToken(t, vorstandUser, scope)
+		neulingUser := newMachine("Dorf-Neuling", nil)
+		neulingToken := fetchToken(t, neulingUser, scope)
+
+		// „Ich will mitjäten.“
+		resp, antrag := request(t, "POST", fmt.Sprintf("/api/v1/traeger/%.0f/beitritt", traegerID),
+			neulingToken, map[string]any{"begruendung": "Ich wohne neben dem Beet"})
+		if resp.StatusCode != 201 {
+			t.Fatalf("Beitrittsantrag: HTTP %d: %v", resp.StatusCode, antrag)
+		}
+		antragID := antrag["id"].(float64)
+
+		// Niemand entscheidet über sich selbst.
+		resp, _ = request(t, "POST", fmt.Sprintf("/api/v1/beitritte/%.0f", antragID),
+			neulingToken, map[string]any{"status": "erteilt"})
+		if resp.StatusCode != 403 {
+			t.Errorf("Selbstaufnahme: HTTP %d, erwartet 403", resp.StatusCode)
+		}
+
+		resp, out := request(t, "POST", fmt.Sprintf("/api/v1/beitritte/%.0f", antragID),
+			vorstandToken, map[string]any{"status": "erteilt", "notiz": "willkommen"})
+		if resp.StatusCode != 200 {
+			t.Fatalf("Freigabe: HTTP %d: %v", resp.StatusCode, out)
+		}
+
+		// Der eigentliche Beweis: In Zitadel steht die Rolle.
+		grants := zapi(t, iamToken, "POST", "/management/v1/users/grants/_search", map[string]any{
+			"queries": []any{map[string]any{"userIdQuery": map[string]any{"userId": neulingUser.UserID}}},
+		})
+		eingetragen := false
+		for _, roh := range grants["result"].([]any) {
+			g := roh.(map[string]any)
+			if g["projectId"] != beitrittProjektID {
+				continue
+			}
+			for _, rolle := range g["roleKeys"].([]any) {
+				if rolle == "mitglied" {
+					eingetragen = true
+				}
+			}
+		}
+		if !eingetragen {
+			t.Fatalf("die Mitgliedschaft steht nicht in Zitadel: %v", grants["result"])
+		}
+
+		// Und sie wirkt sofort — derselbe Token, keine neue Anmeldung.
+		sichtbar := false
+		for i := 0; i < 20; i++ {
+			_, liste := request(t, "GET", "/api/v1/traeger", neulingToken, nil)
+			for _, roh := range liste["traeger"].([]any) {
+				tr := roh.(map[string]any)
+				if tr["id"] == traegerID && tr["istMitglied"] == true {
+					sichtbar = true
+				}
+			}
+			if sichtbar {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		if !sichtbar {
+			t.Fatal("die frisch erteilte Mitgliedschaft wirkt nicht ohne erneute Anmeldung")
+		}
+
+		// Ein zweites Mal beitreten gibt es nicht — man ist ja schon dabei.
+		resp, _ = request(t, "POST", fmt.Sprintf("/api/v1/traeger/%.0f/beitritt", traegerID),
+			neulingToken, map[string]any{})
+		if resp.StatusCode != 409 {
+			t.Errorf("zweiter Antrag: HTTP %d, erwartet 409", resp.StatusCode)
+		}
+
+		// Und der kurze Weg: aufnehmen ohne Antrag (so nimmt eine
+		// geschlossene Gruppe ihre Leute auf).
+		zweiterUser := newMachine("Dorf-Nachbarin", nil)
+		resp, out = request(t, "POST", fmt.Sprintf("/api/v1/traeger/%.0f/mitglieder", traegerID),
+			vorstandToken, map[string]any{"userSub": zweiterUser.UserID, "notiz": "auf der Versammlung gefragt"})
+		if resp.StatusCode != 200 {
+			t.Fatalf("Aufnehmen ohne Antrag: HTTP %d: %v", resp.StatusCode, out)
+		}
+		grants = zapi(t, iamToken, "POST", "/management/v1/users/grants/_search", map[string]any{
+			"queries": []any{map[string]any{"userIdQuery": map[string]any{"userId": zweiterUser.UserID}}},
+		})
+		if len(grants["result"].([]any)) == 0 {
+			t.Fatal("die Aufnahme ohne Antrag steht nicht in Zitadel")
+		}
+	})
 }
 
 // befaehigungErteilen stellt einen Antrag und gibt ihn gleich frei. Der

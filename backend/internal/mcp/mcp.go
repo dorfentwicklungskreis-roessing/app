@@ -19,6 +19,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/clock"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
@@ -37,7 +38,11 @@ type Server struct {
 	// (claude.ai) zurückbekommt.
 	ClientID string
 	Now      func() time.Time
-	tools    []tool
+	// Mitglieder liefert die Träger-Mitgliedschaften und nimmt Leute auf
+	// (siehe internal/mitglied). Ohne Quelle lässt sich in der Rössing-ID
+	// nichts eintragen — die Werkzeuge sagen das dann und tun nichts.
+	Mitglieder mitglied.Quelle
+	tools      []tool
 
 	discoveryMu sync.Mutex
 	discovery   *upstreamDiscovery
@@ -471,6 +476,7 @@ func (s *Server) registerTools() {
 	// Weitere Bereiche bringen ihre Werkzeuge selbst mit; bestehende Namen
 	// bleiben dabei unverändert.
 	s.tools = append(s.tools, s.ideenTools()...)
+	s.tools = append(s.tools, s.beitrittTools()...)
 }
 
 func (s *Server) toolListPlaces(json.RawMessage, auth.User) (any, error) {

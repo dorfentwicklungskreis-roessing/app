@@ -141,53 +141,57 @@ func (z *Zitadel) Fuer(ctx context.Context, u auth.User) Stand {
 	return Stand{Rollen: model.Mitgliedschaften{}, Veraltet: true}
 }
 
-// holen fragt die Rollenzuweisungen einer Person ab.
-func (z *Zitadel) holen(ctx context.Context, userSub string) (model.Mitgliedschaften, error) {
-	token, err := z.dienstToken(ctx)
-	if err != nil {
-		return nil, err
+// zuweisung ist eine Rollenzuweisung, wie Zitadel sie führt: eine Person,
+// ein Projekt, die Rollen darin. Die Kennung braucht das Zurückschreiben —
+// eine bestehende Zuweisung wird geändert, nicht ein zweites Mal angelegt.
+type zuweisung struct {
+	ID        string   `json:"id"`
+	ProjectID string   `json:"projectId"`
+	RoleKeys  []string `json:"roleKeys"`
+	State     string   `json:"state"`
+}
+
+// aktiv sagt, ob die Zuweisung zählt. Zitadel liefert stillgelegte mit,
+// statt sie wegzulassen — wer stillgelegt ist, ist draußen.
+func (g zuweisung) aktiv() bool {
+	return !strings.EqualFold(g.State, "USER_GRANT_STATE_INACTIVE")
+}
+
+func (g zuweisung) hat(rolle string) bool {
+	for _, r := range g.RoleKeys {
+		if r == rolle {
+			return true
+		}
 	}
-	rumpf, _ := json.Marshal(map[string]any{
+	return false
+}
+
+// zuweisungen liest alle Rollenzuweisungen einer Person.
+func (z *Zitadel) zuweisungen(ctx context.Context, userSub string) ([]zuweisung, error) {
+	rumpf := map[string]any{
 		// 500 ist weit jenseits dessen, was ein Dorfbewohner je an
 		// Vereinen hat — die Auskunft bleibt trotzdem in einer Seite.
 		"query":   map[string]any{"limit": 500},
 		"queries": []any{map[string]any{"userIdQuery": map[string]any{"userId": userSub}}},
-	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		z.issuer+"/management/v1/users/grants/_search", bytes.NewReader(rumpf))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := z.klient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		// Ein abgelaufenes Token beim nächsten Versuch neu holen.
-		if resp.StatusCode == http.StatusUnauthorized {
-			z.tokenVerwerfen()
-		}
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("Zitadel-Management-API: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var out struct {
-		Result []struct {
-			ProjectID string   `json:"projectId"`
-			RoleKeys  []string `json:"roleKeys"`
-			State     string   `json:"state"`
-		} `json:"result"`
+		Result []zuweisung `json:"result"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+	if err := z.ruf(ctx, http.MethodPost, "/management/v1/users/grants/_search", rumpf, &out); err != nil {
+		return nil, err
+	}
+	return out.Result, nil
+}
+
+// holen fragt die Rollenzuweisungen einer Person ab.
+func (z *Zitadel) holen(ctx context.Context, userSub string) (model.Mitgliedschaften, error) {
+	grants, err := z.zuweisungen(ctx, userSub)
+	if err != nil {
 		return nil, err
 	}
 	rollen := model.Mitgliedschaften{}
-	for _, g := range out.Result {
-		// Deaktivierte Zuweisungen zählen nicht: Wer stillgelegt ist, ist
-		// draußen. Zitadel liefert sie mit, statt sie wegzulassen.
-		if g.ProjectID == "" || strings.EqualFold(g.State, "USER_GRANT_STATE_INACTIVE") {
+	for _, g := range grants {
+		if g.ProjectID == "" || !g.aktiv() {
 			continue
 		}
 		for _, r := range g.RoleKeys {
@@ -201,6 +205,69 @@ func (z *Zitadel) holen(ctx context.Context, userSub string) (model.Mitgliedscha
 		}
 	}
 	return rollen, nil
+}
+
+// APIFehler ist eine Antwort der Management-API jenseits von 2xx. Er trägt
+// den Status mit, weil ein „darf nicht“ etwas anderes ist als ein „geht
+// gerade nicht“ — und weil nur der Erste dem Betreiber sagt, dass in der
+// Rössing-ID ein Recht fehlt.
+type APIFehler struct {
+	Methode string
+	Pfad    string
+	Status  int
+	Text    string
+}
+
+func (e *APIFehler) Error() string {
+	return fmt.Sprintf("Zitadel-Management-API %s %s: HTTP %d: %s", e.Methode, e.Pfad, e.Status, e.Text)
+}
+
+// FehlendesRecht sagt, ob der Dienst-Nutzer diese Aktion schlicht nicht darf.
+// Das ist kein Ausfall, den ein erneuter Versuch heilt, sondern eine fehlende
+// Berechtigung in der Rössing-ID.
+func (e *APIFehler) FehlendesRecht() bool {
+	return e.Status == http.StatusForbidden || e.Status == http.StatusUnauthorized
+}
+
+// ruf spricht die Management-API an: Dienst-Token holen, Anfrage stellen,
+// Antwort lesen. Ein 401 verwirft das Token, damit der nächste Versuch ein
+// frisches holt.
+func (z *Zitadel) ruf(ctx context.Context, methode, pfad string, rumpf, ziel any) error {
+	token, err := z.dienstToken(ctx)
+	if err != nil {
+		return err
+	}
+	var body io.Reader
+	if rumpf != nil {
+		roh, err := json.Marshal(rumpf)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(roh)
+	}
+	req, err := http.NewRequestWithContext(ctx, methode, z.issuer+pfad, body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := z.klient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		if resp.StatusCode == http.StatusUnauthorized {
+			z.tokenVerwerfen()
+		}
+		roh, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return &APIFehler{Methode: methode, Pfad: pfad, Status: resp.StatusCode,
+			Text: strings.TrimSpace(string(roh))}
+	}
+	if ziel == nil {
+		return nil
+	}
+	return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(ziel)
 }
 
 func (z *Zitadel) tokenVerwerfen() {
