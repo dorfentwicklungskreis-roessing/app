@@ -19,6 +19,12 @@ nonisolated enum DorfFehler: Error, Sendable {
     /// Nicht (mehr) angemeldet (HTTP 401).
     case nichtAngemeldet
     case nichtGefunden
+    /// Der Dienst sagt selbst, dass er gerade nicht kann, und nennt den
+    /// Grund (HTTP 502/503). Das ist kein Absturz: „Die Rössing-ID ist
+    /// gerade nicht erreichbar", „Der Chat ist gerade überlastet" — Sätze,
+    /// die für die Person gedacht sind und die sonst hinter einer
+    /// Statuszahl verschwänden.
+    case nichtVerfuegbar(grund: String)
     case serverfehler(status: Int)
     case netz(String)
 
@@ -37,6 +43,7 @@ nonisolated enum DorfFehler: Error, Sendable {
         case .zuVieleAnfragen: return "Das waren gerade viele auf einmal. Bitte später noch einmal."
         case .nichtAngemeldet: return "Die Anmeldung ist abgelaufen. Bitte neu anmelden."
         case .nichtGefunden: return "Das gibt es nicht (mehr)."
+        case .nichtVerfuegbar(let grund): return grund
         case .serverfehler(let status): return "Der Server antwortet gerade nicht (\(status))."
         case .netz: return "Keine Verbindung zum Server. Es werden ggf. alte Daten angezeigt."
         }
@@ -52,13 +59,20 @@ nonisolated enum DorfFehler: Error, Sendable {
 nonisolated final class DorfApi: Sendable {
     private let basis: URL
     private let sitzung: URLSession
+    private let geduldigeSitzung: URLSession
     private let tokenGeber: @Sendable () async -> Tokenlage
 
     init(basis: URL = Konfiguration.apiBasis,
          sitzung: URLSession = .dorfSitzung,
+         geduldigeSitzung: URLSession? = nil,
          tokenGeber: @escaping @Sendable () async -> Tokenlage) {
         self.basis = basis
         self.sitzung = sitzung
+        // Ohne eigene Angabe gilt: Wer die Sitzung übersteuert — ein Test —
+        // übersteuert beide. Sonst liefe die geduldige Anfrage am
+        // abgefangenen Protokoll vorbei und ginge wirklich ins Netz.
+        self.geduldigeSitzung = geduldigeSitzung
+            ?? (sitzung === URLSession.dorfSitzung ? .dorfGeduldigeSitzung : sitzung)
         self.tokenGeber = tokenGeber
     }
 
@@ -168,15 +182,17 @@ nonisolated final class DorfApi: Sendable {
         return versand
     }
 
-    func hole<T: Decodable>(_ pfad: String, abfrage: [String: String] = [:]) async throws -> T {
-        try await ausfuehren(anfrage("GET", pfad, abfrage: abfrage))
+    func hole<T: Decodable>(_ pfad: String, abfrage: [String: String] = [:],
+                            geduldig: Bool = false) async throws -> T {
+        try await ausfuehren(anfrage("GET", pfad, abfrage: abfrage), geduldig: geduldig)
     }
 
     /// Schreiben mit Antwort. `rumpf` darf fehlen — manche Endpunkte
     /// (Zusagen, Rückgabe) brauchen keinen.
     func schicke<T: Decodable>(_ methode: String, _ pfad: String,
-                               rumpf: (any Encodable)? = nil) async throws -> T {
-        try await ausfuehren(anfrage(methode, pfad, rumpf: rumpf))
+                               rumpf: (any Encodable)? = nil,
+                               geduldig: Bool = false) async throws -> T {
+        try await ausfuehren(anfrage(methode, pfad, rumpf: rumpf), geduldig: geduldig)
     }
 
     /// Schreiben ohne Antwort. Der Rumpf des Servers wird verworfen, der
@@ -187,8 +203,8 @@ nonisolated final class DorfApi: Sendable {
         _ = try await rohAusfuehren(anfrage(methode, pfad, abfrage: abfrage, rumpf: rumpf))
     }
 
-    func ausfuehren<T: Decodable>(_ versand: URLRequest) async throws -> T {
-        let daten = try await rohAusfuehren(versand)
+    func ausfuehren<T: Decodable>(_ versand: URLRequest, geduldig: Bool = false) async throws -> T {
+        let daten = try await rohAusfuehren(versand, geduldig: geduldig)
         // Ein leerer Rumpf ist eine gültige Antwort auf 204 — Aufrufer, die
         // trotzdem etwas erwarten, bekommen hier einen klaren Fehler.
         do {
@@ -198,11 +214,11 @@ nonisolated final class DorfApi: Sendable {
         }
     }
 
-    func rohAusfuehren(_ versand: URLRequest) async throws -> Data {
+    func rohAusfuehren(_ versand: URLRequest, geduldig: Bool = false) async throws -> Data {
         let daten: Data
         let antwort: URLResponse
         do {
-            (daten, antwort) = try await sitzung.data(for: versand)
+            (daten, antwort) = try await (geduldig ? geduldigeSitzung : sitzung).data(for: versand)
         } catch {
             throw DorfFehler.netz(error.localizedDescription)
         }
@@ -248,6 +264,12 @@ nonisolated final class DorfApi: Sendable {
                 ? "Das hat gerade jemand anderes übernommen." : grund)
         case 429:
             return .zuVieleAnfragen
+        case 502, 503:
+            // Hier steht ein Satz des Backends, wenn es einen hat — genau
+            // wie bei 400 und 403. Eine Statuszahl an seiner Stelle wäre
+            // die schlechtere Auskunft.
+            return .nichtVerfuegbar(grund: grund.isEmpty
+                ? "Das geht gerade nicht. Bitte später noch einmal." : grund)
         default:
             return .serverfehler(status: status)
         }
@@ -262,6 +284,27 @@ nonisolated extension URLSession {
         let k = URLSessionConfiguration.default
         k.timeoutIntervalForRequest = 20
         k.timeoutIntervalForResource = 30
+        k.waitsForConnectivity = false
+        return URLSession(configuration: k)
+    }()
+
+    /// Dieselbe Sitzung, nur geduldiger — für den Chat.
+    ///
+    /// Eine Chat-Antwort entsteht nicht im Dorfserver: Er fragt Claude,
+    /// führt die Werkzeuge aus, fragt noch einmal. Das dauert regelmäßig
+    /// länger als eine Liste, und das Backend gibt sich dafür bis zu 50
+    /// Sekunden (`StandardFrist` in `backend/internal/chat`). Mit 20
+    /// Sekunden bräche die App genau die Anfragen ab, die richtig arbeiten.
+    ///
+    /// Bewusst eine zweite **Sitzung** und kein zweiter Transport: Adresse,
+    /// Kopfzeilen, Token und Fehlerübersetzung bleiben `DorfApi`. Die
+    /// Fristen stehen an der Sitzung, nicht an der Anfrage — deshalb geht
+    /// es nicht anders, und deshalb steht sie hier neben ihrer Schwester
+    /// statt in einem Bereich.
+    static let dorfGeduldigeSitzung: URLSession = {
+        let k = URLSessionConfiguration.default
+        k.timeoutIntervalForRequest = 60
+        k.timeoutIntervalForResource = 70
         k.waitsForConnectivity = false
         return URLSession(configuration: k)
     }()

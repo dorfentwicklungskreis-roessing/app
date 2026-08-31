@@ -777,6 +777,100 @@ nonisolated struct GeraetEingabe: Encodable, Hashable, Sendable {
     }
 }
 
+// MARK: - Chat
+
+/// Ein Zug des Gesprächs, so wie ihn die App führt und mitschickt.
+///
+/// Das Backend hält keine Sitzung: Der Verlauf lebt in der App und geht bei
+/// jeder Frage mit. Das ist Absicht — so gibt es kein Gedächtnis auf dem
+/// Server, das jemand einsehen könnte, und ein Neustart der App fängt neu an.
+nonisolated struct Gespraechszug: Codable, Identifiable, Hashable, Sendable {
+    /// „ich" ist die Person, „app" die Antwort des Chats.
+    static let rolleIch = "ich"
+    static let rolleApp = "app"
+
+    var id = UUID()
+    var rolle: String = Gespraechszug.rolleIch
+    var text: String = ""
+    /// Die benutzten Werkzeuge dieser Antwort. Die App zeigt sie klein
+    /// darunter: Wer liest, dass „orte_liste" befragt wurde, weiß, dass die
+    /// Zahl aus dem Dorfserver kommt und nicht aus dem Gedächtnis eines
+    /// Modells.
+    var werkzeuge: [String] = []
+    /// Die Rundengrenze war erreicht, bevor eine Antwort stand — die Antwort
+    /// ist unvollständig, und das steht auch darunter.
+    var abgebrochen = false
+
+    enum CodingKeys: String, CodingKey { case rolle, text }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rolle = c.wert(.rolle, Gespraechszug.rolleIch)
+        text = c.wert(.text, "")
+    }
+
+    init(rolle: String, text: String, werkzeuge: [String] = [], abgebrochen: Bool = false) {
+        self.rolle = rolle
+        self.text = text
+        self.werkzeuge = werkzeuge
+        self.abgebrochen = abgebrochen
+    }
+
+    var vonMir: Bool { rolle == Gespraechszug.rolleIch }
+}
+
+/// Die Frage samt Verlauf.
+nonisolated struct ChatEingabe: Encodable, Sendable {
+    var frage: String
+    var verlauf: [Gespraechszug]
+}
+
+/// Die Antwort des Chats.
+nonisolated struct ChatAntwort: Codable, Sendable {
+    var antwort: String = ""
+    var werkzeuge: [String] = []
+    /// Die Rundengrenze war erreicht, bevor eine Antwort stand.
+    var abgebrochen: Bool = false
+
+    enum CodingKeys: String, CodingKey { case antwort, werkzeuge, abgebrochen }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        antwort = c.wert(.antwort, "")
+        werkzeuge = c.wert(.werkzeuge, [])
+        abgebrochen = c.wert(.abgebrochen, false)
+    }
+
+    init(antwort: String, werkzeuge: [String] = [], abgebrochen: Bool = false) {
+        self.antwort = antwort
+        self.werkzeuge = werkzeuge
+        self.abgebrochen = abgebrochen
+    }
+}
+
+/// Ob der Chat überhaupt eingerichtet ist.
+///
+/// Ohne hinterlegten Schlüssel gibt es ihn nicht — dann sagt der Bereich das
+/// und lässt gar nicht erst tippen. Ein Fehler beim Absenden wäre die
+/// schlechtere Auskunft: Die Person hätte dann umsonst geschrieben.
+nonisolated struct Chatstand: Codable, Sendable {
+    var verfuegbar: Bool = false
+    var hinweis: String = ""
+
+    enum CodingKeys: String, CodingKey { case verfuegbar, hinweis }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        verfuegbar = c.wert(.verfuegbar, false)
+        hinweis = c.wert(.hinweis, "")
+    }
+
+    init(verfuegbar: Bool, hinweis: String = "") {
+        self.verfuegbar = verfuegbar
+        self.hinweis = hinweis
+    }
+}
+
 // MARK: - Zeit
 
 /// RFC3339 lesen. Das Backend schickt mal mit, mal ohne Sekundenbruchteile —

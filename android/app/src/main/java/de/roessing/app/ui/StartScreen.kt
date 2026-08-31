@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.LocalFlorist
@@ -45,7 +46,7 @@ import de.roessing.app.ui.theme.statusFarben
  * Die Bereiche der App. „Mithelfen" ist der erste — weitere kommen, deshalb
  * ist die Startseite eine Übersicht und nicht die Gieß-Karte.
  */
-enum class Bereich { START, MITHELFEN, VERANSTALTUNGEN, PROFIL, DORFBEWOHNER, IDEEN }
+enum class Bereich { START, MITHELFEN, VERANSTALTUNGEN, PROFIL, DORFBEWOHNER, IDEEN, CHAT }
 
 /**
  * Startseite: freundlicher Einstieg mit dem Namen aus dem Profil, darunter
@@ -143,6 +144,17 @@ fun StartScreen(
                 onClick = { onBereich(Bereich.DORFBEWOHNER) },
             )
         }
+
+        // „Frag die App": derselbe Weg, den die Verwaltung ueber den
+        // MCP-Endpunkt schon geht — nur eben in der App und in der Sicht der
+        // fragenden Person.
+        BereichKachel(
+            titel = stringResource(R.string.area_chat_title),
+            text = stringResource(R.string.area_chat_subtitle),
+            symbol = Icons.AutoMirrored.Filled.Chat,
+            testTag = "bereich-chat",
+            onClick = { onBereich(Bereich.CHAT) },
+        )
 
         IdeenKachel(onClick = { onBereich(Bereich.IDEEN) })
 

@@ -183,6 +183,59 @@ spec:
             # nach /data/backups (14 Stück). Bewusst kein CronJob: Das PVC ist
             # ReadWriteOnce und der Pod hält die einzige Schreibverbindung
             # (siehe README, Abschnitt „Sicherung der Datenbank").
+            # --- Chat („frag die App auf Deutsch") -----------------------
+            # ANTHROPIC_API_KEY (noch nicht eingerichtet):
+            # Der Schlüssel gehört ins Backend und NIE in eine App. Ein
+            # Schlüssel in einer ausgelieferten APK oder IPA ist ein
+            # veröffentlichter Schlüssel — wer sie entpackt, hat ihn. Die
+            # Apps sprechen deshalb wie überall nur mit diesem Backend, und
+            # von hier geht genau ein Weg zu Anthropic hinaus.
+            #
+            # Solange der Wert fehlt, läuft alles unverändert weiter: Der
+            # Chat-Bereich meldet sich in beiden Apps als „noch nicht
+            # eingerichtet" ab, der Server startet und alles andere geht.
+            #
+            # Zum Einrichten:
+            #
+            #   1. Unter console.anthropic.com einen API-Schlüssel erzeugen
+            #      und ihm ein Ausgabelimit geben — der Chat läuft auf
+            #      Rechnung des Betreibers.
+            #   2. Ihn als SealedSecret ablegen (wie sealed-fcm.yaml), unter
+            #      dem Namen `dorf-app-anthropic` mit dem Feld `api-key`.
+            #      Der Schlüssel gehört NIE ins Repo.
+            #   3. Die vier Zeilen darunter einkommentieren.
+            #
+            # - name: ANTHROPIC_API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: dorf-app-anthropic
+            #       key: api-key
+            #       # Fehlt das Secret, startet der Pod trotzdem — dann ist
+            #       # eben der Chat aus, genau wie ohne Push-Schlüssel.
+            #       optional: true
+            #
+            # Wahlweise dazu (alle optional):
+            #   CHAT_MODELL            Modellkennung, Vorgabe claude-opus-5
+            #   CHAT_AUFWAND           low | medium | high | xhigh | max | aus
+            #                          (Vorgabe medium — die Antwort muss samt
+            #                          Werkzeugrunden in die Schreibfrist des
+            #                          Servers passen)
+            #   CHAT_RUNDEN            Werkzeugrunden je Frage (Vorgabe 5)
+            #   CHAT_LIMIT_PRO_STUNDE  Fragen je Person und Stunde (Vorgabe 60)
+            #   CHAT_BASIS_URL         abweichender Endpunkt; gedacht fürs
+            #                          Ausprobieren gegen ein lokales Modell,
+            #                          im Cluster nicht gesetzt.
+            #   CHAT_RUECKFALL         „aus" schaltet den serverseitigen
+            #                          Rückfall ab. Er ist an: Lehnt das
+            #                          Modell eine Frage aus
+            #                          Sicherheitsgründen ab, beantwortet sie
+            #                          im selben Aufruf ein anderes. Weil das
+            #                          eine Beta-Erweiterung ist, gehört der
+            #                          erste Versuch nach dem Eintragen des
+            #                          Schlüssels beobachtet: Kommt eine 400
+            #                          mit „unknown beta" zurück, hier
+            #                          CHAT_RUECKFALL=aus setzen — der Chat
+            #                          läuft dann ohne Rückfall weiter.
             - name: BACKUP_DIR
               value: /data/backups
             - name: BACKUP_KEEP

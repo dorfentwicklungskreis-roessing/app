@@ -23,6 +23,23 @@
     <string name="home_more_title">Weitere Bereiche kommen</string>
     <string name="home_more_text">Was als Nächstes dazukommt, entscheidet ihr — sag uns, was die App können soll.</string>
     <!-- Ideen-Sammlung: „Was soll die App noch können?" -->
+    <!-- Chat: in normalem Deutsch fragen, was im Dorf ansteht — und es tun.
+         Die Antwort kommt aus dem Dorfserver ueber das Backend; der
+         Schluessel fuer Claude liegt dort und nie in der App. -->
+    <string name="area_chat_title">Frag die App</string>
+    <string name="area_chat_subtitle">Schreib einfach, was du wissen oder tun willst.</string>
+    <string name="chat_title">Frag die App</string>
+    <string name="chat_intro">Schreib in normalem Deutsch, was du wissen oder tun willst — was ansteht, wer zuletzt gegossen hat, oder trag gleich eine Erledigung ein.</string>
+    <string name="chat_examples">Zum Beispiel: „Was muss diese Woche gegossen werden?" · „Wer war zuletzt am Kirchplatz?" · „Ich habe gerade gegossen."</string>
+    <string name="chat_input_placeholder">Deine Frage …</string>
+    <string name="chat_send">Abschicken</string>
+    <string name="chat_thinking">Ich schaue im Dorf nach …</string>
+    <string name="chat_sources">Nachgesehen in: %1$s</string>
+    <string name="chat_incomplete">Das hat zu lange gedauert — die Antwort ist unvollständig.</string>
+    <string name="chat_reset">Neu anfangen</string>
+    <string name="chat_unavailable">Der Chat ist noch nicht eingerichtet.</string>
+    <string name="chat_unavailable_hint">Sobald der Dorfentwicklungskreis ihn freischaltet, kannst du hier fragen. Alles andere in der App funktioniert weiter.</string>
+
     <string name="area_ideas_title">Idee vorschlagen</string>
     <string name="area_ideas_subtitle">Was soll die App noch können?</string>
     <string name="ideas_title">Deine Idee</string>

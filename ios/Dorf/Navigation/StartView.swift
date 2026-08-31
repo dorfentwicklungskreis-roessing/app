@@ -49,6 +49,11 @@ struct StartView: View {
 
                 Section("Bereiche") {
                     Bereichskachel(
+                        ziel: .chat, symbol: "bubble.left.and.bubble.right.fill",
+                        titel: "Frag die App",
+                        untertitel: "Schreib einfach, was du wissen oder tun willst."
+                    )
+                    Bereichskachel(
                         ziel: .mithelfen, symbol: "leaf.fill", titel: "Mithelfen",
                         untertitel: "Was gerade im Dorf ansteht.",
                         hinweis: Startseitentexte.mithelfenHinweis(orte: umgebung.orte.orte)
