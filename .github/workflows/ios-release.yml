@@ -250,6 +250,14 @@ jobs:
       # CODE_SIGNING_REQUIRED NO) — richtig für den Simulator, untauglich für
       # den Store. Für diesen einen Aufruf wird das übersteuert, statt die
       # Datei anzufassen.
+      #
+      # Die Identität ist hier bewusst **Apple Development** und nicht
+      # Distribution. Beim automatischen Signieren sucht Xcode sie selbst aus;
+      # wer ihm daneben eine Distributionsidentität vorschreibt, bekommt
+      # „Dorf has conflicting provisioning settings" und gar kein Archiv. Zur
+      # Distribution signiert der Export weiter unten um — dafür ist
+      # `method: app-store-connect` da. Genau daran ist der erste Lauf
+      # gescheitert (ios-v0.1.11, 31.08.2026).
       - name: Archivieren (signiert)
         if: env.SIGNIEREN == 'ja'
         working-directory: ios
@@ -269,7 +277,7 @@ jobs:
             -authenticationKeyIssuerID "$ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM" \
             CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
+            CODE_SIGN_IDENTITY="Apple Development" \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES \
             CURRENT_PROJECT_VERSION="$BAUZAHL" \
