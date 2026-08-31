@@ -81,6 +81,20 @@ keine der beiden Apps noch einmal.
   **Dorfentwicklungskreis** als Platzhalter; ihm gehören die bestehenden
   Aufgaben („Blumengießen Unter den Eichen"), bis die **Dorfpflege** offiziell
   zugestimmt hat und ihre Orte übernimmt.
+  **Arbeitskreise stehen unter ihrem Verein** (`parentId`), genau eine Ebene
+  tief. Sie bleiben dabei eigenständig: eigenes Zitadel-Projekt, eigene
+  Mitglieder, eigene Admins — und Rechte vererben sich **in keine Richtung**.
+  Das ist der ganze Grund für die Konstruktion: Wer den AK 2 verwaltet, soll
+  nicht den ganzen Verein verwalten, und die `admin`-Rolle des jeweiligen
+  Projekts ist das einzige Mittel dafür. Tiefer zu schachteln kostet
+  Zyklusprüfungen und rekursive Abfragen für einen Fall, den im Dorf niemand
+  hat; die Ablage weist eine dritte Ebene deshalb ab. Angelegt sind heute die
+  **Dorfpflege Rössing e.V.** und darunter der **AK 2 Umwelt und Natur**, dem
+  das Beet vor dem Dorfgemeinschaftshaus gehört.
+  In beiden Apps steht der Träger **am Ort** — wer sich kümmert, ist die
+  wichtigste Angabe an einem Ort, den man von außen sehen, aber nur mit
+  Einweisung anfassen darf. Der Name kommt fertig vom Server, samt Verdeckung:
+  Eine geschlossene Gruppe heißt für Außenstehende „Eine Gruppe aus dem Dorf".
 - **Mitgliedschaften kommen nicht aus dem Token.** Zitadel legt Rollen eines
   Projekts nur dann ins Token, wenn die App genau dieses Projekt als Empfänger
   anfordert (`urn:zitadel:iam:org:project:id:<id>:aud`) — für jeden neuen
@@ -652,11 +666,35 @@ Der ganze Weg — Abweisung, Metadata, Registrierung, Login an der Rössing-ID,
 Code-Tausch, Werkzeugaufruf — wird in `backend/e2e/web/tests/mcp-connector.spec.mjs`
 gegen ein echtes Zitadel durchlaufen.
 
-Tools: `orte_liste`, `ort_anlegen/aendern/loeschen`,
-`aufgabe_anlegen/aendern/loeschen` (regelmäßig mit `intervalDays` und
-wahlweise einer Jahreszeit `seasonStartMonth`/`seasonEndMonth`, einmalig
-mit `oneOff` + `dueDate`, dazu `removeWhenDone`), `erledigung_melden`,
-`erledigung_zuruecknehmen`, `rangliste`, `hitzefaktor_setzen`.
+Werkzeuge, nach Bereichen:
+
+| Bereich | Werkzeuge |
+| --- | --- |
+| Orte und Aufgaben | `orte_liste`, `ort_anlegen/aendern/loeschen`, `aufgabe_anlegen/aendern/loeschen` (regelmäßig mit `intervalDays` und wahlweise einer Jahreszeit `seasonStartMonth`/`seasonEndMonth`, einmalig mit `oneOff` + `dueDate`, dazu `removeWhenDone`, `sichtbarkeit` und `befaehigungId`) |
+| Erledigungen | `erledigung_melden`, `erledigung_zuruecknehmen`, `rangliste`, `hitzefaktor_setzen` |
+| Vergabe | `vergabe_stand`, `zusage_aufheben` |
+| Träger | `traeger_liste`, `traeger_anlegen`, `traeger_aendern`, `traeger_zulassung` |
+| Einweisungen | `befaehigungen_liste`, `befaehigung_anlegen`, `befaehigung_aendern`, `befaehigung_erteilen` |
+| Ideen | `ideen_liste`, `idee_status_setzen` |
+
+**Was die Web-Verwaltung kann, muss MCP auch können.** Der Bereich
+„Verwaltung" wurde aus beiden Apps entfernt, weil MCP und Web-Verwaltung es
+besser können — damit ist MCP kein Nebenweg mehr, sondern *der* Weg, und jede
+Lücke darin ist eine Sackgasse für den, der gerade kein angemeldetes
+Browserfenster hat. Für eine Maschine ist sie gar kein Weg. Was noch fehlt,
+steht als Issue #62.
+
+Zwei Entscheidungen, die man den Namen ansieht:
+
+- **`traeger_zulassung` ist ein eigenes Werkzeug**, kein Feld in
+  `traeger_aendern`. Der Zulassungsstand ist die Frage, ob eine Gruppe im
+  Namen des Dorfes auftreten darf; sie nebenbei mit einer Umbenennung zu
+  erledigen wäre zu leicht.
+- **`befaehigung_erteilen` kennt keinen Antrag.** Der übliche Weg ist, dass
+  jemand um die Einweisung bittet und der Träger-Admin entscheidet.
+  Eingewiesen wird aber an der Maschine, nicht in der App — wer die Einweisung
+  gegeben hat, trägt sie hinterher ein, ohne dass die Person vorher etwas
+  beantragt haben muss.
 
 ## Deployment
 

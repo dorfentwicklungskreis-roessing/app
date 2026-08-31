@@ -310,10 +310,18 @@ nonisolated struct Ort: Codable, Identifiable, Hashable, Sendable {
     var lon: Double
     var active: Bool = true
     var status: String = "green"
+    /// Der Verein oder Arbeitskreis, dem dieser Ort gehört — der
+    /// Ansprechpartner. Leer, wenn das Backend ihn nicht mitschickt.
+    ///
+    /// Der Name kommt fertig vom Server, samt Verdeckung: Eine geschlossene
+    /// Gruppe heißt für Außenstehende „Eine Gruppe aus dem Dorf“
+    /// (`model.TraegerAnzeigeName`). Die App entscheidet hier nichts, sie
+    /// zeigt an — sonst gäbe es die Sichtbarkeitsregel zweimal.
+    var traegerName: String = ""
     var tasks: [Aufgabe] = []
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description, kind, lat, lon, active, status, tasks
+        case id, name, description, kind, lat, lon, active, status, traegerName, tasks
     }
 
     init(from decoder: Decoder) throws {
@@ -326,14 +334,16 @@ nonisolated struct Ort: Codable, Identifiable, Hashable, Sendable {
         lon = c.wert(.lon, 0)
         active = c.wert(.active, true)
         status = c.wert(.status, "green")
+        traegerName = c.wert(.traegerName, "")
         tasks = c.wert(.tasks, [])
     }
 
     init(id: Int64, name: String, description: String = "", kind: String = "blumenkasten",
          lat: Double, lon: Double, active: Bool = true, status: String = "green",
-         tasks: [Aufgabe] = []) {
+         traegerName: String = "", tasks: [Aufgabe] = []) {
         self.id = id; self.name = name; self.description = description; self.kind = kind
         self.lat = lat; self.lon = lon; self.active = active; self.status = status
+        self.traegerName = traegerName
         self.tasks = tasks
     }
 

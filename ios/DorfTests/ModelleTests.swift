@@ -86,3 +86,30 @@ struct ModelleTests {
         #expect(RFC3339.datum("kein Datum") == nil)
     }
 }
+
+// MARK: - Der Träger am Ort
+
+/// Wer sich um einen Ort kümmert, kommt fertig vom Server — samt Verdeckung:
+/// Eine geschlossene Gruppe heißt für Außenstehende „Eine Gruppe aus dem
+/// Dorf". Die App entscheidet daran nichts, sonst gäbe es die
+/// Sichtbarkeitsregel zweimal.
+struct TraegerAmOrtTests {
+    @Test func traegerNameWirdGelesen() throws {
+        let roh = """
+        {"id":3,"name":"Beet vor dem Dorfgemeinschaftshaus","lat":52.18,"lon":9.81,
+         "traegerName":"AK 2 Umwelt und Natur"}
+        """.data(using: .utf8)!
+        let ort = try JSONDecoder().decode(Ort.self, from: roh)
+        #expect(ort.traegerName == "AK 2 Umwelt und Natur")
+    }
+
+    /// Ältere Stände des Backends schicken das Feld nicht mit. Dann bleibt die
+    /// Zeile leer statt dass die ganze Liste unlesbar wird.
+    @Test func ohneTraegerBleibtEsLeer() throws {
+        let roh = """
+        {"id":1,"name":"Unter den Eichen","lat":52.18,"lon":9.81}
+        """.data(using: .utf8)!
+        let ort = try JSONDecoder().decode(Ort.self, from: roh)
+        #expect(ort.traegerName.isEmpty)
+    }
+}

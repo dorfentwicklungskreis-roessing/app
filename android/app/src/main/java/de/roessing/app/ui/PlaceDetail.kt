@@ -14,6 +14,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
@@ -104,6 +108,27 @@ fun PlaceDetail(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(place.name, style = MaterialTheme.typography.headlineSmall)
             StatusPill(place.careStatus, statusLabel(place.careStatus))
+        }
+        // Wer sich kümmert. Ohne diese Zeile weiß niemand, an wen er sich
+        // wenden soll — und für einen Ort, den man von außen sehen, aber nur
+        // mit Einweisung anfassen darf, ist genau das die wichtigste Angabe.
+        if (place.traegerName.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Group,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    place.traegerName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("ort-traeger"),
+                )
+            }
         }
         if (place.description.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))

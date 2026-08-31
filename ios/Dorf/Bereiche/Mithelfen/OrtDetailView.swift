@@ -62,6 +62,17 @@ struct OrtDetailView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Ampelpunkt(ampel: ort.ampel)
+                    // Wer sich kümmert. Ohne diese Zeile weiß niemand, an wen
+                    // er sich wenden soll — und für einen Ort, den man von
+                    // außen sehen, aber nur mit Einweisung anfassen darf, ist
+                    // genau das die wichtigste Angabe.
+                    if !ort.traegerName.isEmpty {
+                        Label(ort.traegerName, systemImage: "person.2")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Betreut von \(ort.traegerName)")
+                            .accessibilityIdentifier("ort-traeger")
+                    }
                     if !ort.description.isEmpty {
                         Text(ort.description)
                             .font(.body)
