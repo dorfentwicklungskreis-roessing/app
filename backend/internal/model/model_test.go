@@ -138,3 +138,51 @@ func TestEinmaligKurzfristigStartetGelb(t *testing.T) {
 		t.Fatalf("Status = %s, erwartet %s", got, StatusYellow)
 	}
 }
+
+// --- Was vor der App war -----------------------------------------------------
+
+// Jeder Ort im Dorf hat eine Geschichte, die älter ist als die App. Wird eine
+// Aufgabe heute angelegt, rechnet der Server sonst ab heute — und ein Beet,
+// das im Juni zuletzt gejätet wurde, stünde bis Ende Oktober auf grün.
+func TestZuletztErledigtIstDerStartpunkt(t *testing.T) {
+	jetzt := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+	juni := time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
+
+	// Alle acht Wochen jäten, angelegt heute.
+	aufgabe := CareTask{
+		Kind: TaskWeeding, IntervalDays: 56, RedAfterDays: 77,
+		Active: true, CreatedAt: jetzt,
+	}
+
+	// Ohne die Angabe: fällig erst in acht Wochen.
+	if status, _, _ := ComputeStatus(aufgabe, nil, jetzt, 1); status != StatusGreen {
+		t.Fatalf("ohne Angabe erwartet grün, ist %q", status)
+	}
+
+	// Mit „im Juni gemacht": längst überfällig.
+	aufgabe.LastKnownDoneAt = &juni
+	status, dueAt, _ := ComputeStatus(aufgabe, nil, jetzt, 1)
+	if status != StatusRed {
+		t.Fatalf("mit Juni erwartet rot, ist %q (fällig %s)", status, dueAt)
+	}
+	if want := juni.AddDate(0, 0, 56); !dueAt.Equal(want) {
+		t.Errorf("fällig %s, erwartet %s", dueAt, want)
+	}
+}
+
+// Die erste echte Meldung löst die Angabe ab — sonst bliebe eine einmal
+// eingetragene Vergangenheit für immer der Bezugspunkt.
+func TestEchteMeldungSchlaegtDieAngabe(t *testing.T) {
+	jetzt := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+	juni := time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
+	gestern := jetzt.AddDate(0, 0, -1)
+
+	aufgabe := CareTask{
+		Kind: TaskWeeding, IntervalDays: 56, RedAfterDays: 77,
+		Active: true, CreatedAt: juni, LastKnownDoneAt: &juni,
+	}
+	status, _, _ := ComputeStatus(aufgabe, &Completion{DoneAt: gestern}, jetzt, 1)
+	if status != StatusGreen {
+		t.Fatalf("nach der Meldung von gestern erwartet grün, ist %q", status)
+	}
+}

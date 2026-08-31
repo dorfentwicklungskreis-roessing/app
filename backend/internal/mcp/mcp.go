@@ -386,6 +386,10 @@ func (s *Server) registerTools() {
 				"oneOff":         boolean("Einmalige Aufgabe statt eines wiederkehrenden Plans"),
 				"dueDate":        str("Nur einmalig: Fälligkeitsdatum (2026-08-20 oder RFC3339). Gelb ab drei Tagen davor, rot danach"),
 				"removeWhenDone": boolean("Nach dem Erledigen von Karte und Liste nehmen (Erledigung zählt weiter für die Rangliste)"),
+				"lastKnownDoneAt": str("Wann diese Arbeit zuletzt gemacht wurde, BEVOR die App davon " +
+					"wusste (2026-06-15). Keine Erledigung: kein Punkt in der Rangliste, keine Person " +
+					"daran — nur der Startpunkt der Rechnung, damit ein Beet, das im Juni gejätet " +
+					"wurde, nicht bis Oktober auf grün steht. Leerer Text nimmt die Angabe weg."),
 				"seasonStartMonth": integer("Nur regelmäßig: erster Monat der Jahreszeit (1–12, einschließlich). " +
 					"Ohne Angabe fällt die Aufgabe ganzjährig an"),
 				"seasonEndMonth": integer("Nur regelmäßig: letzter Monat der Jahreszeit (1–12, einschließlich). " +
@@ -408,6 +412,10 @@ func (s *Server) registerTools() {
 				"dueDate":        str("Fälligkeitsdatum einmaliger Aufgaben (2026-08-20 oder RFC3339)"),
 				"removeWhenDone": boolean("Nach dem Erledigen entfernen"),
 				"active":         boolean("Aufgabe aktiv?"),
+				"lastKnownDoneAt": str("Wann diese Arbeit zuletzt gemacht wurde, BEVOR die App davon " +
+					"wusste (2026-06-15). Keine Erledigung: kein Punkt in der Rangliste, keine Person " +
+					"daran — nur der Startpunkt der Rechnung, damit ein Beet, das im Juni gejätet " +
+					"wurde, nicht bis Oktober auf grün steht. Leerer Text nimmt die Angabe weg."),
 				"seasonStartMonth": integer("Erster Monat der Jahreszeit (1–12); 0 nimmt die " +
 					"Jahreszeit weg, die Aufgabe fällt dann wieder ganzjährig an"),
 				"seasonEndMonth": integer("Letzter Monat der Jahreszeit (1–12); 0 = ganzjährig"),
@@ -614,6 +622,8 @@ func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) 
 		// Jahreszeit: siehe model.Season. 0 nimmt sie weg.
 		SeasonStartMonth *int `json:"seasonStartMonth"`
 		SeasonEndMonth   *int `json:"seasonEndMonth"`
+		// Was vor der App war. Leerer Text nimmt die Angabe weg.
+		LastKnownDoneAt *string `json:"lastKnownDoneAt"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
 		return nil, err
@@ -662,6 +672,18 @@ func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) 
 	}
 	if in.SeasonEndMonth != nil {
 		t.SeasonEndMonth = *in.SeasonEndMonth
+	}
+	if in.LastKnownDoneAt != nil {
+		wann, weg, err := api.ParseZuletztErledigt(*in.LastKnownDoneAt, s.now())
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case weg:
+			t.LastKnownDoneAt = nil
+		default:
+			t.LastKnownDoneAt = wann
+		}
 	}
 	if t.OneOff {
 		if t.DueDate == nil {
