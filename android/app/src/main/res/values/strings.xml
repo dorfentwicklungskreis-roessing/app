@@ -201,4 +201,15 @@
     <string name="events_offline_stale">Gerade keine Verbindung — die Liste ist möglicherweise nicht mehr aktuell.</string>
     <string name="events_retry">Erneut versuchen</string>
     <string name="events_loading">Termine werden geholt …</string>
+    <string name="events_detail_title">Termin</string>
+    <string name="events_when">Wann</string>
+    <string name="events_where">Wo und von wem</string>
+    <string name="events_about">Worum es geht</string>
+    <string name="events_day">Tag</string>
+    <string name="events_time">Uhrzeit</string>
+    <string name="events_place">Ort</string>
+    <string name="events_address">Adresse</string>
+    <string name="events_organizer">Veranstalter</string>
+    <string name="events_source_link">Auf rössing.de ansehen</string>
+    <string name="events_source_note">Gepflegt wird der Termin auf rössing.de. Dort steht immer der neueste Stand.</string>
 </resources>

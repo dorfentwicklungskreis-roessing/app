@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -103,13 +104,33 @@ fun HomeScreen(
     var bereich by rememberSaveable { mutableStateOf(Bereich.START) }
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val browser = LocalUriHandler.current
     var tab by rememberSaveable { mutableStateOf(0) }
     var selectedPlaceId by rememberSaveable { mutableStateOf<Long?>(null) }
+    // Der aufgeschlagene Termin, als Kennung: Ein Termin selbst überlebt das
+    // Drehen des Geräts nicht, seine Kennung schon — und die Liste liegt
+    // ohnehin daneben.
+    var offenerTermin by rememberSaveable { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
 
-    // System-Zurück führt aus dem Bereich auf die Startseite — und erst von
-    // dort aus der App heraus.
-    BackHandler(enabled = bereich != Bereich.START) { bereich = Bereich.START }
+    // Nur im eigenen Bereich: Wer die Termine verlässt und später
+    // zurückkommt, landet wieder in der Liste und nicht mitten in einem
+    // Termin von vorgestern.
+    val termin = veranstaltungen.termine
+        .find { it.id == offenerTermin }
+        ?.takeIf { bereich == Bereich.VERANSTALTUNGEN }
+
+    // System-Zurück führt aus dem aufgeschlagenen Termin zurück in die Liste,
+    // aus dem Bereich auf die Startseite — und erst von dort aus der App
+    // heraus. Jeder Schritt einzeln, keiner übersprungen.
+    BackHandler(enabled = bereich != Bereich.START || termin != null) {
+        if (termin != null) {
+            offenerTermin = null
+        } else {
+            offenerTermin = null
+            bereich = Bereich.START
+        }
+    }
 
     // Standort: nur im Vordergrund, nur auf Wunsch — und er bleibt auf dem
     // Gerät. Das Backend bekommt ihn nie zu sehen.
@@ -300,7 +321,11 @@ fun HomeScreen(
                             Bereich.PROFIL -> stringResource(R.string.profile_title)
                             Bereich.DORFBEWOHNER -> stringResource(R.string.members_title)
                             Bereich.MITHELFEN -> stringResource(R.string.area_care_title)
-                            Bereich.VERANSTALTUNGEN -> stringResource(R.string.events_title)
+                            Bereich.VERANSTALTUNGEN -> if (termin != null) {
+                                stringResource(R.string.events_detail_title)
+                            } else {
+                                stringResource(R.string.events_title)
+                            }
                             Bereich.IDEEN -> stringResource(R.string.ideas_title)
                             Bereich.START -> stringResource(R.string.home_title)
                         },
@@ -309,7 +334,10 @@ fun HomeScreen(
                 navigationIcon = {
                     if (bereich != Bereich.START) {
                         IconButton(
-                            onClick = { bereich = Bereich.START },
+                            onClick = {
+                                offenerTermin = null
+                                if (termin == null) bereich = Bereich.START
+                            },
                             modifier = Modifier.testTag("zurueck"),
                         ) {
                             Icon(
@@ -468,11 +496,20 @@ fun HomeScreen(
                     modifier = Modifier.padding(padding),
                 )
 
-                Bereich.VERANSTALTUNGEN -> VeranstaltungenScreen(
-                    state = veranstaltungen,
-                    modifier = Modifier.padding(padding),
-                    onAktualisieren = veranstaltungenViewModel::aktualisieren,
-                )
+                Bereich.VERANSTALTUNGEN -> if (termin != null) {
+                    TerminDetail(
+                        termin = termin,
+                        modifier = Modifier.padding(padding),
+                        onWebsite = { browser.openUri(termin.url) },
+                    )
+                } else {
+                    VeranstaltungenScreen(
+                        state = veranstaltungen,
+                        modifier = Modifier.padding(padding),
+                        onAktualisieren = veranstaltungenViewModel::aktualisieren,
+                        onTermin = { offenerTermin = it.id },
+                    )
+                }
 
                 Bereich.IDEEN -> IdeenScreen(
                     state = ideen,

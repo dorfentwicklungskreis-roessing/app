@@ -83,6 +83,18 @@ class VeranstaltungenUiTest {
         organizer = VeranstalterDto(name = "DRK Rössing"),
     )
 
+    /** Fremde Primärquelle: Der Tipp führt nach draußen, nicht in die App. */
+    private val kreisfest = VeranstaltungDto(
+        id = "2026-08-22-kreisfest",
+        name = "Kreisfest in Nordstemmen",
+        description = "Nicht unsere Veranstaltung.",
+        start = "2026-08-22",
+        allDay = true,
+        url = "https://nordstemmen.example/kreisfest",
+        external = true,
+        organizer = VeranstalterDto(name = "Gemeinde Nordstemmen"),
+    )
+
     private val grillen = VeranstaltungDto(
         id = "2026-08-20-grillen",
         name = "Grillen im Pfarrgarten",
@@ -142,6 +154,52 @@ class VeranstaltungenUiTest {
         zuDenTerminen()
 
         compose.onNodeWithText("18:00 Uhr").assertIsDisplayed()
+    }
+
+    @Test
+    fun einTerminDesDorfesZeigtSeineEinzelheitenInDerApp() {
+        zeigeApp(FakeTermine(listOf(blutspende)))
+        zuDenTerminen()
+
+        compose.onNodeWithTag("termin-2026-08-17-blutspende").performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("termin-detail").assertIsDisplayed()
+        compose.onNodeWithTag("termin-beschreibung").assertIsDisplayed()
+        compose.onNodeWithText("Dorfgemeinschaftshaus Rössing").assertIsDisplayed()
+        compose.onNodeWithText("DRK Rössing").assertIsDisplayed()
+        // Ganztägig heißt: keine erfundene Uhrzeit, auch hier nicht.
+        compose.onNodeWithText("Ganztägig").assertIsDisplayed()
+    }
+
+    @Test
+    fun ausDemTerminFuehrtZurueckInDieListe() {
+        zeigeApp(FakeTermine(listOf(blutspende, grillen)))
+        zuDenTerminen()
+
+        compose.onNodeWithTag("termin-2026-08-17-blutspende").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("termin-detail").assertIsDisplayed()
+
+        compose.onNodeWithTag("zurueck").performClick()
+        compose.waitForIdle()
+
+        // Zurück in die Liste, nicht auf die Startseite: ein Schritt, nicht zwei.
+        compose.onNodeWithTag("veranstaltungen").assertIsDisplayed()
+        compose.onNodeWithTag("termin-2026-08-20-grillen").assertIsDisplayed()
+    }
+
+    @Test
+    fun einFremderTerminBleibtBeiSeinerQuelle() {
+        zeigeApp(FakeTermine(listOf(kreisfest)))
+        zuDenTerminen()
+
+        compose.onNodeWithTag("termin-2026-08-22-kreisfest").performClick()
+        compose.waitForIdle()
+
+        // Keine zweite Fassung in der App — der Tipp geht nach draußen.
+        compose.onNodeWithTag("termin-detail").assertDoesNotExist()
+        compose.onNodeWithTag("veranstaltungen").assertIsDisplayed()
     }
 
     @Test
