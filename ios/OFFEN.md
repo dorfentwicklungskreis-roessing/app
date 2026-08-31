@@ -61,6 +61,34 @@ Adressen, damit niemand vor einer leeren Stelle steht.
   (`xcrun simctl push <geräte-id> de.roessing.app <datei.apns>`) — der Weg
   über Apple braucht ein echtes iPhone.
 
+### Maschinchenring — was der Bereich bewusst nicht kann
+
+Der Verleih ist ein **eigener Dienst** (`mieten.…`) mit eigenem Vertrag
+(`docs/mieten-api.md`). Was dort nicht steht, gibt es hier auch nicht — und
+zwar mit Absicht, nicht aus Vergesslichkeit:
+
+- **Geräte anlegen oder ändern.** Die Schnittstelle kennt es nicht; es läuft
+  über den Chat und die Webfassung des Maschinchenrings und soll dort
+  bleiben. Die Vermieteransicht sagt das und führt hinüber.
+- **Sets buchen.** Sets werden angezeigt, nicht gebucht: Stornieren,
+  Zusagen und Absagen einer Set-Buchung ist serverseitig noch nicht
+  umgesetzt und antwortet mit `409`. Eine Buchungsstrecke, deren Rückweg
+  fehlt, wäre eine Falle.
+- **Eine Preissumme.** Der Server rechnet keine aus, und welcher Tarif bei
+  welcher Dauer gilt, steht nirgends. Die App zeigt deshalb **alle** Tarife
+  untereinander und rechnet nichts. Eine erfundene Regel wäre genau der
+  Bruch zwischen Web und App, den wir vermeiden.
+- **Push für Buchungsanfragen.** Läuft heute ausschließlich über E-Mail; das
+  ist ein eigenes Paket und setzt voraus, dass die Mietplattform weiß, an
+  welches Gerät sie senden soll.
+- **Bilder hochladen.** Es gibt einen Endpunkt drüben, er ist aber nicht Teil
+  des Vertrags.
+- **Vermieter freischalten.** Entscheidet die Verwaltung des
+  Maschinchenrings von Hand in der Webfassung. Die App kann nur fragen
+  (Route 9) und den Stand zeigen.
+- **Eine Karte der Abholorte.** Adressen stehen nur in einer bestätigten
+  eigenen Buchung; sie irgendwo zu sammeln wäre gegen den Sinn dieser Regel.
+
 ## Kleinere Lücken
 
 - **Termine auf der Dorfkarte.** `Termin.koordinate` ist gefüllt, sobald die
@@ -161,6 +189,15 @@ Diese Punkte liegen außerhalb von `ios/` und wurden hier nur aufgeschrieben.
 
 **Noch offen:**
 
+- **Der Maschinchenring auf Android.** Die iOS-Fassung des Bereichs steht;
+  die Android-Fassung baut jemand anderes gegen denselben Vertrag
+  (`docs/mieten-api.md`). Bis sie liegt, sind die beiden Apps **nicht** auf
+  demselben Stand — das ist der ausdrückliche Vorbehalt aus `CLAUDE.md`,
+  „Android und iOS bleiben auf demselben Stand", und kein Versehen.
+  Ausgeliefert werden sollte erst, wenn beide Fassungen da sind; sonst sieht
+  der Nachbar mit dem anderen Telefon etwas anderes.
+- **`README.md`** im Wurzelverzeichnis nennt den Maschinchenring noch nicht
+  als zweiten Dienst neben Backend und Website.
 - **`backend/SICHERHEIT.md`**, Punkt 3 der Liste („Push ist da — und damit
   ist Google beteiligt") beschreibt weiterhin nur den Firebase-Weg. Der
   iOS-Weg steht inzwischen weiter unten in einem eigenen Abschnitt, aber

@@ -10,7 +10,8 @@ SCHEME    ?= Dorf
 LOKALE_ADRESSEN = API_BASE_URL=http://127.0.0.1:8099 \
 	WEBSITE_BASE_URL=http://127.0.0.1:8097 \
 	OIDC_ISSUER=http://127.0.0.1:8123 \
-	MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json
+	MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json \
+	RENTAL_BASE_URL=http://127.0.0.1:8098
 
 # Auslieferung nach TestFlight. Dieselben Werte wie in
 # .github/workflows/ios-release.yml — wer es von Hand macht, soll dasselbe tun

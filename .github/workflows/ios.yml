@@ -101,7 +101,10 @@ jobs:
       # CI-Lauf sie anfassen — Kartenstil holen, Terminfeed laden, im
       # schlimmsten Fall an der echten Rössing-ID anklopfen. Genau so ist der
       # Fehler auf Android entstanden (dort -PapiBaseUrl usw.), deshalb steht
-      # jede der vier Adressen an jedem xcodebuild-Aufruf. Die Wache
+      # jede der fünf Adressen an jedem xcodebuild-Aufruf — auch die des
+      # Maschinchenrings, die kein Test anfasst: Eine Adresse, die nur
+      # deswegen fehlt, weil sie heute niemand braucht, fehlt morgen aus
+      # Versehen. Die Wache
       # .github/scripts/pruefe_lokale_tests.py prüft das bei jeder Änderung.
       # 127.0.0.1 ist der Runner selbst: Dort horcht in diesem Job niemand,
       # ein hinausgehender Zugriff schlägt also hörbar fehl, statt still die
@@ -116,7 +119,8 @@ jobs:
             API_BASE_URL=http://127.0.0.1:8099 \
             WEBSITE_BASE_URL=http://127.0.0.1:8097 \
             OIDC_ISSUER=http://127.0.0.1:8123 \
-            MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json
+            MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json \
+            RENTAL_BASE_URL=http://127.0.0.1:8098
 
       - name: Unit-Tests auf dem Simulator
         if: env.SIMULATOR_VORHANDEN == 'ja'
@@ -129,7 +133,8 @@ jobs:
             API_BASE_URL=http://127.0.0.1:8099 \
             WEBSITE_BASE_URL=http://127.0.0.1:8097 \
             OIDC_ISSUER=http://127.0.0.1:8123 \
-            MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json
+            MAP_STYLE_URL=http://127.0.0.1:8097/map-style.json \
+            RENTAL_BASE_URL=http://127.0.0.1:8098
 
       # Immer, nicht nur bei Fehlschlag: Das Ergebnisbündel eines grünen Laufs
       # ist der Vergleichsmaßstab, an dem eine neue Warnung überhaupt auffällt.
