@@ -75,8 +75,25 @@ type Traeger struct {
 	Beschreibung string              `json:"beschreibung"`
 	Status       TraegerStatus       `json:"status"`
 	Sichtbarkeit TraegerSichtbarkeit `json:"sichtbarkeit"`
-	CreatedAt    time.Time           `json:"createdAt"`
+	// ParentID nennt das Dach, unter dem dieser Träger arbeitet — 0 heißt:
+	// keins. So wird aus einem Arbeitskreis kein Nachbar seines Vereins.
+	//
+	// Genau **eine** Ebene, nicht beliebig tief (siehe ParentID-Prüfung in
+	// der Ablage): Verein → Arbeitskreis ist das, was es im Dorf gibt. Tiefer
+	// zu schachteln kostet Zyklusprüfungen und rekursive Abfragen für einen
+	// Fall, den niemand hat.
+	//
+	// Eigenständig bleibt er trotzdem: eigenes Zitadel-Projekt, eigene
+	// Mitglieder, eigene Admins. Wer den AK 2 verwalten darf, verwaltet
+	// deshalb **nicht** den Verein darüber — und umgekehrt genauso wenig.
+	// Das ist der ganze Grund, warum ein Arbeitskreis ein eigener Träger ist
+	// und kein Feld am Verein.
+	ParentID  int64     `json:"parentId,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
 }
+
+// IstUnterTraeger sagt, ob dieser Träger unter einem Dach arbeitet.
+func (t Traeger) IstUnterTraeger() bool { return t.ParentID != 0 }
 
 // Zugelassen sagt, ob der Träger überhaupt in Erscheinung treten darf.
 func (t Traeger) Zugelassen() bool { return t.Status == TraegerZugelassen }
@@ -98,6 +115,13 @@ func (t *Traeger) Validate() error {
 	// Tippfehler und liefe später still ins Leere.
 	if t.ProjektID != "" && strings.Trim(t.ProjektID, "0123456789") != "" {
 		return errors.New("projektId muss die numerische Zitadel-Projekt-ID sein")
+	}
+	if t.ParentID < 0 {
+		return errors.New("parentId muss ein Träger sein")
+	}
+	// Ein Träger unter sich selbst wäre kein Dach, sondern ein Kreis.
+	if t.ParentID != 0 && t.ParentID == t.ID {
+		return errors.New("ein Träger kann nicht sein eigenes Dach sein")
 	}
 	return nil
 }

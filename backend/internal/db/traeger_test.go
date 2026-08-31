@@ -210,3 +210,97 @@ func TestFrischeDatenbankLegtErstBeiBedarfAn(t *testing.T) {
 		t.Fatalf("nicht dem Platzhalter zugeordnet: %+v %v", dek, err)
 	}
 }
+
+// --- Arbeitskreise unter einem Dach -----------------------------------------
+
+// Ein Arbeitskreis ist ein eigener Träger mit eigenem Zitadel-Projekt, der
+// unter einem Verein arbeitet. Der Verein bleibt sein Dach; verwaltet wird er
+// von seinen eigenen Admins.
+func TestUnterTraegerHatEinDach(t *testing.T) {
+	d := testDB(t)
+	verein := testTraeger(t, d, "Dorfpflege", "377270137180389479")
+
+	ak := model.Traeger{
+		Name: "AK 2 Umwelt und Natur", ProjektID: "388659726272954563",
+		ParentID: verein.ID, Status: model.TraegerZugelassen,
+		Sichtbarkeit: model.TraegerOffen, CreatedAt: time.Now().UTC(),
+	}
+	if err := d.InsertTraeger(&ak); err != nil {
+		t.Fatalf("Arbeitskreis anlegen: %v", err)
+	}
+
+	gelesen, err := d.GetTraeger(ak.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gelesen.ParentID != verein.ID {
+		t.Fatalf("Dach verloren: %+v", gelesen)
+	}
+	if !gelesen.IstUnterTraeger() {
+		t.Errorf("sollte ein Unter-Träger sein: %+v", gelesen)
+	}
+
+	unter, err := d.ListUnterTraeger(verein.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unter) != 1 || unter[0].ID != ak.ID {
+		t.Fatalf("Arbeitskreise unter dem Verein: %+v", unter)
+	}
+
+	// Der Verein selbst steht unter keinem Dach — und trägt sich nicht selbst.
+	if oben, err := d.GetTraeger(verein.ID); err != nil || oben.IstUnterTraeger() {
+		t.Fatalf("der Verein hat ein Dach bekommen: %+v (%v)", oben, err)
+	}
+}
+
+// Genau eine Ebene: Verein über Arbeitskreis. Alles darunter wäre ein Baum,
+// den niemand hat, und jede Abfrage bräuchte eine Zyklusprüfung.
+func TestDreiteEbeneWirdAbgelehnt(t *testing.T) {
+	d := testDB(t)
+	verein := testTraeger(t, d, "Dorfpflege", "1")
+
+	ak := model.Traeger{Name: "AK 2", ParentID: verein.ID, Status: model.TraegerZugelassen,
+		Sichtbarkeit: model.TraegerOffen, CreatedAt: time.Now().UTC()}
+	if err := d.InsertTraeger(&ak); err != nil {
+		t.Fatal(err)
+	}
+
+	untergruppe := model.Traeger{Name: "Untergruppe", ParentID: ak.ID,
+		Status: model.TraegerZugelassen, Sichtbarkeit: model.TraegerOffen,
+		CreatedAt: time.Now().UTC()}
+	if err := d.InsertTraeger(&untergruppe); err == nil {
+		t.Fatal("eine dritte Ebene wurde angenommen")
+	}
+
+	// Und andersherum: Wer schon Arbeitskreise trägt, zieht nicht selbst
+	// unter ein Dach — sonst stünde am Ende doch etwas auf der dritten Ebene.
+	anderer := testTraeger(t, d, "DRK", "2")
+	verein.ParentID = anderer.ID
+	if err := d.UpdateTraeger(&verein); err == nil {
+		t.Fatal("ein Dach durfte unter ein anderes ziehen")
+	}
+}
+
+func TestDachMussEsGeben(t *testing.T) {
+	d := testDB(t)
+	waise := model.Traeger{Name: "AK ohne Verein", ParentID: 999,
+		Status: model.TraegerZugelassen, Sichtbarkeit: model.TraegerOffen,
+		CreatedAt: time.Now().UTC()}
+	if err := d.InsertTraeger(&waise); err == nil {
+		t.Fatal("ein Dach, das es nicht gibt, wurde angenommen")
+	}
+}
+
+// Der Bestand hat kein Dach und soll auch keins bekommen: Die Migration
+// setzt die Spalte auf 0, und daran ändert sich beim Lesen nichts.
+func TestBestandBleibtOhneDach(t *testing.T) {
+	d := testDB(t)
+	dek, err := d.TraegerSicherstellen(model.SchluesselDEK, model.NameDEK)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dek.IstUnterTraeger() {
+		t.Fatalf("der Dorfentwicklungskreis hat ein Dach bekommen: %+v", dek)
+	}
+}
