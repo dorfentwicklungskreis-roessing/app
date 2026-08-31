@@ -34,6 +34,7 @@
           <th>Zitadel-Projekt</th>
           <th class="text-right">Orte</th>
           <th class="text-right">Offene Anträge</th>
+          <th class="text-right">Beitritte</th>
         </tr>
       </thead>
       <tbody>
@@ -52,6 +53,10 @@
             <td class="text-right">{{.Orte}}</td>
             <td class="text-right">
               {{if .OffeneAntraege}}<span class="badge badge-warning">{{.OffeneAntraege}}</span>
+              {{else}}0{{end}}
+            </td>
+            <td class="text-right" id="beitritte-offen-{{.ID}}">
+              {{if .OffeneBeitritte}}<span class="badge badge-warning">{{.OffeneBeitritte}}</span>
               {{else}}0{{end}}
             </td>
           </tr>

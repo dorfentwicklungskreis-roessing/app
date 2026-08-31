@@ -64,6 +64,26 @@ CREATE TABLE IF NOT EXISTS befaehigungs_antraege (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_antrag_person
   ON befaehigungs_antraege(befaehigung_id, user_sub);
 CREATE INDEX IF NOT EXISTS idx_antrag_status ON befaehigungs_antraege(status);
+
+-- Beitritte: „Ich will bei euch mitmachen.“ Anders als beim Befähigungs-
+-- antrag ist ein erteilter Beitritt NICHT die Mitgliedschaft — die steht in
+-- der Rössing-ID. Hier steht der Vorgang: wer gefragt hat, wer entschieden
+-- hat, wann. Je Person und Träger genau eine Zeile; ein erneuter Antrag
+-- belebt sie wieder, statt Karteileichen zu stapeln.
+CREATE TABLE IF NOT EXISTS beitritte (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  traeger_id      INTEGER NOT NULL REFERENCES traeger(id) ON DELETE CASCADE,
+  user_sub        TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'beantragt',
+  begruendung     TEXT NOT NULL DEFAULT '',
+  notiz           TEXT NOT NULL DEFAULT '',
+  created_at      TEXT NOT NULL,
+  entschieden_am  TEXT NOT NULL DEFAULT '',
+  entschieden_von TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_beitritt_person
+  ON beitritte(traeger_id, user_sub);
+CREATE INDEX IF NOT EXISTS idx_beitritt_status ON beitritte(status);
 `); err != nil {
 		return err
 	}
@@ -556,4 +576,158 @@ func scanAntrag(row scannable) (*model.BefaehigungsAntrag, error) {
 	a.CreatedAt, _ = time.Parse(timeFormat, created)
 	a.EntschiedenAm = zeitWert(entschieden)
 	return &a, nil
+}
+
+// --- Beitritte --------------------------------------------------------------
+
+const beitrittSpalten = `id,traeger_id,user_sub,status,begruendung,notiz,created_at,entschieden_am,entschieden_von`
+
+// InsertBeitritt stellt einen Beitrittsantrag. Gibt es für diese Person und
+// diesen Träger schon einen, wird er wiederbelebt.
+//
+// Anders als beim Befähigungsantrag überlebt auch ein bereits erteilter
+// Antrag das nicht: Wer einmal aufgenommen war und heute nicht mehr in der
+// Rössing-ID steht, ist ausgetreten oder entfernt worden und fragt neu. Der
+// alte Vorgang ist damit erledigt, nicht mehr gültig — ob jemand Mitglied
+// ist, sagt ohnehin nur Zitadel.
+func (d *DB) InsertBeitritt(b *model.Beitritt) error {
+	res, err := d.sql.Exec(`INSERT INTO beitritte
+		(traeger_id,user_sub,status,begruendung,created_at) VALUES(?,?,?,?,?)
+		ON CONFLICT(traeger_id,user_sub) DO UPDATE SET
+		  status      = excluded.status,
+		  begruendung = excluded.begruendung,
+		  created_at  = excluded.created_at,
+		  entschieden_am = '', entschieden_von = '', notiz = ''`,
+		b.TraegerID, b.UserSub, string(b.Status), b.Begruendung,
+		b.CreatedAt.UTC().Format(timeFormat))
+	if err != nil {
+		return err
+	}
+	if b.ID, err = res.LastInsertId(); err != nil || b.ID > 0 {
+		return err
+	}
+	// Beim Aktualisieren liefert SQLite keine brauchbare ID zurück.
+	return d.sql.QueryRow(`SELECT id FROM beitritte WHERE traeger_id=? AND user_sub=?`,
+		b.TraegerID, b.UserSub).Scan(&b.ID)
+}
+
+// EntscheideBeitritt hält die Entscheidung fest.
+//
+// Sie wird erst geschrieben, wenn die Rollenzuweisung in der Rössing-ID
+// steht — sonst stünde hier „Mitglied“ und dort nichts.
+func (d *DB) EntscheideBeitritt(id int64, status model.AntragStatus, durch, notiz string, at time.Time) error {
+	res, err := d.sql.Exec(`UPDATE beitritte
+		SET status=?, notiz=?, entschieden_am=?, entschieden_von=? WHERE id=?`,
+		string(status), notiz, at.UTC().Format(timeFormat), durch, id)
+	if err != nil {
+		return err
+	}
+	return requireRow(res)
+}
+
+func (d *DB) GetBeitritt(id int64) (*model.Beitritt, error) {
+	return scanBeitritt(d.sql.QueryRow(`SELECT `+beitrittSpalten+` FROM beitritte WHERE id=?`, id))
+}
+
+// BeitrittVon liefert den Antrag dieser Person an diesen Träger, falls es
+// einen gibt. (nil, nil), wenn nicht.
+func (d *DB) BeitrittVon(traegerID int64, userSub string) (*model.Beitritt, error) {
+	b, err := scanBeitritt(d.sql.QueryRow(`SELECT `+beitrittSpalten+`
+		FROM beitritte WHERE traeger_id=? AND user_sub=?`, traegerID, userSub))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return b, err
+}
+
+// ListBeitritte liefert die Anträge eines Trägers, optional auf einen Stand
+// gefiltert (leerer Status = alle).
+func (d *DB) ListBeitritte(traegerID int64, status model.AntragStatus) ([]model.Beitritt, error) {
+	query := `SELECT ` + beitrittSpalten + ` FROM beitritte WHERE traeger_id = ?`
+	args := []any{traegerID}
+	if status != "" {
+		query += ` AND status = ?`
+		args = append(args, string(status))
+	}
+	query += ` ORDER BY created_at DESC`
+	rows, err := d.sql.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return sammleBeitritte(rows)
+}
+
+// ListBeitritteVonPerson liefert alles, was jemand beantragt hat — mit dem
+// Namen des Trägers, damit die App keine Kennungen auflösen muss.
+func (d *DB) ListBeitritteVonPerson(userSub string) ([]model.Beitritt, error) {
+	rows, err := d.sql.Query(`SELECT b.id,b.traeger_id,b.user_sub,b.status,b.begruendung,b.notiz,
+	                 b.created_at,b.entschieden_am,b.entschieden_von,t.name
+	            FROM beitritte b
+	            JOIN traeger t ON t.id = b.traeger_id
+	           WHERE b.user_sub = ? ORDER BY t.name`, userSub)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Beitritt{}
+	for rows.Next() {
+		var b model.Beitritt
+		var status, created, entschieden string
+		if err := rows.Scan(&b.ID, &b.TraegerID, &b.UserSub, &status, &b.Begruendung, &b.Notiz,
+			&created, &entschieden, &b.EntschiedenVon, &b.TraegerName); err != nil {
+			return nil, err
+		}
+		b.Status = model.AntragStatus(status)
+		b.CreatedAt, _ = time.Parse(timeFormat, created)
+		b.EntschiedenAm = zeitWert(entschieden)
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// OffeneBeitritte zählt die unentschiedenen Anträge je Träger — für die
+// Listen, die den Zähler an jedem Träger zeigen, ohne je Zeile zu fragen.
+func (d *DB) OffeneBeitritte() (map[int64]int, error) {
+	rows, err := d.sql.Query(`SELECT traeger_id, COUNT(*) FROM beitritte
+		WHERE status = ? GROUP BY traeger_id`, string(model.AntragBeantragt))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]int{}
+	for rows.Next() {
+		var id int64
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
+}
+
+func sammleBeitritte(rows *sql.Rows) ([]model.Beitritt, error) {
+	out := []model.Beitritt{}
+	for rows.Next() {
+		b, err := scanBeitritt(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *b)
+	}
+	return out, rows.Err()
+}
+
+func scanBeitritt(row scannable) (*model.Beitritt, error) {
+	var b model.Beitritt
+	var status, created, entschieden string
+	if err := row.Scan(&b.ID, &b.TraegerID, &b.UserSub, &status, &b.Begruendung, &b.Notiz,
+		&created, &entschieden, &b.EntschiedenVon); err != nil {
+		return nil, err
+	}
+	b.Status = model.AntragStatus(status)
+	b.CreatedAt, _ = time.Parse(timeFormat, created)
+	b.EntschiedenAm = zeitWert(entschieden)
+	return &b, nil
 }

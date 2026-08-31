@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/api"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
@@ -42,6 +43,9 @@ func (a *App) registerTraeger(mux *http.ServeMux) {
 	post("/{id}/befaehigungen/{bid}/loeschen", a.befaehigungLoeschen)
 
 	post("/{id}/antraege/{aid}", a.antragEntscheiden)
+
+	post("/{id}/beitritte/{bid}", a.beitrittEntscheiden)
+	post("/{id}/mitglieder", a.mitgliedAufnehmen)
 }
 
 // requireVerwaltung lässt herein, wer irgendetwas zu verwalten hat: den
@@ -107,9 +111,10 @@ type traegerListeDaten struct {
 
 type traegerZeile struct {
 	model.Traeger
-	OffeneAntraege int
-	Orte           int
-	DarfVerwalten  bool
+	OffeneAntraege  int
+	OffeneBeitritte int
+	Orte            int
+	DarfVerwalten   bool
 }
 
 func (a *App) traegerListe(w http.ResponseWriter, r *http.Request, s session) {
@@ -128,6 +133,11 @@ func (a *App) traegerListe(w http.ResponseWriter, r *http.Request, s session) {
 	for _, o := range orte {
 		orteJe[o.TraegerID]++
 	}
+	offeneBeitritte, err := a.db.OffeneBeitritte()
+	if err != nil {
+		a.fail(w, r, http.StatusInternalServerError, err)
+		return
+	}
 
 	daten := traegerListeDaten{Betreiber: z.Betreiber, Veraltet: z.Veraltet}
 	for _, t := range alle {
@@ -139,6 +149,7 @@ func (a *App) traegerListe(w http.ResponseWriter, r *http.Request, s session) {
 		if offen, err := a.db.ListAntraege(t.ID, model.AntragBeantragt); err == nil {
 			zeile.OffeneAntraege = len(offen)
 		}
+		zeile.OffeneBeitritte = offeneBeitritte[t.ID]
 		daten.Traeger = append(daten.Traeger, zeile)
 	}
 	a.render(w, r, http.StatusOK, "traeger_liste", view{
@@ -207,6 +218,15 @@ type traegerDetailDaten struct {
 	Entschieden    []model.BefaehigungsAntrag
 	Orte           []model.Place
 	Betreiber      bool
+	// Beitritte: wer mitmachen will, und wer schon aufgenommen ist.
+	OffeneBeitritte []model.Beitritt
+	Mitglieder      []model.Beitritt
+	// AufnahmeMoeglich sagt, ob eine Freigabe überhaupt etwas bewirken kann.
+	// Ohne schreibenden Dienst-Nutzer bliebe sie wirkungslos, und dann soll
+	// hier ein Hinweis stehen statt eines Knopfes, der nichts tut.
+	AufnahmeMoeglich bool
+	// KeineAufnahme ist der Hinweistext für genau diesen Fall.
+	KeineAufnahme string
 }
 
 // traegerAusPfad lädt den Träger und prüft, ob er gepflegt werden darf.
@@ -289,6 +309,26 @@ func (a *App) zeigeTraeger(w http.ResponseWriter, r *http.Request, status int,
 		}
 	}
 
+	alleBeitritte, err := a.db.ListBeitritte(t.ID, "")
+	if err != nil {
+		a.fail(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	offeneBeitritte := []model.Beitritt{}
+	mitglieder := []model.Beitritt{}
+	for _, b := range alleBeitritte {
+		b.UserName = namen.Resolve(b.UserSub, "")
+		if b.UserName == "" {
+			b.UserName = b.UserSub
+		}
+		if b.Status == model.AntragBeantragt {
+			offeneBeitritte = append(offeneBeitritte, b)
+		} else {
+			mitglieder = append(mitglieder, b)
+		}
+	}
+	_, kannAufnehmen := mitglied.AufnehmerVon(a.mitglieder)
+
 	formular := t
 	if entwurf != nil {
 		formular = *entwurf
@@ -305,6 +345,11 @@ func (a *App) zeigeTraeger(w http.ResponseWriter, r *http.Request, status int,
 			Entschieden:    entschieden,
 			Orte:           seine,
 			Betreiber:      z.Betreiber,
+
+			OffeneBeitritte:  offeneBeitritte,
+			Mitglieder:       mitglieder,
+			AufnahmeMoeglich: kannAufnehmen && t.ProjektID != "",
+			KeineAufnahme:    api.NochNichtEingerichtet,
 		},
 	})
 }

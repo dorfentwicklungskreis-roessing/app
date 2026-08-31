@@ -178,6 +178,101 @@
   </div>
 </div>
 
+{{/* --- Beitritte --- */}}
+<div class="card mt-6 bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title text-lg">
+      Mitmachen
+      {{if .Data.OffeneBeitritte}}
+        <span class="badge badge-warning" id="beitritte-offen">{{len .Data.OffeneBeitritte}}</span>
+      {{else}}
+        <span class="badge badge-ghost" id="beitritte-offen">0</span>
+      {{end}}
+    </h2>
+    <p class="text-base-content/70">
+      Wer diesem Träger beitreten möchte, fragt hier an. Eine Freigabe trägt die Rolle
+      <code>mitglied</code> unmittelbar in der Rössing-ID ein — niemand muss dafür in die
+      Zitadel-Konsole. Wer eine geschlossene Gruppe verwaltet, nimmt unten selbst auf:
+      Anträge nimmt sie nicht entgegen.
+    </p>
+
+    {{if not .Data.AufnahmeMoeglich}}
+      <div class="alert alert-warning mt-2" id="keine-aufnahme">
+        <span>{{.Data.KeineAufnahme}}</span>
+      </div>
+    {{end}}
+
+    {{if .Data.OffeneBeitritte}}
+      <div class="mt-2 overflow-x-auto">
+        <table class="table" id="offene-beitritte">
+          <thead><tr><th>Person</th><th>Begründung</th><th>Gefragt</th><th></th></tr></thead>
+          <tbody>
+            {{range .Data.OffeneBeitritte}}
+              <tr id="beitritt-{{.ID}}">
+                <td>{{.UserName}}</td>
+                <td class="max-w-xs">{{.Begruendung}}</td>
+                <td class="whitespace-nowrap">{{datum .CreatedAt}}</td>
+                <td class="whitespace-nowrap text-right">
+                  <form method="post" action="/admin/traeger/{{.TraegerID}}/beitritte/{{.ID}}"
+                        class="flex flex-wrap items-center justify-end gap-1">
+                    <input class="input input-sm" type="text" name="notiz"
+                           placeholder="Notiz (optional)" maxlength="500">
+                    <button class="btn btn-success btn-sm" type="submit" name="status" value="erteilt">Aufnehmen</button>
+                    <button class="btn btn-ghost btn-sm" type="submit" name="status" value="abgelehnt">Ablehnen</button>
+                  </form>
+                </td>
+              </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    {{else}}
+      <div class="alert mt-2" id="keine-beitritte"><span>Keine offenen Beitrittsanträge.</span></div>
+    {{end}}
+
+    <form method="post" action="/admin/traeger/{{.Data.Traeger.ID}}/mitglieder"
+          class="mt-4 flex flex-wrap items-end gap-2">
+      <fieldset class="fieldset grow">
+        <legend class="fieldset-legend">Jemanden aufnehmen</legend>
+        <input class="input w-full" type="text" name="userSub" id="aufnehmen-usersub"
+               placeholder="Kennung aus der Rössing-ID" required maxlength="200">
+      </fieldset>
+      <fieldset class="fieldset grow">
+        <legend class="fieldset-legend">Notiz</legend>
+        <input class="input w-full" type="text" name="notiz" id="aufnehmen-notiz"
+               placeholder="z.B. „hat auf der Versammlung zugesagt“" maxlength="500">
+      </fieldset>
+      <button class="btn btn-primary" type="submit" id="aufnehmen">Aufnehmen</button>
+    </form>
+    <p class="text-sm text-base-content/60">
+      Die Kennung steht in der Rangliste und an jeder Erledigung.
+    </p>
+
+    {{if .Data.Mitglieder}}
+      <h3 class="mt-4 font-medium">Bereits entschieden</h3>
+      <div class="overflow-x-auto">
+        <table class="table table-sm" id="entschiedene-beitritte">
+          <thead><tr><th>Person</th><th>Stand</th><th>Am</th><th>Notiz</th></tr></thead>
+          <tbody>
+            {{range .Data.Mitglieder}}
+              <tr>
+                <td>{{.UserName}}</td>
+                <td><span class="badge {{antragBadge .Status}}">{{antragStatus .Status}}</span></td>
+                <td class="whitespace-nowrap">{{datumOpt .EntschiedenAm}}</td>
+                <td>{{.Notiz}}</td>
+              </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-base-content/60">
+        Wer hier steht, wurde über die Dorf-App aufgenommen. Wer außerhalb der App
+        eingetragen wurde, taucht hier nicht auf — maßgeblich ist die Rössing-ID.
+      </p>
+    {{end}}
+  </div>
+</div>
+
 {{/* --- Orte --- */}}
 <div class="card mt-6 bg-base-100 shadow-sm">
   <div class="card-body">

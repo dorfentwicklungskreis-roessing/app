@@ -159,6 +159,16 @@ func (s *speicher) letzter(sub string) (eintrag, bool) {
 	return e, ok
 }
 
+// vergessen wirft die gemerkte Auskunft weg. Nach einer Aufnahme muss die
+// nächste Frage wieder nach Zitadel gehen: Sonst hätte die eben aufgenommene
+// Person bis zu einer Frist lang keine Mitgliedschaft — und die Freigabe
+// sähe aus, als hätte sie nicht gewirkt.
+func (s *speicher) vergessen(sub string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.nach, sub)
+}
+
 func (s *speicher) merken(sub string, rollen model.Mitgliedschaften, jetzt time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -33,6 +33,8 @@ func (s *Server) registerTraeger(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/traeger/{id}/antraege", s.handleListAntraege)
 	api.HandleFunc("POST /api/v1/antraege/{id}", s.handleAntragEntscheiden)
 	api.HandleFunc("GET /api/v1/me/befaehigungen", s.handleMeineBefaehigungen)
+
+	s.registerBeitritt(api)
 }
 
 // --- Zugriffs-Helfer --------------------------------------------------------
@@ -145,6 +147,46 @@ type TraegerInput struct {
 	Sichtbarkeit string `json:"sichtbarkeit"`
 }
 
+// TraegerAnsicht ist ein Träger, wie ihn genau diese Person sieht.
+//
+// Ohne diese Felder müsste die App raten, ob der Knopf „Mitmachen“ etwas
+// bewirkt — und die Antwort hinge an Regeln, die nur der Server kennt (Zutritt,
+// Sichtbarkeit, bestehende Mitgliedschaft, ein schon gestellter Antrag).
+// Deshalb steht hier, was gilt, und nicht bloß der Träger.
+type TraegerAnsicht struct {
+	model.Traeger
+	IstMitglied   bool `json:"istMitglied"`
+	DarfVerwalten bool `json:"darfVerwalten"`
+	// BeitrittMoeglich: Hier kann diese Person jetzt einen Antrag stellen.
+	BeitrittMoeglich bool `json:"beitrittMoeglich"`
+	// BeitrittHindernis nennt den Grund, warum nicht — leer, wenn es geht.
+	// Er ist deutsch und für die Anzeige gedacht.
+	BeitrittHindernis string `json:"beitrittHindernis,omitempty"`
+	// BeitrittStatus ist der Stand des eigenen Antrags („“ = keiner).
+	BeitrittStatus model.AntragStatus `json:"beitrittStatus,omitempty"`
+	// OffeneBeitritte zählt die unentschiedenen Anträge — nur für die,
+	// die den Träger verwalten.
+	OffeneBeitritte int `json:"offeneBeitritte,omitempty"`
+}
+
+// traegerAnsicht baut die Sicht einer Person auf einen Träger.
+func (s *Server) traegerAnsicht(z model.Zugriff, t model.Traeger, offen map[int64]int) TraegerAnsicht {
+	a := TraegerAnsicht{
+		Traeger:           t,
+		IstMitglied:       z.Mitglied.IstMitglied(t.ProjektID),
+		DarfVerwalten:     z.DarfVerwalten(t),
+		BeitrittHindernis: z.BeitrittsHindernis(t),
+	}
+	a.BeitrittMoeglich = a.BeitrittHindernis == ""
+	if eigener, err := s.DB.BeitrittVon(t.ID, z.Sub); err == nil && eigener != nil {
+		a.BeitrittStatus = eigener.Status
+	}
+	if a.DarfVerwalten {
+		a.OffeneBeitritte = offen[t.ID]
+	}
+	return a
+}
+
 func (s *Server) handleListTraeger(w http.ResponseWriter, r *http.Request) {
 	z := s.zugriff(r)
 	alle, err := s.DB.ListTraeger()
@@ -152,10 +194,15 @@ func (s *Server) handleListTraeger(w http.ResponseWriter, r *http.Request) {
 		writeInternal(w, r, err)
 		return
 	}
-	sichtbar := []model.Traeger{}
+	offen, err := s.DB.OffeneBeitritte()
+	if err != nil {
+		writeInternal(w, r, err)
+		return
+	}
+	sichtbar := []TraegerAnsicht{}
 	for _, t := range alle {
 		if z.SiehtTraeger(t) {
-			sichtbar = append(sichtbar, t)
+			sichtbar = append(sichtbar, s.traegerAnsicht(z, t, offen))
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"traeger": sichtbar})
@@ -167,8 +214,13 @@ func (s *Server) handleGetTraeger(w http.ResponseWriter, r *http.Request) {
 		schreibeZugriffsfehler(w, r, err)
 		return
 	}
+	offen, err := s.DB.OffeneBeitritte()
+	if err != nil {
+		writeInternal(w, r, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"traeger": t, "darfVerwalten": z.DarfVerwalten(t),
+		"traeger": s.traegerAnsicht(z, t, offen), "darfVerwalten": z.DarfVerwalten(t),
 	})
 }
 

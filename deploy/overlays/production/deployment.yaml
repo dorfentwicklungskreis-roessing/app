@@ -161,9 +161,17 @@ spec:
             #   1. In der Rössing-ID einen Machine-User anlegen
             #      (z.B. „dorf-app-rollen"), Access-Token-Typ JWT,
             #      JSON-Key erzeugen.
-            #   2. Ihm NUR Leserechte auf Rollenzuweisungen geben
-            #      (ORG_USER_GRANT_VIEWER). Er darf keine Nutzer anlegen und
-            #      keine Rollen vergeben.
+            #   2. Ihm Rechte auf Rollenzuweisungen geben — LESEN und
+            #      SCHREIBEN (user.grant.read/write; in Zitadel die
+            #      Manager-Rolle ORG_USER_PERMISSION_EDITOR). Nutzer anlegen
+            #      oder löschen darf er weiterhin nicht.
+            #      Das Schreibrecht ist neu: Seit ein Beitritt in der App
+            #      beantragt und vom Träger-Admin freigegeben wird, trägt die
+            #      Freigabe die Rolle „mitglied" unmittelbar in der Rössing-ID
+            #      ein — sonst wäre das Verfahren eine Sackgasse. Fehlt das
+            #      Recht, läuft die Freigabe nicht still ins Leere: Sie
+            #      scheitert mit genau diesem Hinweis, und der Antrag bleibt
+            #      offen.
             #   3. Den Key als SealedSecret ablegen (wie sealed-fcm.yaml),
             #      unter /secrets/zitadel einhängen und die beiden Zeilen
             #      unten einkommentieren.
