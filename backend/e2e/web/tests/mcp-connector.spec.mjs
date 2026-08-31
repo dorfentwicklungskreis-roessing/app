@@ -12,9 +12,9 @@
 //
 // Die Rücksprung-Adresse ist die von claude.ai — sie ist die einzige, die der
 // Registrierungs-Endpunkt herausgibt, und darum die einzige, die etwas
-// beweist. Angefasst wird claude.ai dabei nicht: Die Route wird im Browser
-// abgefangen und lokal beantwortet; den Code lesen wir aus der abgefangenen
-// Adresse.
+// beweist. Angefasst wird claude.ai dabei nie: Der Name ist für diesen
+// Browser unauflösbar (playwright.config.mjs), und gelesen wird die Anfrage,
+// nicht die Antwort — der Code steht in der Adresse.
 import crypto from 'node:crypto';
 import { test, expect, state, anmelden, anmeldemaskeDurchlaufen } from '../fixtures.mjs';
 import { BASE_URL, ISSUER } from '../config.mjs';
@@ -130,15 +130,19 @@ async function fetchAuthCode(page, { server, resource, clientId, user, password 
     code_challenge_method: 'S256',
   }).toString();
 
+  // Gelesen wird die Anfrage, nicht die Antwort: Der Code steht in der
+  // Adresse, und die kennt der Browser schon, bevor er sie abschickt.
+  // Abschicken kann er sie nicht — claude.ai ist für diesen Browser
+  // unauflösbar (siehe playwright.config.mjs). Ein Route-Handler genügte
+  // dafür nicht: Beim letzten Sprung einer fremden Weiterleitungskette ruft
+  // Playwright ihn nicht auf.
   let returned = null;
-  await page.route('https://claude.ai/**', async (route) => {
-    returned = route.request().url();
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/html; charset=utf-8',
-      body: '<!doctype html><title>Rücksprung</title><p>abgefangen</p>',
-    });
+  page.on('request', (request) => {
+    if (request.url().startsWith(REDIRECT_URI)) returned = request.url();
   });
+  // Zweiter Riegel für alles, was doch noch abfangbar ist — er greift bei
+  // jedem Sprung außer dem letzten und kostet nichts.
+  await page.route('https://claude.ai/**', (route) => route.abort());
 
   await page.goto(target.toString());
   await anmeldemaskeDurchlaufen(page, user, password, () => returned !== null);
