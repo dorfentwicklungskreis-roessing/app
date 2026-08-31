@@ -85,7 +85,9 @@ private struct Beschriftet: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Group {
-                if let symbol { Image(systemName: symbol) } else { Color.clear }
+                // Verstecktes Symbol statt Farbfläche: `Color.clear` hat keine
+                // eigene Größe und dehnt die Zeile in die Höhe.
+                if let symbol { Image(systemName: symbol) } else { Image(systemName: "circle").hidden() }
             }
             .font(.footnote)
             .frame(width: 18)
