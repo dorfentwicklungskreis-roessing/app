@@ -147,7 +147,7 @@ spec:
             #
             - name: APNS_KEY_FILE
               value: /secrets/apns/AuthKey.p8
-            # ZITADEL_SERVICE_USER_KEY_FILE (noch nicht eingerichtet):
+            # ZITADEL_SERVICE_USER_KEY_FILE:
             # Damit fragt das Backend die Träger-Mitgliedschaften (welcher
             # Verein, welche Rolle) über die Zitadel-Management-API ab. Sie
             # kommen bewusst NICHT aus dem Token — sonst bräuchte jeder neue
@@ -173,11 +173,15 @@ spec:
             #      scheitert mit genau diesem Hinweis, und der Antrag bleibt
             #      offen.
             #   3. Den Key als SealedSecret ablegen (wie sealed-fcm.yaml),
-            #      unter /secrets/zitadel einhängen und die beiden Zeilen
-            #      unten einkommentieren.
+            #      unter /secrets/zitadel einhängen und die Zeile unten
+            #      einkommentieren.
             #
-            # - name: ZITADEL_SERVICE_USER_KEY_FILE
-            #   value: /secrets/zitadel/service-user.json
+            # Eingerichtet am 31.08.2026: Machine-User „dorf-app-backend"
+            # (Zitadel-ID 388679249365565635), Access-Token-Typ JWT,
+            # Manager-Rolle ORG_USER_PERMISSION_EDITOR. Der Key liegt als
+            # sealed-zitadel.yaml daneben.
+            - name: ZITADEL_SERVICE_USER_KEY_FILE
+              value: /secrets/zitadel/service-user.json
             # ZITADEL_ROLLEN_TTL (optional, Vorgabe 45s): So lange gilt eine
             # Mitgliedschafts-Auskunft als frisch. Kurz genug, dass eine neue
             # Mitgliedschaft praktisch sofort wirkt.
@@ -260,6 +264,9 @@ spec:
             - name: apns
               mountPath: /secrets/apns
               readOnly: true
+            - name: zitadel
+              mountPath: /secrets/zitadel
+              readOnly: true
             # Schreibbares /tmp, weil das Wurzeldateisystem nur lesbar ist.
             - name: tmp
               mountPath: /tmp
@@ -296,6 +303,13 @@ spec:
             secretName: dorf-app-apns
             # Dieselbe Regel wie bei fcm: fehlt es, gibt es kein iOS-Push,
             # aber der Server läuft.
+            optional: true
+        - name: zitadel
+          secret:
+            secretName: dorf-app-zitadel
+            # Dieselbe Regel wie bei fcm und apns: Fehlt es, gibt es keine
+            # Träger-Mitgliedschaften — die Verwaltung liegt dann allein beim
+            # Betreiber —, aber der Server läuft.
             optional: true
         - name: tmp
           emptyDir:
