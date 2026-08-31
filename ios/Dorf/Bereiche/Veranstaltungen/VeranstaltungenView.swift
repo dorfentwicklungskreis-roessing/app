@@ -20,37 +20,34 @@ struct VeranstaltungenView: View {
                 }
             }
 
+            // Liste, Warten und Leere gehören in *einen* Abschnitt: Drei
+            // eigene Abschnitte lassen dort, wo gerade keiner von ihnen etwas
+            // zu sagen hat, nur eine Lücke stehen.
             Section {
-                Text("Die Termine kommen von rössing.de — gepflegt werden sie dort, "
-                    + "damit sie nur an einer Stelle stehen.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .listRowBackground(Color.clear)
-            }
-
-            if modell.laedt && modell.termine.isEmpty {
-                Section {
+                if modell.laedt && modell.termine.isEmpty {
                     HStack(spacing: 10) {
                         ProgressView()
                         Text("Termine werden geholt …").foregroundStyle(.secondary)
                     }
                     .accessibilityIdentifier("veranstaltungen-laedt")
                 }
-            }
 
-            Section {
                 ForEach(modell.termine) { termin in
                     TerminZeile(termin: termin)
                 }
-            }
 
-            if modell.leer {
-                Section {
+                if modell.leer {
                     Text("Gerade steht kein Termin an. Sobald etwas eingetragen ist, "
                         + "steht es hier.")
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("veranstaltungen-leer")
                 }
+            } footer: {
+                // Woher die Termine kommen, steht als Fußnote unter der Liste —
+                // dort, wo iOS Erklärungen erwartet. Als eigener Abschnitt
+                // darüber wäre es ein Kasten, der aussieht wie ein Termin.
+                Text("Die Termine kommen von rössing.de — gepflegt werden sie dort, "
+                    + "damit sie nur an einer Stelle stehen.")
             }
         }
         .accessibilityIdentifier("veranstaltungen")
@@ -128,10 +125,15 @@ private struct TerminZeile: View {
 
                 // Ein Termin, der nach draußen führt, sagt das mit dem Symbol,
                 // das iOS dafür benutzt — nicht mit einer anderen Textfarbe.
-                Image(systemName: termin.extern ? "arrow.up.forward.app" : "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 3)
+                // Nach innen wird hier nichts gemalt: Den Pfeil setzt in einer
+                // Liste der NavigationLink selbst, und zwei Pfeile in einer
+                // Zeile sind einer zu viel.
+                if termin.extern {
+                    Image(systemName: "arrow.up.forward.app")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 3)
+                }
             }
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -224,7 +226,12 @@ private struct Angabe: View {
                 if let symbol {
                     Image(systemName: symbol)
                 } else {
-                    Color.clear
+                    // Die Spalte bleibt stehen, damit die Adresse unter dem
+                    // Ortsnamen bündig steht — aber als *verstecktes Symbol*,
+                    // nicht als Farbfläche. `Color.clear` hat keine eigene
+                    // Größe und dehnt sich in die Höhe, bis die Zeile
+                    // auseinanderfällt und in die nächste läuft.
+                    Image(systemName: "circle").hidden()
                 }
             }
             .font(.footnote)
