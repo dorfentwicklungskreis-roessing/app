@@ -15,6 +15,7 @@ import de.roessing.app.data.RentalPeriod
 import de.roessing.app.data.RentalProfile
 import de.roessing.app.data.RentalRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -313,13 +314,29 @@ class RentalViewModel(
         checkJob?.cancel()
         checkJob = viewModelScope.launch {
             _state.update { it.copy(checking = true) }
-            runCatching { repo.availability(device.id, period) }
-                .onSuccess { answer ->
-                    _state.update { it.copy(checking = false, availability = answer) }
+            val answer = runCatching { repo.availability(device.id, period) }
+            // Ein Abbruch ist kein Ausfall. `runCatching` fängt auch die
+            // CancellationException — ohne diese Zeile meldete jede zweite
+            // Änderung des Zeitraums „nicht erreichbar", weil die abgelöste
+            // Prüfung noch ihren Zustand schriebe.
+            if (!isActive) return@launch
+            // Eine Antwort gilt nur für den Zeitraum, für den sie kam: Wer die
+            // Tage verschiebt, hat keine Antwort mehr, sonst fragte jemand ein
+            // freies Wochenende auf einem belegten an. Der Abbruch oben sorgt
+            // schon dafür, dass keine überholte Antwort ankommt; dass sie zur
+            // Frage gehört, wird hier trotzdem nachgesehen — es ist eine Zeile,
+            // und der Preis eines Irrtums wäre eine falsche Buchung.
+            answer
+                .onSuccess { free ->
+                    _state.update {
+                        if (it.period != period) it.copy(checking = false)
+                        else it.copy(checking = false, availability = free)
+                    }
                 }
                 .onFailure { failure ->
                     _state.update {
-                        it.copy(checking = false, availability = null).after(failure)
+                        if (it.period != period) it.copy(checking = false)
+                        else it.copy(checking = false, availability = null).after(failure)
                     }
                 }
         }

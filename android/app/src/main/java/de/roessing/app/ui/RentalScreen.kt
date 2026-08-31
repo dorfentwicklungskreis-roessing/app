@@ -102,6 +102,17 @@ fun RentalScreen(
     /** Null when a fresh sign-in cannot be started from here. */
     onSignInAgain: (() -> Unit)? = null,
 ) {
+    // Der Weg nach draußen wird **hier** nachgeschlagen, im Fenster der App —
+    // und nicht unten im Blatt. Ein ModalBottomSheet ist ein eigenes Fenster
+    // mit eigenem Owner, und der belegt `LocalUriHandler` selbst neu
+    // (`ProvideCommonCompositionLocals`). Wer den Verweis erst dort drinnen
+    // liest, bekommt darum immer den Browser des Systems — auch dann, wenn
+    // die App außen etwas anderes untergeschoben bekommen hat. Im Test hieß
+    // das: Chromium ging auf, die App verschwand im Hintergrund, und die drei
+    // folgenden Prüfungen fanden ihre Oberfläche nicht wieder.
+    val uriHandler = LocalUriHandler.current
+    val browser: (String) -> Unit = { uriHandler.openUri(it) }
+
     Column(modifier.fillMaxWidth().testTag("rental")) {
         SearchField(state.query, onQuery)
 
@@ -231,6 +242,7 @@ fun RentalScreen(
                 state = state,
                 onPeriod = onPeriod,
                 onBook = onBook,
+                onOpenLink = browser,
             )
         }
     }
@@ -430,13 +442,14 @@ private fun DeviceDetail(
     state: RentalUiState,
     onPeriod: (RentalPeriod) -> Unit,
     onBook: (notes: String, firstName: String, lastName: String, phone: String) -> Unit,
+    /** Führt eine Adresse nach draußen — gereicht, nicht hier nachgeschlagen. */
+    onOpenLink: (String) -> Unit,
 ) {
     var picking by remember { mutableStateOf(false) }
     var notes by rememberSaveable(device.id) { mutableStateOf("") }
     var firstName by rememberSaveable(device.id) { mutableStateOf("") }
     var lastName by rememberSaveable(device.id) { mutableStateOf("") }
     var phone by rememberSaveable(device.id) { mutableStateOf("") }
-    val browser = LocalUriHandler.current
 
     Column(
         Modifier
@@ -613,7 +626,7 @@ private fun DeviceDetail(
                 )
                 device.webUrl?.let { url ->
                     TextButton(
-                        onClick = { browser.openUri(url) },
+                        onClick = { onOpenLink(url) },
                         modifier = Modifier.testTag("rental-missing-web"),
                     ) { Text(stringResource(R.string.rental_web_link)) }
                 }
@@ -647,13 +660,13 @@ private fun DeviceDetail(
 
         device.webUrl?.let { url ->
             TextButton(
-                onClick = { browser.openUri(url) },
+                onClick = { onOpenLink(url) },
                 modifier = Modifier.testTag("rental-web"),
             ) { Text(stringResource(R.string.rental_web_link)) }
         }
         device.productUrl?.let { url ->
             TextButton(
-                onClick = { browser.openUri(url) },
+                onClick = { onOpenLink(url) },
                 modifier = Modifier.testTag("rental-product"),
             ) { Text(stringResource(R.string.rental_product_link)) }
         }

@@ -18,6 +18,7 @@ import de.roessing.app.data.RentalProfile
 import de.roessing.app.data.RentalRepository
 import de.roessing.app.ui.RentalEvent
 import de.roessing.app.ui.RentalViewModel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -53,6 +54,13 @@ private class FakeRental : RentalRepository {
     var occupancy: List<RentalOccupancy> = emptyList()
     var availability: RentalAvailability? = null
     var profile: RentalProfile = profil()
+
+    /**
+     * Hält eine Verfügbarkeitsprüfung an, solange sie nicht freigegeben ist.
+     * Ohne sie ist eine abgelöste Prüfung schon vorbei, bevor sie abgebrochen
+     * werden kann — und der Fall, um den es geht, träte gar nicht ein.
+     */
+    var availabilityGate: CompletableDeferred<Unit>? = null
 
     /** Was der nächste Abruf werfen soll, statt zu antworten. */
     var devicesFailure: Throwable? = null
@@ -96,8 +104,12 @@ private class FakeRental : RentalRepository {
         deviceId: String,
         period: RentalPeriod,
     ): RentalAvailability {
+        availabilityGate?.await()
         availabilityFailure?.let { throw it }
-        return availability ?: RentalAvailability(period, available = false, reason = "occupied")
+        // Die Antwort trägt den Zeitraum, für den gefragt wurde — genau
+        // darauf kommt es an, wenn zwei Prüfungen unterwegs sind.
+        return availability?.copy(period = period)
+            ?: RentalAvailability(period, available = false, reason = "occupied")
     }
 
     override suspend fun profile(): RentalProfile {
@@ -439,6 +451,103 @@ class RentalViewModelTest {
         vm.setPeriod(zeitraum())
         advanceUntilIdle()
         assertTrue(vm.state.value.canBook)
+    }
+
+    /**
+     * Eine Antwort auf „ist es frei?" gilt für **den** Zeitraum, für den sie
+     * kam. Wer die Tage verschiebt, hat keine Antwort mehr — sonst fragte
+     * jemand ein freies Wochenende auf einem belegten an.
+     */
+    @Test
+    fun `eine Antwort auf einen alten Zeitraum zaehlt nicht`() = runTest(dispatcher) {
+        val repo = FakeRental().apply { devices = listOf(geraet("maeher")) }
+        val vm = vm(repo, RentalSignIn.VALID)
+        vm.load()
+        advanceUntilIdle()
+        vm.open(repo.devices.first())
+        advanceUntilIdle()
+
+        repo.availability = RentalAvailability(zeitraum(), available = true, reason = null)
+        vm.setPeriod(zeitraum())
+        advanceUntilIdle()
+        assertTrue(vm.state.value.canBook)
+
+        // Ein anderer Zeitraum: Die alte Zusage darf ihn nicht mittragen —
+        // weder gleich beim Umstellen noch, wenn die neue Antwort da ist.
+        val anderer = zeitraum("2026-10-01", "2026-10-03")
+        vm.setPeriod(anderer)
+        assertNull(vm.state.value.availability)
+        assertFalse(vm.state.value.canBook)
+
+        advanceUntilIdle()
+        assertEquals(anderer, vm.state.value.availability?.period)
+    }
+
+    /**
+     * Und derselbe Fall von der anderen Seite: Eine Antwort, die zu einem
+     * inzwischen abgelösten Zeitraum gehört, darf den neuen nicht freigeben.
+     */
+    @Test
+    fun `eine ueberholte Zusage gibt den neuen Zeitraum nicht frei`() = runTest(dispatcher) {
+        val repo = FakeRental().apply {
+            devices = listOf(geraet("maeher"))
+            availability = RentalAvailability(zeitraum(), available = true, reason = null)
+            availabilityGate = CompletableDeferred()
+        }
+        val vm = vm(repo, RentalSignIn.VALID)
+        vm.load()
+        advanceUntilIdle()
+        vm.open(repo.devices.first())
+        advanceUntilIdle()
+
+        val alter = zeitraum()
+        vm.setPeriod(alter)
+        advanceUntilIdle()
+        // Die Prüfung hängt noch an der Schranke.
+        assertTrue(vm.state.value.checking)
+        assertNull(vm.state.value.availability)
+
+        val neuer = zeitraum("2026-10-01", "2026-10-03")
+        vm.setPeriod(neuer)
+        repo.availabilityGate?.complete(Unit)
+        advanceUntilIdle()
+
+        // Die Antwort, die ankommt, gehört zum neuen Zeitraum.
+        assertEquals(neuer, vm.state.value.availability?.period)
+    }
+
+    /**
+     * Wer schnell zweimal einen Zeitraum wählt, bricht die erste Prüfung ab.
+     * Ein Abbruch ist kein Ausfall — sonst stünde „nicht erreichbar" da,
+     * obwohl nichts fehlt.
+     */
+    @Test
+    fun `eine abgeloeste Pruefung meldet keinen Ausfall`() = runTest(dispatcher) {
+        val repo = FakeRental().apply {
+            devices = listOf(geraet("maeher"))
+            availability = RentalAvailability(zeitraum(), available = true, reason = null)
+            availabilityGate = CompletableDeferred()
+        }
+        val vm = vm(repo, RentalSignIn.VALID)
+        vm.load()
+        advanceUntilIdle()
+        vm.open(repo.devices.first())
+        advanceUntilIdle()
+
+        vm.setPeriod(zeitraum())
+        // Erst laufen lassen, damit die Prüfung wirklich an der Schranke
+        // hängt — sonst wird sie abgebrochen, bevor sie begonnen hat, und der
+        // Fall, um den es geht, träte nie ein.
+        advanceUntilIdle()
+        assertTrue(vm.state.value.checking)
+
+        vm.setPeriod(zeitraum("2026-10-01", "2026-10-03"))
+        repo.availabilityGate?.complete(Unit)
+        advanceUntilIdle()
+
+        // Der Abbruch der ersten Prüfung ist kein Ausfall der Mietplattform.
+        assertFalse(vm.state.value.offline)
+        assertFalse(vm.state.value.checking)
     }
 
     @Test

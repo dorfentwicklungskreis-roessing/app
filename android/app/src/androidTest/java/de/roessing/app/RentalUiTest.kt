@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -294,7 +295,13 @@ class RentalUiTest {
         compose.onNodeWithTag("rental-book").performScrollTo().assertIsNotEnabled()
     }
 
-    /** Die Beschreibung kommt als Markdown und wird als Klartext gezeigt. */
+    /**
+     * Die Beschreibung kommt als Markdown und wird als Klartext gezeigt.
+     *
+     * Geprüft wird am Blatt, nicht am Wortlaut: Die Kachel in der Liste zeigt
+     * dieselbe Beschreibung (nur gekürzt), und ein Text kommt damit zweimal
+     * in der Oberfläche vor.
+     */
     @Test
     fun eineBeschreibungStehtOhneSternchenDa() {
         zeigeApp(FakeRental(devices = listOf(maeher)))
@@ -303,12 +310,18 @@ class RentalUiTest {
         compose.onNodeWithTag("device-${maeher.id}").performClick()
         compose.waitForIdle()
 
-        compose.onNodeWithText("• Arbeitsbreite 85 cm", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("device-description")
+            .assertTextContains("• Arbeitsbreite 85 cm", substring = true)
     }
 
     /**
      * Der Weg nach draußen führt in den Browser — im Test in ein Notizbuch,
      * sonst wäre die App im Hintergrund und der Test ohne Oberfläche.
+     *
+     * Der Verweis steht im Blatt zum Gerät, und ein Blatt ist ein eigenes
+     * Fenster: Dort drinnen belegt Compose `LocalUriHandler` selbst wieder mit
+     * dem Browser des Systems. Dieser Fall prüft mit, dass der Bereich den Weg
+     * nach draußen davor nachschlägt — sonst geht hier wirklich Chromium auf.
      */
     @Test
     fun derWegZurWebfassungFuehrtNachDraussen() {
