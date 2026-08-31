@@ -402,6 +402,8 @@ type aufgabeFormularDaten struct {
 	// Befaehigungen sind die Einweisungen des Trägers, dem der Ort gehört —
 	// nur aus ihnen lässt sich eine auswählen.
 	Befaehigungen []model.Befaehigung
+	// Months füllt die Auswahl der Jahreszeit.
+	Months []monthOption
 }
 
 func (a *App) aufgabeNeuFormular(w http.ResponseWriter, r *http.Request, _ session) {
@@ -426,6 +428,7 @@ func (a *App) zeigeAufgabeNeu(w http.ResponseWriter, r *http.Request, status int
 			Neu: true, Ort: p, Aufgabe: t, LiterText: liter, Fehler: fehler,
 			Ziel:          fmt.Sprintf("%s/orte/%d/aufgaben/neu", mithelfenBasis, p.ID),
 			Befaehigungen: a.befaehigungenVon(p),
+			Months:        monthOptions(),
 		},
 	})
 }
@@ -479,6 +482,7 @@ func (a *App) zeigeAufgabe(w http.ResponseWriter, r *http.Request, status int, p
 			Ort: p, Aufgabe: t, LiterText: liter, Fehler: fehler,
 			Ziel:          fmt.Sprintf("%s/aufgaben/%d", mithelfenBasis, t.ID),
 			Befaehigungen: a.befaehigungenVon(p),
+			Months:        monthOptions(),
 		},
 	})
 }
@@ -852,10 +856,37 @@ func aufgabeAusFormular(r *http.Request) (model.CareTask, string, api.TaskInput,
 		return entwurf, literText, in, fmt.Errorf("Intervall und Rot-Schwelle müssen Zahlen sein")
 	}
 	in.IntervalDays, in.RedAfterDays = intervall, rot
+	// Die Jahreszeit gehört zur regelmäßigen Aufgabe; bei einmaligen wird
+	// sie wie das Intervall schlicht übergangen. Fehlen die Felder ganz,
+	// bleibt die gespeicherte Jahreszeit stehen (Zeiger = unverändert).
+	if von, ok := formMonth(r, "seasonStartMonth"); ok {
+		in.SeasonStartMonth = &von
+		entwurf.SeasonStartMonth = von
+	}
+	if bis, ok := formMonth(r, "seasonEndMonth"); ok {
+		in.SeasonEndMonth = &bis
+		entwurf.SeasonEndMonth = bis
+	}
 	if err := in.Validate(); err != nil {
 		return entwurf, literText, in, err
 	}
 	return entwurf, literText, in, nil
+}
+
+// formMonth liest einen Monat aus der Auswahl der Jahreszeit. Der zweite
+// Rückgabewert sagt, ob das Feld überhaupt geschickt wurde — nur dann darf
+// eine gespeicherte Jahreszeit überschrieben werden. Unlesbares zählt als 0
+// („ganzjährig"); die eigentliche Prüfung macht TaskInput.Validate.
+func formMonth(r *http.Request, field string) (int, bool) {
+	raw, ok := r.Form[field]
+	if !ok || len(raw) == 0 {
+		return 0, false
+	}
+	m, err := strconv.Atoi(strings.TrimSpace(raw[0]))
+	if err != nil {
+		return 0, true
+	}
+	return m, true
 }
 
 // --- Einstellungen ----------------------------------------------------------

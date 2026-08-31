@@ -143,6 +143,10 @@ func Werkzeuge() []Werkzeug {
 				"termin":        schemaText("Nur einmalig: Fälligkeitsdatum (2026-08-20 oder RFC3339)"),
 				"sichtbarkeit": schemaAuswahl("Wer sieht die Aufgabe (Vorgabe: oeffentlich)",
 					"oeffentlich", "nur_mitglieder"),
+				"saisonVon": schemaGanzzahl("Nur regelmäßig: erster Monat der Jahreszeit (1–12). " +
+					"Ohne Angabe fällt die Aufgabe ganzjährig an"),
+				"saisonBis": schemaGanzzahl("Nur regelmäßig: letzter Monat der Jahreszeit (1–12). " +
+					"4 und 9 heißt April bis September; 11 und 2 geht über den Jahreswechsel"),
 			}),
 			Aendert: true,
 			Handler: werkzeugAufgabeAnlegen,
@@ -307,6 +311,8 @@ func werkzeugAufgabeAnlegen(args json.RawMessage, s Sitzung) (any, error) {
 		Einmalig      bool     `json:"einmalig"`
 		Termin        string   `json:"termin"`
 		Sichtbarkeit  string   `json:"sichtbarkeit"`
+		SaisonVon     *int     `json:"saisonVon"`
+		SaisonBis     *int     `json:"saisonBis"`
 	}
 	if err := entpacke(args, &in); err != nil {
 		return nil, err
@@ -317,7 +323,8 @@ func werkzeugAufgabeAnlegen(args json.RawMessage, s Sitzung) (any, error) {
 	}
 	eingabe := api.TaskInput{Kind: in.Art, Title: in.Titel, Liters: in.Liter,
 		IntervalDays: in.IntervallTage, RedAfterDays: in.RotNachTagen,
-		OneOff: in.Einmalig, DueDate: in.Termin, Sichtbarkeit: in.Sichtbarkeit}
+		OneOff: in.Einmalig, DueDate: in.Termin, Sichtbarkeit: in.Sichtbarkeit,
+		SeasonStartMonth: in.SaisonVon, SeasonEndMonth: in.SaisonBis}
 	if err := eingabe.Validate(); err != nil {
 		return nil, err
 	}

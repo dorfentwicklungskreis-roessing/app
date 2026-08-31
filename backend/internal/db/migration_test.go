@@ -147,6 +147,12 @@ func TestMigrationBestandsdatenBleiben(t *testing.T) {
 	if task.IntervalDays != 7 || task.RedAfterDays != 14 {
 		t.Errorf("Intervalle verändert: %+v", task)
 	}
+	// Die Jahreszeit (#78) kommt additiv dazu: Wer nichts angegeben hat,
+	// gießt weiter das ganze Jahr über.
+	if _, saisonal := task.SeasonOf(); saisonal {
+		t.Errorf("Bestandsaufgabe bekam eine Jahreszeit: %d/%d",
+			task.SeasonStartMonth, task.SeasonEndMonth)
+	}
 
 	cs, err := d.ListCompletions(1, 10)
 	if err != nil {

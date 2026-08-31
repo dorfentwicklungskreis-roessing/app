@@ -210,15 +210,11 @@ func AssemblePlacesFuer(d *db.DB, now time.Time, z model.Zugriff) ([]model.Place
 			// ausschreiben, ohne sich dabei zu offenbaren.
 			p.TraegerName = z.TraegerAnzeigeName(t)
 		}
-		pws := model.PlaceWithStatus{Place: p, Tasks: byPlace[p.ID], Status: model.StatusGreen}
+		pws := model.PlaceWithStatus{Place: p, Tasks: byPlace[p.ID]}
 		if pws.Tasks == nil {
 			pws.Tasks = []model.TaskWithStatus{}
 		}
-		for _, t := range pws.Tasks {
-			if t.Active {
-				pws.Status = model.Worst(pws.Status, t.Status)
-			}
-		}
+		pws.Status = model.PlaceStatus(pws.Tasks)
 		out = append(out, pws)
 	}
 	// Vergabestand je Aufgabe: wer hat zugesagt, wie viele helfen hier mit.
@@ -473,6 +469,15 @@ type TaskInput struct {
 	// wie die Aufgabe. Aus demselben Grund ein Zeiger: fehlt das Feld, bleibt
 	// die Einweisung, wie sie ist — ausdrückliche 0 nimmt sie weg.
 	BefaehigungID *int64 `json:"befaehigungId"`
+	// SeasonStartMonth/SeasonEndMonth: die Jahreszeit der Aufgabe, in ganzen
+	// Monaten und einschließlich (4 und 9 = April bis September). 0/0 nimmt
+	// sie wieder weg, die Aufgabe fällt dann ganzjährig an.
+	//
+	// Zeiger aus demselben Grund wie oben: Eine ältere App-Version schickt
+	// die Felder nicht mit, und ein geändertes Gießintervall darf einer
+	// Aufgabe nicht ihre Jahreszeit wegnehmen.
+	SeasonStartMonth *int `json:"seasonStartMonth"`
+	SeasonEndMonth   *int `json:"seasonEndMonth"`
 
 	// termin ist das geprüfte DueDate. Validate() setzt es, Apply() nutzt es.
 	termin *time.Time
@@ -502,9 +507,19 @@ func (in *TaskInput) Validate() error {
 			return err
 		}
 		in.termin = &termin
+		// Eine einmalige Aufgabe hat einen Termin, keinen Rhythmus — und
+		// damit auch keine Jahreszeit. Wer beides angibt, meint zwei
+		// verschiedene Dinge und bekommt eine Absage statt einer stillen
+		// Auslegung.
+		if seasonGiven(in.SeasonStartMonth) || seasonGiven(in.SeasonEndMonth) {
+			return errors.New("eine einmalige Aufgabe hat keine Jahreszeit: entweder Termin oder Zeitraum")
+		}
 		// Intervalle spielen bei einem Termin keine Rolle; sie werden
 		// bewusst genullt, damit nirgends zwei Wahrheiten stehen.
 		in.IntervalDays, in.RedAfterDays = 0, 0
+		// Eine vorher gespeicherte Jahreszeit fällt beim Umstellen weg.
+		null := 0
+		in.SeasonStartMonth, in.SeasonEndMonth = &null, &null
 		return nil
 	}
 	if in.DueDate != "" {
@@ -521,7 +536,27 @@ func (in *TaskInput) Validate() error {
 	if in.RedAfterDays < in.IntervalDays {
 		return errors.New("redAfterDays muss >= intervalDays sein")
 	}
+	if err := model.ValidSeasonMonths(monthOrZero(in.SeasonStartMonth),
+		monthOrZero(in.SeasonEndMonth)); err != nil {
+		return err
+	}
+	if in.SeasonStartMonth != nil && in.SeasonEndMonth != nil {
+		von, bis := model.NormalizeSeasonMonths(*in.SeasonStartMonth, *in.SeasonEndMonth)
+		in.SeasonStartMonth, in.SeasonEndMonth = &von, &bis
+	}
 	return nil
+}
+
+// seasonGiven sagt, ob wirklich eine Jahreszeit gemeint war — eine
+// mitgeschickte 0 heißt „ganzjährig" und ist keine.
+func seasonGiven(month *int) bool { return month != nil && *month != 0 }
+
+// monthOrZero liest einen optionalen Monat; fehlt er, gilt „ganzjährig".
+func monthOrZero(month *int) int {
+	if month == nil {
+		return 0
+	}
+	return *month
 }
 
 // ParseTermin liest das Fälligkeitsdatum einer einmaligen Aufgabe.
@@ -555,6 +590,12 @@ func (in *TaskInput) Apply(t *model.CareTask) {
 	}
 	if in.BefaehigungID != nil {
 		t.BefaehigungID = *in.BefaehigungID
+	}
+	if in.SeasonStartMonth != nil {
+		t.SeasonStartMonth = *in.SeasonStartMonth
+	}
+	if in.SeasonEndMonth != nil {
+		t.SeasonEndMonth = *in.SeasonEndMonth
 	}
 	t.Kind, t.Title = model.TaskKind(in.Kind), in.Title
 	t.Liters = in.Liters

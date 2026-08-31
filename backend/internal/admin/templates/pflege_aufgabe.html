@@ -67,6 +67,37 @@
           </div>
         </div>
 
+        <label class="fieldset-legend">Jahreszeit — bei regelmäßig</label>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="fieldset-legend" for="feld-season-start">Von Monat</label>
+            <select name="seasonStartMonth" id="feld-season-start" class="select w-full">
+              <option value="0">ganzjährig</option>
+              {{range .Data.Months}}
+                <option value="{{.Number}}"
+                        {{if eq .Number $.Data.Aufgabe.SeasonStartMonth}}selected{{end}}>{{.Name}}</option>
+              {{end}}
+            </select>
+          </div>
+          <div>
+            <label class="fieldset-legend" for="feld-season-end">Bis Monat</label>
+            <select name="seasonEndMonth" id="feld-season-end" class="select w-full">
+              <option value="0">ganzjährig</option>
+              {{range .Data.Months}}
+                <option value="{{.Number}}"
+                        {{if eq .Number $.Data.Aufgabe.SeasonEndMonth}}selected{{end}}>{{.Name}}</option>
+              {{end}}
+            </select>
+          </div>
+        </div>
+        <p class="text-sm text-base-content/70">
+          Beide Monate zählen ganz mit: April bis September heißt vom 1. April bis zum
+          30. September. Außerhalb ist die Aufgabe außer Dienst — sie wird weder gelb noch
+          rot, und niemand wird dafür gefragt. Steht der Anfang nach dem Ende
+          (November bis Februar), geht die Jahreszeit über den Jahreswechsel.
+          „Ganzjährig“ nimmt die Beschränkung wieder weg.
+        </p>
+
         <label class="fieldset-legend" for="feld-termin">Fällig am — bei einmalig</label>
         <input type="date" name="termin" id="feld-termin"
                value="{{datumFeld .Data.Aufgabe.DueDate}}" class="input w-full">

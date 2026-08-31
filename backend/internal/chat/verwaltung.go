@@ -79,6 +79,8 @@ func verwaltungsWerkzeuge() []Werkzeug {
 				"aktiv": schemaJaNein("Aufgabe aktiv?"),
 				"sichtbarkeit": schemaAuswahl("Wer sieht die Aufgabe", "oeffentlich",
 					"nur_mitglieder"),
+				"saisonVon": schemaGanzzahl("Erster Monat der Jahreszeit (1–12); 0 nimmt sie weg"),
+				"saisonBis": schemaGanzzahl("Letzter Monat der Jahreszeit (1–12); 0 nimmt sie weg"),
 			}),
 			Aendert: true,
 			Handler: werkzeugAufgabeAendern,
@@ -252,6 +254,8 @@ func werkzeugAufgabeAendern(args json.RawMessage, s Sitzung) (any, error) {
 		EntfernenWennErledigt *bool    `json:"entfernenWennErledigt"`
 		Aktiv                 *bool    `json:"aktiv"`
 		Sichtbarkeit          *string  `json:"sichtbarkeit"`
+		SaisonVon             *int     `json:"saisonVon"`
+		SaisonBis             *int     `json:"saisonBis"`
 	}
 	if err := entpacke(args, &in); err != nil {
 		return nil, err
@@ -269,6 +273,12 @@ func werkzeugAufgabeAendern(args json.RawMessage, s Sitzung) (any, error) {
 	uebernimm(&eingabe.DueDate, in.Termin)
 	uebernimm(&eingabe.RemoveWhenDone, in.EntfernenWennErledigt)
 	uebernimm(&eingabe.Sichtbarkeit, in.Sichtbarkeit)
+	if in.SaisonVon != nil {
+		eingabe.SeasonStartMonth = in.SaisonVon
+	}
+	if in.SaisonBis != nil {
+		eingabe.SeasonEndMonth = in.SaisonBis
+	}
 	if in.Liter != nil {
 		eingabe.Liters = in.Liter
 	}
@@ -574,6 +584,10 @@ func eingabeAus(t model.CareTask) api.TaskInput {
 		OneOff:         t.OneOff,
 		RemoveWhenDone: t.RemoveWhenDone,
 		Sichtbarkeit:   string(t.Sichtbarkeit),
+		// Die Jahreszeit wird mitgeführt, damit eine Änderung an etwas
+		// anderem sie nicht stillschweigend abräumt.
+		SeasonStartMonth: &t.SeasonStartMonth,
+		SeasonEndMonth:   &t.SeasonEndMonth,
 	}
 	if t.OneOff && t.DueDate != nil {
 		in.DueDate = t.DueDate.Format(time.RFC3339)

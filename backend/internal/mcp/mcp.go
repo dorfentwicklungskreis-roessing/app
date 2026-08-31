@@ -365,7 +365,10 @@ func (s *Server) registerTools() {
 				"z.B. Gießplan (kind=giessen, liters=10, intervalDays=7, redAfterDays=14) " +
 				"oder Jäten (kind=jaeten, intervalDays=21, redAfterDays=35) — oder EINMALIG " +
 				"mit Termin statt Intervall (oneOff=true, dueDate=2026-08-20), z.B. " +
-				"„einmal zum Bahnhof fahren\". Beides zusammen geht nicht.",
+				"„einmal zum Bahnhof fahren\". Beides zusammen geht nicht. " +
+				"Eine regelmäßige Aufgabe kann auf einen Teil des Jahres beschränkt werden " +
+				"(seasonStartMonth=4, seasonEndMonth=9 = April bis September); außerhalb " +
+				"ruht sie und erzeugt weder Ampel noch Erinnerung.",
 			Schema: obj([]string{"placeId", "kind"}, map[string]any{
 				"placeId":        integer("ID des Ortes"),
 				"kind":           enum("Art der Aufgabe", "giessen", "jaeten", "sonstiges"),
@@ -378,6 +381,10 @@ func (s *Server) registerTools() {
 				"oneOff":         boolean("Einmalige Aufgabe statt eines wiederkehrenden Plans"),
 				"dueDate":        str("Nur einmalig: Fälligkeitsdatum (2026-08-20 oder RFC3339). Gelb ab drei Tagen davor, rot danach"),
 				"removeWhenDone": boolean("Nach dem Erledigen von Karte und Liste nehmen (Erledigung zählt weiter für die Rangliste)"),
+				"seasonStartMonth": integer("Nur regelmäßig: erster Monat der Jahreszeit (1–12, einschließlich). " +
+					"Ohne Angabe fällt die Aufgabe ganzjährig an"),
+				"seasonEndMonth": integer("Nur regelmäßig: letzter Monat der Jahreszeit (1–12, einschließlich). " +
+					"Anfang größer als Ende geht über den Jahreswechsel, z.B. 11 bis 2 = November bis Februar"),
 			}),
 			Handler: s.toolCreateTask,
 		},
@@ -396,6 +403,9 @@ func (s *Server) registerTools() {
 				"dueDate":        str("Fälligkeitsdatum einmaliger Aufgaben (2026-08-20 oder RFC3339)"),
 				"removeWhenDone": boolean("Nach dem Erledigen entfernen"),
 				"active":         boolean("Aufgabe aktiv?"),
+				"seasonStartMonth": integer("Erster Monat der Jahreszeit (1–12); 0 nimmt die " +
+					"Jahreszeit weg, die Aufgabe fällt dann wieder ganzjährig an"),
+				"seasonEndMonth": integer("Letzter Monat der Jahreszeit (1–12); 0 = ganzjährig"),
 			}),
 			Handler: s.toolUpdateTask,
 		},
@@ -595,6 +605,9 @@ func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) 
 		Active         *bool    `json:"active"`
 		Sichtbarkeit   *string  `json:"sichtbarkeit"`
 		BefaehigungID  *int64   `json:"befaehigungId"`
+		// Jahreszeit: siehe model.Season. 0 nimmt sie weg.
+		SeasonStartMonth *int `json:"seasonStartMonth"`
+		SeasonEndMonth   *int `json:"seasonEndMonth"`
 	}
 	if err := json.Unmarshal(args, &in); err != nil {
 		return nil, err
@@ -638,17 +651,34 @@ func (s *Server) toolUpdateTask(args json.RawMessage, u auth.User) (any, error) 
 		}
 		t.DueDate = &termin
 	}
+	if in.SeasonStartMonth != nil {
+		t.SeasonStartMonth = *in.SeasonStartMonth
+	}
+	if in.SeasonEndMonth != nil {
+		t.SeasonEndMonth = *in.SeasonEndMonth
+	}
 	if t.OneOff {
 		if t.DueDate == nil {
 			return nil, fmt.Errorf("dueDate fehlt: eine einmalige Aufgabe braucht ein Fälligkeitsdatum")
 		}
 		// Intervalle spielen bei einem Termin keine Rolle.
 		t.IntervalDays, t.RedAfterDays = 0, 0
+		// Ein Termin hat keine Jahreszeit — wer beides angibt, meint zwei
+		// verschiedene Dinge.
+		if in.SeasonStartMonth != nil && *in.SeasonStartMonth != 0 ||
+			in.SeasonEndMonth != nil && *in.SeasonEndMonth != 0 {
+			return nil, fmt.Errorf("eine einmalige Aufgabe hat keine Jahreszeit: entweder Termin oder Zeitraum")
+		}
+		t.SeasonStartMonth, t.SeasonEndMonth = 0, 0
 	} else {
 		t.DueDate = nil
 		if t.IntervalDays <= 0 || t.RedAfterDays < t.IntervalDays {
 			return nil, fmt.Errorf("ungültige Intervalle: intervalDays > 0 und redAfterDays >= intervalDays nötig")
 		}
+		if err := model.ValidSeasonMonths(t.SeasonStartMonth, t.SeasonEndMonth); err != nil {
+			return nil, err
+		}
+		t.SeasonStartMonth, t.SeasonEndMonth = model.NormalizeSeasonMonths(t.SeasonStartMonth, t.SeasonEndMonth)
 	}
 	if err := s.DB.UpdateTask(t); err != nil {
 		return nil, err

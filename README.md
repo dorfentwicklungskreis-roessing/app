@@ -2,7 +2,8 @@
 
 Die App fürs Dorf: Login mit der **Rössing-ID**, danach eine Startseite mit
 Bereichen. Der erste Bereich heißt **„Mithelfen"** — was gerade im Dorf
-ansteht: Karte der Blumenkästen und Beete mit Ampel-Status (grün/gelb/rot),
+ansteht: Karte der Blumenkästen und Beete mit Ampel-Status (grün/gelb/rot,
+dazu grau für „außer Dienst"),
 Gieß- und Jätpläne, Erledigungen melden, Rangliste. Dazu **Mein Profil** und
 **Dorfbewohner**. Weitere Bereiche kommen; das Gießen ist ausdrücklich nur der
 Anfang.
@@ -129,6 +130,22 @@ keine der beiden Apps noch einmal.
   sobald er verstrichen ist; erledigt bleibt sie grün und wird nicht wieder
   fällig. Der globale **Hitzefaktor** (z.B. 0.5) beschleunigt nur
   Gieß-Aufgaben — auf einen Termin wirkt er nicht.
+  Eine **regelmäßige** Aufgabe kann außerdem sagen, in welchem Teil des
+  Jahres sie überhaupt anfällt: `seasonStartMonth`/`seasonEndMonth`, ganze
+  Monate und einschließlich (4 und 9 = 1. April bis 30. September, in
+  Ortszeit des Dorfes). Steht der Anfang nach dem Ende, geht der Zeitraum
+  über den Jahreswechsel (11/2 = November bis Februar). Ohne Angabe (0/0)
+  fällt sie ganzjährig an — so laufen alle Bestandsaufgaben weiter.
+  Außerhalb ihrer Jahreszeit ist die Aufgabe **außer Dienst**: Der Status
+  heißt dann `dormant`, sie wird weder gelb noch rot, die Vergabe fragt
+  niemanden, und es geht keine Erinnerung raus. Sie wird dabei ausdrücklich
+  **nicht grün** — ein Beet, an dem im Winter nichts zu jäten ist, ist nicht
+  in Ordnung gebracht worden. Der Zähler läuft im Hintergrund weiter, nur die
+  Ampel schweigt: Wer im September zuletzt gejätet hat, ist am 1. April
+  wieder fällig, ohne dass jemand etwas anfassen muss. Ein Ort, dessen
+  sämtliche aktiven Aufgaben ruhen, ruht mit; steht eine ganzjährige daneben,
+  entscheidet die. Eine **einmalige** Aufgabe hat einen Termin und deshalb
+  keine Jahreszeit — beides zusammen wird abgewiesen.
   Mit `removeWhenDone` verschwindet eine einmalige Aufgabe nach der Meldung
   von Karte und Liste. Gelöscht wird sie dabei **nicht**, sondern *abgeräumt*
   (`removed_at`): An ihr hängen die Erledigungen, und die zählen weiter für
@@ -636,7 +653,8 @@ Code-Tausch, Werkzeugaufruf — wird in `backend/e2e/web/tests/mcp-connector.spe
 gegen ein echtes Zitadel durchlaufen.
 
 Tools: `orte_liste`, `ort_anlegen/aendern/loeschen`,
-`aufgabe_anlegen/aendern/loeschen` (regelmäßig mit `intervalDays`, einmalig
+`aufgabe_anlegen/aendern/loeschen` (regelmäßig mit `intervalDays` und
+wahlweise einer Jahreszeit `seasonStartMonth`/`seasonEndMonth`, einmalig
 mit `oneOff` + `dueDate`, dazu `removeWhenDone`), `erledigung_melden`,
 `erledigung_zuruecknehmen`, `rangliste`, `hitzefaktor_setzen`.
 
