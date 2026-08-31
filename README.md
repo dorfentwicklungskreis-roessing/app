@@ -57,12 +57,20 @@ keine der beiden Apps noch einmal.
     „Mithelfen" liegt unter `/admin/mithelfen/…` (der frühere Pfad
     `/admin/dorfpflege/…` leitet dauerhaft per 308 dorthin um)
   - SQLite im WAL-Modus auf einem PVC (`/data/dorfapp.sqlite`)
-- **Träger**: Alles, was in der App steht, gehört einem **Verein oder einer
-  Gruppe**. Die Dorf-App vermittelt ausdrücklich **nicht** zwischen
-  Privatleuten, sondern verwaltet die **Allmende** — das, was dem Dorf
-  gemeinsam gehört. Aufgaben entstehen deshalb nicht spontan von Einzelnen,
-  sondern werden von Trägern **kuratiert** eingestellt; neben den bestehenden
-  Vereinen entsteht keine Parallelstruktur.
+- **Träger**: Alles, was an Aufgaben in der App steht, gehört einem **Verein
+  oder einer Gruppe**. Aufgaben entstehen nicht spontan von Einzelnen, sondern
+  werden von Trägern **kuratiert** eingestellt; neben den bestehenden Vereinen
+  entsteht keine Parallelstruktur. Das bleibt der Kern: Die Dorf-App verwaltet
+  die **Allmende** — das, was dem Dorf gemeinsam gehört.
+  **Sie ist aber nicht darauf beschränkt.** Seit dem 31.08.2026 ist sie das
+  Dach für das Dörfliche überhaupt, und dazu gehört auch Vermittlung zwischen
+  Privatleuten: Der **Verleih** („Maschinchenring", `mieten.xn--rssing-wxa.de`)
+  ist ein eigener Dienst mit eigener Adresse, den die Apps unmittelbar
+  aufrufen, und er vermittelt Geräte von Nachbar zu Nachbar. Der frühere Satz
+  „vermittelt ausdrücklich nicht zwischen Privatleuten" ist damit gefallen.
+  Er hatte einen guten Grund — keine Parallelstruktur zu den Vereinen zu
+  bauen — und dieser Grund gilt weiter für **Aufgaben**. Für einen Dienst, den
+  es im Dorf längst gibt und der niemandem etwas wegnimmt, galt er nie.
   **Ein Träger = ein Zitadel-Projekt** mit genau zwei Rollen, `admin` und
   `mitglied` (ohne Vereinspräfix — sie sind im Projekt eindeutig).
   Ein Träger hat einen **Zulassungsstand** (`beantragt`, `zugelassen`,

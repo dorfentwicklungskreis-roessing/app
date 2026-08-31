@@ -132,10 +132,27 @@ Wird ein Befund doch mitgegeben, weil er Zeit spart, dann ausdrücklich als
 
 ## Träger (Vereine und Gruppen)
 
-Die Dorf-App verwaltet die **Allmende**, sie vermittelt nicht zwischen
-Privatleuten. Jeder Ort und jede Aufgabe gehört einem **Träger**; Aufgaben
-werden von Vereinen und Gruppen **kuratiert** eingestellt. **Keine
-Parallelstrukturen zu bestehenden Vereinen aufbauen.**
+Jeder Ort und jede Aufgabe gehört einem **Träger**; Aufgaben werden von
+Vereinen und Gruppen **kuratiert** eingestellt. **Keine Parallelstrukturen zu
+bestehenden Vereinen aufbauen.** Das ist der Kern: Die Dorf-App verwaltet die
+**Allmende**.
+
+**Sie ist aber nicht darauf beschränkt** (Entscheidung vom 31.08.2026). Die
+Dorf-App ist das Dach für das Dörfliche überhaupt — auch für Vermittlung
+zwischen Privatleuten, wie sie der **Verleih** betreibt. Der frühere Satz „sie
+vermittelt nicht zwischen Privatleuten" stand hier, um keine Parallelstruktur
+neben den Vereinen zu bauen; dafür gilt weiter, was oben steht. Einen Dienst
+aufzunehmen, den es im Dorf längst gibt und der keinem Verein etwas wegnimmt,
+war davon nie gemeint. Wer den alten Satz sucht: Er ist bewusst gestrichen,
+nicht vergessen.
+
+Aufnehmen heißt dabei nicht einverleiben: **Getrennte Dienste unter eigenen
+Adressen, kein App-Monolith.** Der Verleih bleibt unter
+`mieten.xn--rssing-wxa.de` mit eigenem Backend und eigener Inferenz; die Apps
+rufen ihn unmittelbar auf, das Go-Backend ist kein Weiterleiter. Zusammen hält
+alles **eine Identität** (Rössing-ID), nicht ein gemeinsames Backend. Der
+Präzedenzfall steht im Haus: Die Veranstaltungen kommen von einem fremden
+Server über einen eigenen kleinen Client, und das Backend weiß nichts davon.
 
 - **Ein Träger = ein Zitadel-Projekt** mit genau zwei Rollen: `admin` und
   `mitglied`. **Keine Rollennamen mit Vereinspräfix.**
