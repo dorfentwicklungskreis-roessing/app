@@ -2,7 +2,9 @@
 package db
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -297,6 +299,48 @@ func (d *DB) WateringFactor() (float64, error) {
 		return 1.0, nil
 	}
 	return f, nil
+}
+
+// SessionKey liefert den Schlüssel, mit dem die Web-Verwaltung ihre
+// Cookies signiert — und legt ihn beim ersten Aufruf an.
+//
+// **Warum in der Datenbank und nicht in einem Secret:** Ohne einen festen
+// Schlüssel würfelt der Server bei jedem Start einen neuen, und dann ist
+// jede Anmeldung nach dem nächsten Rollout ungültig. An einem Tag mit
+// mehreren Auslieferungen heißt das: alle paar Stunden neu anmelden. Ein
+// Secret im Cluster wäre der übliche Weg, verlangt aber, dass jemand es
+// anlegt und versiegelt — und wer das vergisst, merkt es erst, wenn sich
+// die Leute beschweren.
+//
+// Die Datenbank liegt ohnehin auf einem PVC, das Rollouts überlebt, und der
+// Server ist der Einzige, der sie liest. Der Schlüssel entsteht damit von
+// selbst und bleibt, ohne dass ihn ein Mensch anfassen muss.
+//
+// SESSION_KEY aus der Umgebung hat weiterhin Vorrang: Ausdrücklich schlägt
+// stillschweigend.
+func (d *DB) SessionKey() ([]byte, error) {
+	var v string
+	err := d.sql.QueryRow(`SELECT value FROM settings WHERE key='admin_session_key'`).Scan(&v)
+	if err == nil {
+		if roh, derr := base64.StdEncoding.DecodeString(v); derr == nil && len(roh) >= 32 {
+			return roh, nil
+		}
+		// Unbrauchbar gespeichert (von Hand verändert?) — neu erzeugen statt
+		// mit einem zu kurzen Schlüssel weiterzumachen.
+	} else if err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	roh := make([]byte, 32)
+	if _, err := rand.Read(roh); err != nil {
+		return nil, err
+	}
+	if _, err := d.sql.Exec(`INSERT INTO settings(key,value) VALUES('admin_session_key',?)
+		ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+		base64.StdEncoding.EncodeToString(roh)); err != nil {
+		return nil, err
+	}
+	return roh, nil
 }
 
 func (d *DB) SetWateringFactor(f float64) error {

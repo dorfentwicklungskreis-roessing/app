@@ -274,6 +274,8 @@ func (a *App) requireAdmin(h func(http.ResponseWriter, *http.Request, session)) 
 			http.Redirect(w, r, "/admin/", http.StatusSeeOther)
 			return
 		}
+		// Wer die Verwaltung benutzt, bleibt angemeldet.
+		a.sitzungAuffrischen(w, s)
 		h(w, r, s)
 	}
 }
@@ -297,6 +299,9 @@ func (a *App) handleAdminHome(w http.ResponseWriter, r *http.Request) {
 		a.render(w, r, http.StatusOK, "anmelden", view{Title: "Anmelden"})
 		return
 	}
+	// Auch hier verlängern: Die Startseite ist genau die Stelle, an die
+	// jemand nach ein paar Tagen zurückkommt.
+	a.sitzungAuffrischen(w, s)
 	a.render(w, r, http.StatusOK, "verwaltung", view{Title: "Verwaltung", Nav: "verwaltung",
 		Data: a.bereichsDaten()})
 }
