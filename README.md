@@ -190,6 +190,16 @@ keine der beiden Apps noch einmal.
   Nachtrag, den die Verwaltung unter fremdem Namen eingetragen hat, die
   genannte Person. Die SQL-Gruppierung bleibt unangetastet, ersetzt wird erst
   für die Anzeige. Datenschutz-Folgen: siehe `backend/SICHERHEIT.md`.
+  **Spitzname statt Leerstelle**: Hat jemand weder Nickname noch Anzeigenamen
+  und liefert auch die Rössing-ID keinen Namen, stand die Person bisher
+  namenlos in der Rangliste — mit Punkten, Litern und Auszeichnungen, aber
+  ohne Beschriftung. Statt der Leerstelle steht dort jetzt ein freundlicher
+  Spitzname („Lustiger Lurch"), der allein aus der Zitadel-Kennung entsteht
+  (`model.AnonymousName`): dieselbe Person heißt nach jedem Neustart und in
+  jeder Kopie der Datenbank gleich, und aus dem Namen lässt sich nichts über
+  sie ableiten. Er steht **hinter** jedem echten Namen und macht niemanden
+  sichtbarer: Wer weder Anzeigenamen noch Nickname freigegeben hat, fehlt
+  weiterhin in `GET /api/v1/members`.
 - **Push-Benachrichtigungen**: Neben der Abrufliste (`GET
   /api/v1/me/notifications`) verschickt der Server Anfragen und Hinweise über
   **Firebase Cloud Messaging** (`internal/push`, HTTP v1, Zugriffstoken aus

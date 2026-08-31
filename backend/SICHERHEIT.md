@@ -202,6 +202,33 @@ gespeicherter Name); erst ganz zum Schluss, nach Auszeichnungen und der Suche
 nach dem eigenen Eintrag, wird der Anzeigename ersetzt. Dadurch spaltet sich
 keine Person in zwei Zeilen, wenn sie sich umbenennt.
 
+### Spitzname statt Leerstelle (Stand 31.08.2026)
+
+Hat eine Person weder Nickname noch Anzeigenamen **und** liefert ihre
+Rössing-ID keinen Namen (`name` und `preferred_username` beide leer), stand sie
+namenlos in der Rangliste — die Zeile war da, mit Punkten, Litern und
+Auszeichnungen, nur ohne Beschriftung. An dieser Stelle steht jetzt ein
+Spitzname („Lustiger Lurch", `model.AnonymousName`).
+
+- **Woher er kommt:** SHA-256 über eine feste Domänentrennung plus die
+  Zitadel-Kennung; je vier Byte wählen ein Adjektiv und ein Tier aus zwei von
+  Hand gepflegten Wortlisten im Quelltext (`internal/model/anonymousname.go`).
+  Kein Zufall, kein Zustand, keine Spalte — dieselbe Kennung ergibt in jedem
+  Prozess, nach jedem Neustart und in jeder Sicherungskopie denselben Namen.
+- **Was er verrät:** nichts. Weder Name, Nickname, E-Mail noch Telefon gehen
+  ein, aus dem Spitznamen ist also keines dieser Felder zurückzurechnen. Er ist
+  ein stabiles Pseudonym zur Kennung — und die Kennung (`userSub`) steht in
+  denselben Antworten ohnehin, es entsteht also keine neue Verkettbarkeit.
+- **Was er nicht tut:** Er macht niemanden sichtbarer. `Profile.AsMember`
+  bleibt unverändert — wer weder Anzeigenamen noch Nickname freigegeben hat,
+  fehlt in `GET /api/v1/members` weiterhin ganz. Der Spitzname füllt nur
+  Leerstellen dort, wo die Person ohnehin schon in einer Liste steht.
+- **Beleidigungsfreiheit** ist geprüfte Eigenschaft, nicht Sorgfalt:
+  `TestWortlistenSindHarmlos` geht alle 784 Paarungen durch und weist sowohl
+  einzelne Wörter als auch feststehende herabsetzende Kombinationen ab.
+  `TestAnonymousNameIstStabil` hält ein paar Namen fest verdrahtet — er schlägt
+  an, sobald eine Änderung der Wortlisten alle Namenlosen umbenennen würde.
+
 ### Migration
 
 `CREATE TABLE IF NOT EXISTS profiles` — rein additiv. An `places`,
