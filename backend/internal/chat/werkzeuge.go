@@ -11,6 +11,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/auth"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
 
 // Die Werkzeuge des Chats.
@@ -45,6 +46,10 @@ type Sitzung struct {
 	Now     time.Time
 	Zugriff model.Zugriff
 	Nutzer  auth.User
+	// Zusteller verschickt die Hinweise, die beim Pausieren und Löschen
+	// fällig werden. Nil ist zulässig — dann bleibt es bei der Abrufliste,
+	// genau wie in der REST-API ohne Push-Schlüssel.
+	Zusteller vergabe.Zusteller
 }
 
 // Werkzeug ist ein Werkzeug des Chats.
@@ -64,7 +69,7 @@ type Werkzeug struct {
 // ein eigener Dienst unter mieten.xn--rssing-wxa.de mit eigenen Werkzeugen;
 // hier gäbe es davon eine zweite, schlechtere Fassung.
 func Werkzeuge() []Werkzeug {
-	return []Werkzeug{
+	basis := []Werkzeug{
 		{
 			Name: "orte_liste",
 			Beschreibung: "Listet die Pflege-Orte des Dorfes (Blumenkästen, Beete, …) mit ihren " +
@@ -155,6 +160,9 @@ func Werkzeuge() []Werkzeug {
 			Handler: werkzeugErledigungMelden,
 		},
 	}
+	// Was am MCP-Endpunkt geht, geht auch hier — nur eben in der Sicht der
+	// fragenden Person statt in der des Betreibers (siehe verwaltung.go).
+	return append(basis, verwaltungsWerkzeuge()...)
 }
 
 // Beschreibungen liefert die Werkzeuge in der Form, die die API erwartet.
@@ -303,21 +311,9 @@ func werkzeugAufgabeAnlegen(args json.RawMessage, s Sitzung) (any, error) {
 	if err := entpacke(args, &in); err != nil {
 		return nil, err
 	}
-	ort, err := s.DB.GetPlace(in.OrtID)
-	if err != nil {
-		return nil, fmt.Errorf("Diesen Ort gibt es nicht (%d).", in.OrtID)
-	}
-	traeger, err := s.DB.GetTraeger(ort.TraegerID)
+	ort, _, err := verwaltbarerOrt(s, in.OrtID)
 	if err != nil {
 		return nil, err
-	}
-	// Was man nicht sehen darf, gibt es für einen nicht — der Ort wird nicht
-	// über eine Fehlermeldung verraten.
-	if !s.Zugriff.SiehtTraeger(*traeger) && !s.Zugriff.Mitglied.IstMitglied(traeger.ProjektID) {
-		return nil, fmt.Errorf("Diesen Ort gibt es nicht (%d).", in.OrtID)
-	}
-	if !s.Zugriff.DarfVerwalten(*traeger) {
-		return nil, abgelehnt(s, *traeger)
 	}
 	eingabe := api.TaskInput{Kind: in.Art, Title: in.Titel, Liters: in.Liter,
 		IntervalDays: in.IntervallTage, RedAfterDays: in.RotNachTagen,

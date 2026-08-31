@@ -168,7 +168,7 @@ func main() {
 		slog.Info("MCP-Server aktiv unter /mcp (OAuth + DCR)", "issuer", issuer)
 		// Chat: dieselben Daten in normalem Deutsch, in der Sicht der
 		// fragenden Person. Ohne ANTHROPIC_API_KEY schaltet er sich ab.
-		chat.Register(mux, auth.Middleware(verifier), chat.AusUmgebung(database, mitglieder))
+		chat.Register(mux, auth.Middleware(verifier), chat.AusUmgebung(database, mitglieder, zusteller))
 		// Startseite und Verwaltung. Ohne ADMIN_CLIENT_ID bleibt es bei der
 		// Startseite; die Verwaltungsseiten werden dann nicht registriert.
 		clientID := os.Getenv("ADMIN_CLIENT_ID")

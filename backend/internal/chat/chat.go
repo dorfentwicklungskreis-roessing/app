@@ -19,6 +19,7 @@ import (
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/db"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/mitglied"
 	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/model"
+	"github.com/dorfentwicklungskreis-roessing/app/backend/internal/vergabe"
 )
 
 // Grenzen des Gesprächs.
@@ -55,7 +56,11 @@ type Config struct {
 	// Anbieter ist der Zugang zur Claude-API. Nil heißt: kein Schlüssel
 	// eingerichtet, der Chat schaltet sich verständlich ab.
 	Anbieter *Anbieter
-	Now      func() time.Time
+	// Zusteller verschickt die Hinweise, die beim Pausieren und Löschen
+	// fällig werden — derselbe Weg wie aus der REST-API. Wer über den Chat
+	// eine Aufgabe abräumt, muss die Zusagenden genauso erreichen.
+	Zusteller vergabe.Zusteller
+	Now       func() time.Time
 	// MaxRunden, Frist und LimitProStunde übernehmen bei 0 die Vorgaben.
 	MaxRunden      int
 	Frist          time.Duration
@@ -70,10 +75,11 @@ type Config struct {
 //	CHAT_AUFWAND        low | medium | high | xhigh | max | aus
 //	CHAT_RUNDEN         Werkzeugrunden je Frage
 //	CHAT_LIMIT_PRO_STUNDE  Fragen je Person und Stunde
-func AusUmgebung(database *db.DB, mitglieder mitglied.Quelle) Config {
+func AusUmgebung(database *db.DB, mitglieder mitglied.Quelle, zusteller vergabe.Zusteller) Config {
 	return Config{
 		DB:             database,
 		Mitglieder:     mitglieder,
+		Zusteller:      zusteller,
 		Anbieter:       AnbieterAusUmgebung(),
 		MaxRunden:      envZahl("CHAT_RUNDEN", StandardRunden),
 		LimitProStunde: envZahl("CHAT_LIMIT_PRO_STUNDE", StandardLimit),
@@ -237,8 +243,9 @@ func (s *Server) handleFrage(w http.ResponseWriter, r *http.Request) {
 		// Werkzeugrunden derselben Frage benutzt. Sonst könnte eine
 		// Mitgliedschaft mitten im Gespräch kippen, und die Antwort mischte
 		// zwei Sichten.
-		Zugriff: mitglied.Zugriff(ctx, s.cfg.Mitglieder, nutzer),
-		Nutzer:  nutzer,
+		Zugriff:   mitglied.Zugriff(ctx, s.cfg.Mitglieder, nutzer),
+		Nutzer:    nutzer,
+		Zusteller: s.cfg.Zusteller,
 	}
 
 	aus, err := s.gespraech(ctx, sitzung, frage, ein.Verlauf)
