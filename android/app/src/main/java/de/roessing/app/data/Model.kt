@@ -178,6 +178,15 @@ data class PlaceDto(
      * Sichtbarkeitsregel zweimal.
      */
     val traegerName: String = "",
+    /**
+     * Die Kennung desselben Trägers — der Weg von hier zu ihm.
+     *
+     * Sie steht auch dann im JSON, wenn der Name verdeckt ist. Ob der Weg
+     * angeboten wird, entscheidet die App trotzdem nicht an dieser Zahl,
+     * sondern am Verzeichnis: Steht der Träger nicht darin, hat der Server
+     * ihn für diese Person nicht vorgesehen.
+     */
+    val traegerId: Long = 0,
     val tasks: List<TaskDto> = emptyList(),
 ) {
     val careStatus: CareStatus get() = parseStatus(status)

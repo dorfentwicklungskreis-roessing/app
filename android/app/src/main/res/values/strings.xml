@@ -410,4 +410,61 @@
     <string name="rental_block_reason">Grund (freiwillig)</string>
     <string name="rental_block_note">Für andere sieht die Sperre aus wie jeder belegte Zeitraum — ohne Grund und ohne Namen. Eine bestehende Buchung verdrängt sie nicht.</string>
     <string name="rental_block_saving">Wird gesperrt …</string>
+
+    <!-- Träger: die Vereine und Gruppen des Dorfes. Wer was betreut, wer
+         dazugehört, und wie man mitmacht. Was jemand sehen und tun darf,
+         entscheidet der Server — hier stehen nur die Worte dafür. -->
+    <string name="area_traeger_title">Vereine und Gruppen</string>
+    <string name="area_traeger_subtitle">Wer im Dorf was betreut — und wie du mitmachst.</string>
+    <string name="traeger_title">Vereine und Gruppen</string>
+    <plurals name="traeger_open_requests_hint">
+        <item quantity="one">Eine Anfrage wartet auf dich</item>
+        <item quantity="other">%1$d Anfragen warten auf dich</item>
+    </plurals>
+    <string name="traeger_empty_title">Noch keine Vereine im Verzeichnis</string>
+    <string name="traeger_empty_text">Sobald ein Verein oder eine Gruppe zugelassen ist, steht sie hier — mit ihren Arbeitskreisen und dem Weg zum Mitmachen.</string>
+    <string name="traeger_member_badge">Du bist dabei</string>
+    <string name="traeger_closed_badge">Geschlossene Gruppe</string>
+    <string name="traeger_pending_badge">Anfrage läuft</string>
+    <string name="traeger_joinable_badge">Mitmachen möglich</string>
+    <string name="traeger_open_badge">%1$d offen</string>
+    <string name="traeger_my_requests">Deine Anfragen</string>
+    <string name="traeger_my_request_pending">Liegt beim Vorstand.</string>
+    <string name="traeger_state_heading">Wie dieser Träger steht</string>
+    <string name="traeger_status_approved">Zugelassen</string>
+    <string name="traeger_status_pending">Noch nicht zugelassen</string>
+    <string name="traeger_status_blocked">Gesperrt</string>
+    <string name="traeger_visibility_open">Offen für alle im Dorf</string>
+    <string name="traeger_visibility_closed">Geschlossene Gruppe</string>
+    <string name="traeger_parent">Arbeitskreis von %1$s</string>
+    <string name="traeger_working_groups">Arbeitskreise</string>
+    <string name="traeger_working_groups_hint">Jeder Arbeitskreis entscheidet selbst, wer bei ihm mitmacht — eine Mitgliedschaft im Verein ist keine im Arbeitskreis.</string>
+    <string name="traeger_places">Orte dieses Trägers</string>
+    <string name="traeger_places_hint">Was hier ansteht, findest du auch im Bereich Mithelfen.</string>
+    <string name="traeger_not_found_title">Diesen Träger gibt es nicht</string>
+    <string name="traeger_not_found_text">Vielleicht wurde er gesperrt — oder er steht nicht für dich im Verzeichnis.</string>
+
+    <!-- Mitmachen sagen -->
+    <string name="traeger_join_heading">Mitmachen</string>
+    <string name="traeger_join">Ich will mitmachen</string>
+    <string name="traeger_join_intro">Schreib dem Vorstand von %1$s kurz, warum du dabei sein möchtest. Ein Satz reicht — er ist freiwillig.</string>
+    <string name="traeger_join_placeholder">Zum Beispiel: Ich wohne neben dem Beet und würde gern mitjäten.</string>
+    <string name="traeger_join_send">Anfrage abschicken</string>
+    <string name="traeger_joined">Deine Anfrage ist raus. Der Vorstand entscheidet sie.</string>
+    <string name="traeger_i_am_member">Du gehörst dazu.</string>
+    <string name="traeger_my_request_state">Deine Anfrage liegt beim Vorstand.</string>
+
+    <!-- Anträge entscheiden (Vorstand) -->
+    <string name="traeger_requests">Anfragen</string>
+    <string name="traeger_requests_empty">Gerade wartet niemand.</string>
+    <string name="traeger_requests_hint">Eine Freigabe trägt die Mitgliedschaft in die Rössing-ID ein. Klappt das nicht, bleibt die Anfrage offen — und es steht dabei, warum.</string>
+    <string name="traeger_grant">Aufnehmen</string>
+    <string name="traeger_reject">Ablehnen</string>
+    <string name="traeger_granted">%1$s gehört jetzt dazu.</string>
+    <string name="traeger_rejected">Abgelehnt. %1$s bleibt außen vor.</string>
+    <string name="traeger_add_member">Jemanden direkt aufnehmen</string>
+    <string name="traeger_add_member_search">Name suchen</string>
+    <string name="traeger_add_member_hint">Aufgenommen wird sofort: Die Mitgliedschaft wird in die Rössing-ID geschrieben, nicht bloß hier vermerkt.</string>
+    <string name="traeger_add_member_loading">Die Dorfbewohner werden geladen …</string>
+    <string name="traeger_failed_title">Das hat nicht geklappt</string>
 </resources>

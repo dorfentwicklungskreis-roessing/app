@@ -34,5 +34,20 @@ class TraegerAmOrtTest {
             """{"id":1,"name":"Unter den Eichen","lat":52.18,"lon":9.81}""",
         )
         assertTrue(ort.traegerName.isEmpty())
+        assertEquals(0L, ort.traegerId)
+    }
+
+    /**
+     * Die Kennung ist der Weg von hier zum Träger. Angeboten wird er
+     * trotzdem nicht an dieser Zahl, sondern am Verzeichnis des Servers —
+     * siehe TraegerViewModelTest.
+     */
+    @Test
+    fun `die Kennung des Traegers kommt mit`() {
+        val ort = json.decodeFromString<PlaceDto>(
+            """{"id":3,"name":"Beet vor dem Dorfgemeinschaftshaus","lat":52.18,"lon":9.81,
+                "traegerName":"AK 2 Umwelt und Natur","traegerId":2}""",
+        )
+        assertEquals(2L, ort.traegerId)
     }
 }

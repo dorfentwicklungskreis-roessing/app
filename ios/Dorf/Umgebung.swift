@@ -29,6 +29,13 @@ final class AppUmgebung: ObservableObject {
     /// zählte dann etwas anderes, als die Liste dahinter zeigt.
     let orte: OrteModell
 
+    /// Die Vereine und Gruppen des Dorfes — aus demselben Grund **ein**
+    /// Modell für alle: Die Startseite zeigt daraus nur, wie viele Anfragen
+    /// auf eine Entscheidung warten, das Verzeichnis die ganze Liste, und die
+    /// Ortsansicht fragt es, ob es zu ihrem Träger überhaupt einen Weg gibt.
+    /// Zwei Modelle hießen zwei Abrufe und zwei Stände.
+    let traeger: TraegerModel
+
     /// Wer gerade angemeldet ist. Wird nach der Anmeldung einmal geladen und
     /// danach von den Bereichen mitbenutzt — `isAdmin` entscheidet, ob der
     /// Bereich „Verwaltung" überhaupt auftaucht.
@@ -59,6 +66,7 @@ final class AppUmgebung: ObservableObject {
             await anmeldung.frischesToken()
         })
         self.orte = OrteModell(api: api)
+        self.traeger = TraegerModel(api: api)
         // Die Benachrichtigungen brauchen denselben Zugang: Sie melden die
         // Gerätekennung an und beim Abmelden wieder ab. Gefragt wird damit
         // noch niemand — das passiert erst beim Eintragen als Helfer:in.
@@ -68,13 +76,14 @@ final class AppUmgebung: ObservableObject {
 
     /// Für Vorschauen und Tests: eine Umgebung, die nichts abruft.
     init(anmeldung: Anmeldung, api: DorfApi, ich: Ich?, orte: OrteModell? = nil,
-         rental: RentalClient? = nil) {
+         rental: RentalClient? = nil, traeger: TraegerModel? = nil) {
         self.anmeldung = anmeldung
         self.api = api
         self.rental = rental ?? RentalClient(tokenProvider: { [anmeldung] in
             await anmeldung.frischesToken()
         })
         self.orte = orte ?? OrteModell(api: api)
+        self.traeger = traeger ?? TraegerModel(api: api)
         self.ich = ich
         kinderWeiterreichen()
     }
@@ -83,6 +92,7 @@ final class AppUmgebung: ObservableObject {
         weiterleitungen = [
             anmeldung.objectWillChange.sink { [weak self] in self?.objectWillChange.send() },
             orte.objectWillChange.sink { [weak self] in self?.objectWillChange.send() },
+            traeger.objectWillChange.sink { [weak self] in self?.objectWillChange.send() },
         ]
     }
 
@@ -115,6 +125,7 @@ final class AppUmgebung: ObservableObject {
     func erneutVersuchen() async {
         await ichLaden()
         await orte.laden()
+        await traeger.load()
     }
 
     func profilUebernehmen(_ profil: Profil) {

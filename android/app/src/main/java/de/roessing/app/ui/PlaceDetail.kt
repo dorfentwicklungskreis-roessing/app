@@ -1,5 +1,6 @@
 package de.roessing.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -89,6 +90,12 @@ fun PlaceDetail(
     onSignup: (placeId: Long, taskKind: String?, an: Boolean) -> Unit = { _, _, _ -> },
     onClaim: (assignmentId: Long) -> Unit = {},
     onRelease: (assignmentId: Long) -> Unit = {},
+    /**
+     * Der Weg zum Träger dieses Ortes — null heißt: Es gibt keinen. Ob es
+     * einen gibt, entscheidet nicht diese Ansicht, sondern das Verzeichnis
+     * des Servers: Was nicht darin steht, gibt es für diese Person nicht.
+     */
+    onTraeger: (() -> Unit)? = null,
 ) {
     LaunchedEffect(place.id) {
         place.tasks.forEach { onLoadHistory(it.id) }
@@ -114,7 +121,14 @@ fun PlaceDetail(
         // mit Einweisung anfassen darf, ist genau das die wichtigste Angabe.
         if (place.traegerName.isNotEmpty()) {
             Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = if (onTraeger == null) {
+                    Modifier
+                } else {
+                    Modifier.clickable(onClick = onTraeger)
+                },
+            ) {
                 Icon(
                     Icons.Filled.Group,
                     contentDescription = null,
@@ -125,7 +139,11 @@ fun PlaceDetail(
                 Text(
                     place.traegerName,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (onTraeger == null) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
                     modifier = Modifier.testTag("ort-traeger"),
                 )
             }

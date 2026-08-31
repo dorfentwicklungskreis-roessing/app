@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Handyman
 import androidx.compose.material.icons.filled.LocalFlorist
 import androidx.compose.material.icons.filled.Person
@@ -47,7 +48,9 @@ import de.roessing.app.ui.theme.statusFarben
  * Die Bereiche der App. „Mithelfen" ist der erste — weitere kommen, deshalb
  * ist die Startseite eine Übersicht und nicht die Gieß-Karte.
  */
-enum class Bereich { START, MITHELFEN, VERANSTALTUNGEN, VERLEIH, PROFIL, DORFBEWOHNER, IDEEN, CHAT }
+enum class Bereich {
+    START, MITHELFEN, VERANSTALTUNGEN, VERLEIH, PROFIL, DORFBEWOHNER, IDEEN, CHAT, TRAEGER,
+}
 
 /**
  * Startseite: freundlicher Einstieg mit dem Namen aus dem Profil, darunter
@@ -62,6 +65,12 @@ fun StartScreen(
     modifier: Modifier = Modifier,
     /** Only accounts holding the role "admin" see the hint on administering. */
     isAdmin: Boolean = false,
+    /**
+     * Wie viele Beitrittsanfragen auf **meine** Entscheidung warten. Die Zahl
+     * schickt der Server nur denen mit, die den Träger verwalten — wer nichts
+     * zu entscheiden hat, sieht deshalb gar nichts.
+     */
+    offeneTraegerAnfragen: Int = 0,
     notifications: List<de.roessing.app.data.NotificationDto> = emptyList(),
     pendingAssignments: Set<Long> = emptySet(),
     meineVorgaenge: Set<Long> = emptySet(),
@@ -132,6 +141,26 @@ fun StartScreen(
             symbol = Icons.Filled.Handyman,
             testTag = "bereich-verleih",
             onClick = { onBereich(Bereich.VERLEIH) },
+        )
+
+        // Wem die Orte und Aufgaben gehören — und wo man sagt „ich will
+        // mitmachen". Der Hinweis zählt, was auf eine Entscheidung wartet:
+        // Wer im Vorstand ist, soll es sehen, ohne erst hineinzugehen.
+        BereichKachel(
+            titel = stringResource(R.string.area_traeger_title),
+            text = stringResource(R.string.area_traeger_subtitle),
+            symbol = Icons.Filled.Groups,
+            testTag = "bereich-traeger",
+            hinweis = if (offeneTraegerAnfragen > 0) {
+                pluralStringResource(
+                    R.plurals.traeger_open_requests_hint,
+                    offeneTraegerAnfragen,
+                    offeneTraegerAnfragen,
+                )
+            } else {
+                null
+            },
+            onClick = { onBereich(Bereich.TRAEGER) },
         )
 
         Row(
@@ -276,6 +305,8 @@ private fun BereichKachel(
     symbol: ImageVector,
     testTag: String,
     modifier: Modifier = Modifier,
+    /** Optionale Zeile darunter („2 Anfragen warten auf dich"). */
+    hinweis: String? = null,
     onClick: () -> Unit,
 ) {
     Card(
@@ -304,6 +335,14 @@ private fun BereichKachel(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (hinweis != null) {
+                Text(
+                    hinweis,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.testTag("$testTag-hinweis"),
+                )
+            }
         }
     }
 }
