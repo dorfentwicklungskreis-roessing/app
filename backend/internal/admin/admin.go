@@ -165,6 +165,8 @@ var funcs = template.FuncMap{
 	"vergabeStand":   vergabeStandText,
 	"ortsart":        ortsart,
 	"aufgabenart":    aufgabenart,
+	// Jahreszeit einer Aufgabe im Klartext („April bis September“).
+	"season": seasonText,
 	// Träger: Zulassungsstand, Sichtbarkeit und Anträge im Klartext.
 	"traegerStatus":       traegerStatusText,
 	"traegerBadge":        traegerBadge,
@@ -314,6 +316,8 @@ func statusText(s model.Status) string {
 		return "fällig"
 	case model.StatusRed:
 		return "überfällig"
+	case model.StatusDormant:
+		return "außer Dienst"
 	default:
 		return "in Ordnung"
 	}
@@ -326,9 +330,50 @@ func statusBadge(s model.Status) string {
 		return "badge-warning"
 	case model.StatusRed:
 		return "badge-error"
+	case model.StatusDormant:
+		// Grau: außerhalb ihrer Jahreszeit ist an der Aufgabe nichts zu tun
+		// — aber sie ist auch nicht „in Ordnung gebracht" worden.
+		return "badge-ghost"
 	default:
 		return "badge-success"
 	}
+}
+
+// monthNames sind die Monatsnamen für Auswahl und Anzeige der Jahreszeit,
+// 1-basiert (der Platz 0 bleibt leer: „ganzjährig").
+var monthNames = [13]string{"", "Januar", "Februar", "März", "April", "Mai", "Juni",
+	"Juli", "August", "September", "Oktober", "November", "Dezember"}
+
+// monthName liefert den Monatsnamen; 0 und Unsinn ergeben nichts.
+func monthName(m int) string {
+	if m < 1 || m > 12 {
+		return ""
+	}
+	return monthNames[m]
+}
+
+// seasonText beschreibt die Jahreszeit einer Aufgabe im Klartext.
+// Ganzjährig ergibt einen leeren Text — dann steht schlicht nichts da.
+func seasonText(t model.CareTask) string {
+	s, ok := t.SeasonOf()
+	if !ok {
+		return ""
+	}
+	return monthName(int(s.Start)) + " bis " + monthName(int(s.End))
+}
+
+// monthOption ist ein Eintrag der Monatsauswahl im Formular.
+type monthOption struct {
+	Number int
+	Name   string
+}
+
+func monthOptions() []monthOption {
+	out := make([]monthOption, 0, 12)
+	for m := 1; m <= 12; m++ {
+		out = append(out, monthOption{Number: m, Name: monthNames[m]})
+	}
+	return out
 }
 
 // --- Träger im Klartext -----------------------------------------------------

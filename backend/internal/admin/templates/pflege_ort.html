@@ -67,6 +67,7 @@
             {{end}}
           </span>
           {{if .OneOff}}<span class="badge badge-info badge-sm" data-einmalig>einmalig</span>{{end}}
+          {{with season .CareTask}}<span class="badge badge-ghost badge-sm" data-season>{{.}}</span>{{end}}
           {{if .RemoveWhenDone}}<span class="badge badge-ghost badge-sm" data-entfernen>verschwindet nach dem Erledigen</span>{{end}}
           {{if not .Active}}<span class="badge badge-ghost badge-sm">inaktiv</span>{{end}}
         </div>

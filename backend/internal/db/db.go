@@ -184,6 +184,12 @@ CREATE INDEX IF NOT EXISTS idx_devices_person ON push_devices(user_sub);
 		`ALTER TABLE care_tasks ADD COLUMN due_date TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE care_tasks ADD COLUMN remove_when_done INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE care_tasks ADD COLUMN removed_at TEXT NOT NULL DEFAULT ''`,
+		// Jahreszeit einer wiederkehrenden Aufgabe (#78): der Monat, in dem
+		// sie beginnt, und der, in dem sie endet — beide einschließlich.
+		// 0/0 heißt ganzjährig, und genau das bekommt jede Bestandsaufgabe:
+		// Der laufende Betrieb ändert sich durch die Spalten nicht.
+		`ALTER TABLE care_tasks ADD COLUMN season_start_month INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE care_tasks ADD COLUMN season_end_month INTEGER NOT NULL DEFAULT 0`,
 		// Ort und Aufgabe im Klartext bei der Zustellung: Wird die Aufgabe
 		// gelöscht, ist sie nicht mehr nachschlagbar — der Hinweis soll
 		// trotzdem sagen können, worum es ging (siehe loeseNotificationsVomVorgang).
@@ -438,12 +444,14 @@ func (d *DB) InsertTask(t *model.CareTask) error {
 		t.Sichtbarkeit = model.AufgabeOeffentlich
 	}
 	res, err := d.sql.Exec(`INSERT INTO care_tasks(place_id,kind,title,liters,interval_days,red_after_days,
-			one_off,due_date,remove_when_done,active,created_at,sichtbarkeit,befaehigung_id)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			one_off,due_date,remove_when_done,active,created_at,sichtbarkeit,befaehigung_id,
+			season_start_month,season_end_month)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.PlaceID, string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays,
 		boolToInt(t.OneOff), zeitText(t.DueDate), boolToInt(t.RemoveWhenDone),
 		boolToInt(t.Active), t.CreatedAt.UTC().Format(timeFormat),
-		string(t.Sichtbarkeit), t.BefaehigungID)
+		string(t.Sichtbarkeit), t.BefaehigungID,
+		t.SeasonStartMonth, t.SeasonEndMonth)
 	if err != nil {
 		return err
 	}
@@ -456,10 +464,12 @@ func (d *DB) UpdateTask(t *model.CareTask) error {
 		t.Sichtbarkeit = model.AufgabeOeffentlich
 	}
 	res, err := d.sql.Exec(`UPDATE care_tasks SET kind=?,title=?,liters=?,interval_days=?,red_after_days=?,
-			one_off=?,due_date=?,remove_when_done=?,active=?,sichtbarkeit=?,befaehigung_id=? WHERE id=?`,
+			one_off=?,due_date=?,remove_when_done=?,active=?,sichtbarkeit=?,befaehigung_id=?,
+			season_start_month=?,season_end_month=? WHERE id=?`,
 		string(t.Kind), t.Title, t.Liters, t.IntervalDays, t.RedAfterDays,
 		boolToInt(t.OneOff), zeitText(t.DueDate), boolToInt(t.RemoveWhenDone),
-		boolToInt(t.Active), string(t.Sichtbarkeit), t.BefaehigungID, t.ID)
+		boolToInt(t.Active), string(t.Sichtbarkeit), t.BefaehigungID,
+		t.SeasonStartMonth, t.SeasonEndMonth, t.ID)
 	if err != nil {
 		return err
 	}
@@ -488,7 +498,8 @@ func (d *DB) DeleteTask(id int64) error {
 }
 
 const taskSpalten = `id,place_id,kind,title,liters,interval_days,red_after_days,
-	one_off,due_date,remove_when_done,removed_at,active,created_at,sichtbarkeit,befaehigung_id`
+	one_off,due_date,remove_when_done,removed_at,active,created_at,sichtbarkeit,befaehigung_id,
+	season_start_month,season_end_month`
 
 // GetTask liefert auch abgeräumte Aufgaben — die Rangliste und die Historie
 // müssen ihre Erledigungen weiter zuordnen können.
@@ -522,7 +533,7 @@ func scanTask(row scannable) (*model.CareTask, error) {
 	var created, kind, dueDate, removedAt, sichtbarkeit string
 	err := row.Scan(&t.ID, &t.PlaceID, &kind, &t.Title, &t.Liters, &t.IntervalDays, &t.RedAfterDays,
 		&oneOff, &dueDate, &removeWhenDone, &removedAt, &active, &created,
-		&sichtbarkeit, &t.BefaehigungID)
+		&sichtbarkeit, &t.BefaehigungID, &t.SeasonStartMonth, &t.SeasonEndMonth)
 	if err != nil {
 		return nil, err
 	}

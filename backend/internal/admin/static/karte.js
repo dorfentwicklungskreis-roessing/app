@@ -8,7 +8,10 @@
   if (!behaelter) return;
 
   var mitte = [9.87, 52.211];
-  var farben = ["match", ["get", "status"], "yellow", "#f9a825", "red", "#c62828", "#2e7d32"];
+  // "dormant": außerhalb ihrer Jahreszeit ist an einem Ort nichts zu tun —
+  // ein grauer Punkt, kein grüner (siehe model.StatusDormant).
+  var farben = ["match", ["get", "status"],
+    "yellow", "#f9a825", "red", "#c62828", "dormant", "#9e9e9e", "#2e7d32"];
 
   function zustand(wert) {
     document.body.dataset.mapState = wert;

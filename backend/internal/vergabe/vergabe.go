@@ -983,8 +983,11 @@ func (e *Engine) istFaellig(task model.CareTask, place *model.Place, now time.Ti
 		}
 		faktor = f
 	}
+	// NeedsWork statt „nicht grün": Eine Aufgabe außerhalb ihrer Jahreszeit
+	// ruht (StatusDormant) — sie ist nicht grün, aber es ist auch nichts zu
+	// tun, und dafür wird niemand gefragt (#78).
 	status, _, _ := model.ComputeStatus(task, letzte, now, faktor)
-	return status != model.StatusGreen, letzte, nil
+	return status.NeedsWork(), letzte, nil
 }
 
 func zeiger(t time.Time) *time.Time { return &t }

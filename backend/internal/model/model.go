@@ -12,16 +12,31 @@ const (
 	StatusGreen  Status = "green"  // kürzlich erledigt
 	StatusYellow Status = "yellow" // Intervall überschritten, bitte erledigen
 	StatusRed    Status = "red"    // Rot-Schwelle überschritten, dringend
+	// StatusDormant: außer Dienst — die Aufgabe fällt zu dieser Jahreszeit
+	// gar nicht an (siehe season.go). Sie ist dann weder fällig noch gelb
+	// noch rot, und niemand wird deswegen gefragt. Bewusst kein „grün":
+	// Ein Beet, an dem im Winter nichts zu jäten ist, ist nicht in Ordnung
+	// gebracht worden, sondern gerade nicht im Dienst.
+	StatusDormant Status = "dormant"
 )
+
+// statusRank ordnet die Ampel: schlechter heißt größer. Ruhend steht unter
+// grün — an einer ruhenden Aufgabe ist noch weniger zu tun als an einer
+// frisch erledigten.
+var statusRank = map[Status]int{StatusDormant: 0, StatusGreen: 1, StatusYellow: 2, StatusRed: 3}
 
 // Worst liefert den schlechteren von zwei Status.
 func Worst(a, b Status) Status {
-	rank := map[Status]int{StatusGreen: 0, StatusYellow: 1, StatusRed: 2}
-	if rank[b] > rank[a] {
+	if statusRank[b] > statusRank[a] {
 		return b
 	}
 	return a
 }
+
+// NeedsWork sagt, ob an der Aufgabe gerade wirklich etwas zu tun ist. Wer
+// fragen, erinnern oder vergeben will, fragt das — nicht „ist sie nicht
+// grün": Ruhend ist auch nicht grün, aber es ist nichts zu tun.
+func (s Status) NeedsWork() bool { return s == StatusYellow || s == StatusRed }
 
 // PlaceKind beschreibt die Art eines Ortes.
 type PlaceKind string
@@ -83,6 +98,13 @@ type CareTask struct {
 	// RedAfterDays: Nach so vielen Tagen ohne Erledigung wird sie rot.
 	// Bei einmaligen Aufgaben ohne Bedeutung (0).
 	RedAfterDays float64 `json:"redAfterDays"`
+	// SeasonStartMonth/SeasonEndMonth: der Teil des Jahres, in dem die
+	// Aufgabe überhaupt anfällt — jeweils ein ganzer Monat, einschließlich
+	// (4 und 9 heißt 1. April bis 30. September). 0/0 heißt ganzjährig und
+	// ist die Vorbelegung des gesamten Bestands. Anfang > Ende geht über den
+	// Jahreswechsel (11/2 = November bis Februar). Siehe season.go.
+	SeasonStartMonth int `json:"seasonStartMonth,omitempty"`
+	SeasonEndMonth   int `json:"seasonEndMonth,omitempty"`
 	// OneOff: einmalige Aufgabe („einmal zum Bahnhof fahren") statt eines
 	// wiederkehrenden Pflegeplans. An die Stelle des Intervalls tritt dann
 	// das Fälligkeitsdatum.
@@ -195,6 +217,15 @@ type PlaceWithStatus struct {
 // der Aufgabe als Startpunkt. factor skaliert die Schwellen: 1.0 = normal,
 // 0.5 = Hitzewelle (doppelt so schnell gelb/rot). Der Aufrufer entscheidet,
 // für welche Aufgabenarten der Faktor gilt (typisch: nur Gießen).
+//
+// Hat die Aufgabe eine Jahreszeit (season.go), gilt sie nur in deren
+// Fenster. Außerhalb ruht sie: StatusDormant, und die beiden Zeitpunkte
+// zeigen auf den Beginn des nächsten Fensters — der Tag, ab dem wieder etwas
+// zu tun ist. Der Zähler läuft dabei bewusst weiter: Wer im September zuletzt
+// gejätet hat, ist am 1. April fällig, ohne dass jemand etwas anfassen muss.
+// Deshalb wird die Basis nicht zurückgesetzt, sondern nur die Anzeige der
+// Schwellen auf den Fensterbeginn gezogen — vor dem 1. April kann nichts
+// fällig gewesen sein.
 func ComputeStatus(task CareTask, last *Completion, now time.Time, factor float64) (Status, time.Time, time.Time) {
 	if task.OneOff {
 		return statusEinmalig(task, last, now)
@@ -209,6 +240,15 @@ func ComputeStatus(task CareTask, last *Completion, now time.Time, factor float6
 	dayHours := 24 * factor
 	dueAt := base.Add(time.Duration(task.IntervalDays * dayHours * float64(time.Hour)))
 	redAt := base.Add(time.Duration(task.RedAfterDays * dayHours * float64(time.Hour)))
+	if season, ok := task.SeasonOf(); ok {
+		von, _, drin := season.Window(now, Location())
+		dueAt, redAt = laterOf(dueAt, von), laterOf(redAt, von)
+		if !drin {
+			// Der Hitzefaktor ändert daran nichts: Er staucht Schwellen,
+			// er verlängert keine Jahreszeit.
+			return StatusDormant, dueAt, redAt
+		}
+	}
 	// RedAfterDays < IntervalDays wäre eine Fehlkonfiguration; rot gewinnt dann.
 	switch {
 	case !now.Before(redAt):
@@ -218,6 +258,40 @@ func ComputeStatus(task CareTask, last *Completion, now time.Time, factor float6
 	default:
 		return StatusGreen, dueAt, redAt
 	}
+}
+
+// laterOf liefert den späteren der beiden Zeitpunkte.
+func laterOf(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return b
+	}
+	return a
+}
+
+// PlaceStatus fasst die Aufgaben eines Ortes zu dem einen Punkt zusammen,
+// der auf der Karte steht: der schlechteste Status seiner aktiven Aufgaben.
+//
+// Ruhen sie alle, ruht der Ort — ein Beet, an dem im Winter nichts zu jäten
+// ist, meldet nicht „alles gut", sondern ist außer Dienst. Ein Ort ohne
+// aktive Aufgabe bleibt grün, wie bisher.
+func PlaceStatus(tasks []TaskWithStatus) Status {
+	status := StatusGreen
+	aktive, ruhende := 0, 0
+	for _, t := range tasks {
+		if !t.Active {
+			continue
+		}
+		aktive++
+		if t.Status == StatusDormant {
+			ruhende++
+			continue
+		}
+		status = Worst(status, t.Status)
+	}
+	if aktive > 0 && aktive == ruhende {
+		return StatusDormant
+	}
+	return status
 }
 
 // statusEinmalig ist die Ampel einer einmaligen Aufgabe. An die Stelle des
