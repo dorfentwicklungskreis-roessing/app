@@ -112,6 +112,14 @@ export async function menschAnlegen({ issuer, token, projectId, userName, passwo
 }
 
 /**
+ * Rücksprung-Adresse des Claude-Connectors. Genau diese gibt der
+ * Registrierungs-Endpunkt des Backends heraus, also muss die Anwendung in der
+ * Rössing-ID auch genau diese führen. Angefasst wird claude.ai dabei nie: Der
+ * Test fängt den Rücksprung im Browser ab (siehe tests/mcp-connector.spec.mjs).
+ */
+export const CLAUDE_RUECKSPRUNG = 'https://claude.ai/api/mcp/auth_callback';
+
+/**
  * Legt Projekt, Rollen, eine User-Agent-App mit PKCE und zwei menschliche
  * Nutzer (mit Passwort) an. Gibt Client-ID und Zugangsdaten zurück.
  */
@@ -147,6 +155,26 @@ export async function bootstrap({ issuer, keyPath, redirectUri }) {
     idTokenRoleAssertion: true,
   });
 
+  // Die Anwendung des Claude-Connectors: Web-App, PKCE, kein Secret — genau
+  // die Bauart, die der Registrierungs-Endpunkt an claude.ai ausgibt.
+  //
+  // accessTokenRoleAssertion bleibt bewusst AUS. In der Rössing-ID ist das ein
+  // Haken in einer Weboberfläche, den niemand hier sehen kann; steht der
+  // Anmeldeweg nur deshalb, weil ihn jemand einmal gesetzt hat, ist er nicht
+  // geprüft, sondern geraten. So muss der Server die Rollen selbst anfordern —
+  // über den Scope in seiner Metadata.
+  const mcpApp = await zapi(issuer, token, 'POST', `/management/v1/projects/${projectId}/apps/oidc`, {
+    name: 'Claude-MCP-Connector E2E',
+    redirectUris: [CLAUDE_RUECKSPRUNG],
+    responseTypes: ['OIDC_RESPONSE_TYPE_CODE'],
+    grantTypes: ['OIDC_GRANT_TYPE_AUTHORIZATION_CODE', 'OIDC_GRANT_TYPE_REFRESH_TOKEN'],
+    appType: 'OIDC_APP_TYPE_WEB',
+    authMethodType: 'OIDC_AUTH_METHOD_TYPE_NONE',
+    accessTokenType: 'OIDC_TOKEN_TYPE_JWT',
+    accessTokenRoleAssertion: false,
+    idTokenRoleAssertion: false,
+  });
+
   const newHuman = (userName, password, roleKeys) =>
     menschAnlegen({ issuer, token, projectId, userName, password, roleKeys });
 
@@ -154,5 +182,5 @@ export async function bootstrap({ issuer, keyPath, redirectUri }) {
   const admin = await newHuman(`test-dorf-${stamp}`, 'Test-Dorf-2026!', ['admin']);
   const member = await newHuman(`test-mitglied-${stamp}`, 'Test-Dorf-2026!', ['member']);
 
-  return { projectId, clientId: app.clientId, admin, member };
+  return { projectId, clientId: app.clientId, mcpClientId: mcpApp.clientId, admin, member };
 }
