@@ -1,0 +1,43 @@
+{
+  "items": [
+    {
+      "id": "as-585-km-kreiselmaeher",
+      "name": "AS 585 KM Kreiselmäher",
+      "description": "Kreiselmäher für hohes Gras und Böschungen.\n\n- Arbeitsbreite 85 cm\n- **Benzin**, Radantrieb",
+      "pricePerDay": 25,
+      "pricePerWeekend": 40,
+      "pricePerWeek": 120,
+      "deposit": 100,
+      "tags": ["garten", "motorgeraet"],
+      "thumbnailUrl": "https://cdn.example.invalid/sIgn/resize:fill:600:450/plain/local:///items/as-585-km-kreiselmaeher/front.jpg",
+      "productUrl": "https://www.example.invalid/as-585",
+      "webUrl": "https://mieten.example.invalid/geraete/as-585-km-kreiselmaeher/"
+    },
+    {
+      "id": "018f2c1a-7b3d-4e91-9a0c-2f5d8e6b4a11",
+      "name": "Rasenwalze",
+      "description": null,
+      "pricePerDay": 8,
+      "pricePerWeekend": null,
+      "pricePerWeek": null,
+      "deposit": null,
+      "tags": ["garten"],
+      "thumbnailUrl": null,
+      "productUrl": null,
+      "webUrl": "https://mieten.example.invalid/geraete/018f2c1a-7b3d-4e91-9a0c-2f5d8e6b4a11/"
+    },
+    {
+      "id": "fallschutzmatten",
+      "name": "Fallschutzmatten (10 Stück)",
+      "description": "Für Feste mit Hüpfburg.",
+      "pricePerDay": 12.5,
+      "pricePerWeekend": null,
+      "pricePerWeek": null,
+      "deposit": null,
+      "tags": ["feste"],
+      "thumbnailUrl": null,
+      "productUrl": null,
+      "webUrl": "https://mieten.example.invalid/geraete/fallschutzmatten/"
+    }
+  ]
+}

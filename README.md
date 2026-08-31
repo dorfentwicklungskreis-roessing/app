@@ -270,6 +270,34 @@ keine der beiden Apps noch einmal.
   Erinnerung wäre ein eigenes Thema mit eigener Einwilligung.
   Termine mit Koordinaten sind für die Dorfkarte vorbereitet; Koordinaten
   pflegt die Website an den Orten (`geo` in `src/data/locations/*.yaml`).
+- **Verleih** („Maschinchenring"): Nachbarn verleihen ihre Geräte an
+  Nachbarn. Der Dienst läuft unter `https://mieten.xn--rssing-wxa.de` mit
+  eigenem Backend; die App redet **unmittelbar** mit ihm, das Dorf-Backend ist
+  kein Weiterleiter und weiß nichts davon — derselbe Zuschnitt wie bei den
+  Veranstaltungen, nur dass hier ein Token mitgeht. Der Vertrag steht in
+  `docs/mieten-api.md` und ist die einzige Quelle für die Datenform.
+  **Ansehen und suchen geht ohne Anmeldung** (Geräteliste, Detail, Suche,
+  belegte Zeiträume und Verfügbarkeit sind drüben öffentlich, so wie auf ihrer
+  Webseite) — der Bereich ist deshalb auch vom Anmeldeschirm aus erreichbar.
+  Mit der Rössing-ID kommen die eigenen Buchungen dazu: anfragen, ansehen,
+  stornieren. **Die App enthält keine Regeln des Verleihs**: Ob ein Zeitraum
+  frei ist, sagt `GET /api/v1/availability`; ob storniert werden darf, sagt
+  `canCancel`. Die Tarife stehen einzeln da und werden **nicht** zu einer
+  Summe verrechnet — welcher bei welcher Dauer gilt, legt die Mietplattform
+  nirgends fest. Zeiträume sind halboffen: `endDate` ist der Rückgabetag.
+  Ist die Mietplattform nicht erreichbar, steht ein Hinweis über der
+  (womöglich älteren) Liste statt einer leeren Seite.
+  Damit ein Token drüben gilt, muss ihr Zitadel-Projekt in der `aud` stehen —
+  angefordert über den Scope `urn:zitadel:iam:org:project:id:<id>:aud`
+  (Android: `LOGIN_SCOPES`, Kennung aus `BuildConfig.MIETEN_PROJECT_ID`).
+  **Ein Gerät, das schon angemeldet war, behält seinen Token-Satz über die
+  Aktualisierung hinweg** und bekommt von der Mietplattform `401`
+  (`token_audience`). Die App sieht deshalb vor jeder angemeldeten Anfrage in
+  ihr eigenes Token (`auth/RentalAudience.kt`) und bittet um eine **erneute
+  Anmeldung**, statt eine leere Liste zu zeigen; die bestehende Anmeldung
+  bleibt dabei stehen, falls der Browser abgebrochen wird.
+  **Geräte anlegen und pflegen** gibt es in der App bewusst nicht — das läuft
+  über den Chat und die Webfassung der Mietplattform.
 - **Spielschutz**: Nach einer Erledigung bleibt dieselbe Aufgabe gesperrt —
   50 % des Soll-Intervalls (beim Gießen mit dem Hitzefaktor skaliert, bei
   Jäten & Co. nicht), mindestens 12 Stunden, höchstens das volle Intervall.

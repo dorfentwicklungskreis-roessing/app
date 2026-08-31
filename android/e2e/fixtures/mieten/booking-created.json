@@ -1,0 +1,14 @@
+{
+  "booking": {
+    "id": "8f14c2b0-91ae-4c77-b1b2-0a3d5e7c9f01",
+    "deviceId": "as-585-km-kreiselmaeher",
+    "setId": null,
+    "deviceName": "AS 585 KM Kreiselmäher",
+    "startDate": "2026-09-05",
+    "endDate": "2026-09-07",
+    "status": "pending",
+    "notes": "Hole ich Samstag früh ab.",
+    "canCancel": true,
+    "pickup": null
+  }
+}

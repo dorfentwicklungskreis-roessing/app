@@ -3,6 +3,7 @@ package de.roessing.app
 import android.app.Application
 import android.content.Context
 import de.roessing.app.auth.AuthManager
+import de.roessing.app.auth.RentalAudience
 import de.roessing.app.data.ApiChatRepository
 import de.roessing.app.data.ApiDeviceRepository
 import de.roessing.app.data.ApiIdeenRepository
@@ -14,6 +15,9 @@ import de.roessing.app.data.ChatRepository
 import de.roessing.app.data.DeviceRepository
 import de.roessing.app.data.IdeenRepository
 import de.roessing.app.data.DorfApi
+import de.roessing.app.data.MietenApi
+import de.roessing.app.data.MietenRentalRepository
+import de.roessing.app.data.RentalRepository
 import de.roessing.app.data.PlacesRepository
 import de.roessing.app.data.ProfileRepository
 import de.roessing.app.data.StatsRepository
@@ -55,6 +59,20 @@ class AppContainer(context: Context) {
     // Website — dort werden sie gepflegt. Eigener Client, ohne Token.
     val veranstaltungenRepository: VeranstaltungenRepository =
         WebsiteVeranstaltungenRepository(WebsiteApi.create(BuildConfig.WEBSITE_BASE_URL))
+
+    // Der Maschinchenring läuft auf einem eigenen Server. Das Dorf-Backend ist
+    // kein Weiterleiter und weiß von ihm nichts — deshalb ein eigener Client,
+    // wie bei den Veranstaltungen, nur dass hier ein Token mitgeht.
+    val rentalRepository: RentalRepository = MietenRentalRepository(
+        MietenApi.create(BuildConfig.MIETEN_BASE_URL) { authManager.freshToken() },
+        signIn = {
+            RentalAudience.state(authManager.freshToken(), BuildConfig.MIETEN_PROJECT_ID)
+        },
+    )
+
+    /** Wie die Anmeldung dieses Geräts zur Mietplattform steht. */
+    suspend fun rentalSignIn() =
+        RentalAudience.state(authManager.freshToken(), BuildConfig.MIETEN_PROJECT_ID)
 }
 
 val Context.appContainer: AppContainer

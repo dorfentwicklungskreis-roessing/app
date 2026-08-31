@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "token_audience",
+    "message": "Token gilt nicht für die Mietplattform"
+  }
+}

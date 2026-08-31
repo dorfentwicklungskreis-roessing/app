@@ -1,7 +1,10 @@
 package de.roessing.app
 
 import de.roessing.app.auth.LOGIN_SCOPES
+import de.roessing.app.auth.MIETEN_AUDIENCE_SCOPE
 import de.roessing.app.auth.ROLLEN_SCOPE
+import de.roessing.app.auth.RentalAudience
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,6 +39,33 @@ class LoginScopesTest {
         assertTrue(
             "Erwartet wird der Scope mit „projects\" (Plural): $ROLLEN_SCOPE",
             ROLLEN_SCOPE == "urn:zitadel:iam:org:projects:roles",
+        )
+    }
+
+    /**
+     * Ohne den Empfänger-Scope gilt das Token für die Mietplattform nicht:
+     * Sie prüft die `aud` und weist jede angemeldete Anfrage ab. Der Bereich
+     * „Maschinchenring" wäre dann für alle lesend und für niemanden buchbar —
+     * und niemand sähe, woran es liegt.
+     */
+    @Test
+    fun `der Login fordert die Mietplattform als Empfaenger mit an`() {
+        assertTrue(
+            "Die App fordert $MIETEN_AUDIENCE_SCOPE nicht an — dann kann niemand " +
+                "buchen: $LOGIN_SCOPES",
+            LOGIN_SCOPES.contains(MIETEN_AUDIENCE_SCOPE),
+        )
+    }
+
+    /**
+     * Die Projektkennung gehört in die Build-Einstellungen, nicht in den
+     * Quelltext — sonst lässt sie sich in CI und Tests nicht übersteuern.
+     */
+    @Test
+    fun `die Projektkennung kommt aus den Build-Einstellungen`() {
+        assertEquals(
+            RentalAudience.scopeFor(BuildConfig.MIETEN_PROJECT_ID),
+            MIETEN_AUDIENCE_SCOPE,
         )
     }
 

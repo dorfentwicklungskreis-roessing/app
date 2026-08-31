@@ -88,17 +88,19 @@ class StartNavigationTest {
     fun startseite_zeigtDieBereicheStattDerKarte() {
         zeigeApp(listOf(ort(1, "green")))
 
+        // Von oben nach unten gelesen. Die Startseite wächst mit jedem
+        // Bereich, und was gestern noch über der Falz stand, liegt heute
+        // darunter — deshalb steht zuerst, was oben ist, und alles Weitere
+        // wird herangeblättert. Ohne das meldet ein neuer Bereich seinen
+        // Einzug als Fehler in einem Fall, der mit ihm nichts zu tun hat.
+        compose.onNodeWithText("Moin, Erna!").assertIsDisplayed()
         compose.onNodeWithTag("bereich-mithelfen").assertIsDisplayed()
-        compose.onNodeWithTag("bereich-profil").assertIsDisplayed()
-        compose.onNodeWithTag("bereich-dorfbewohner").assertIsDisplayed()
         // Der Reiter-Balken gehört in den Bereich, nicht auf die oberste Ebene.
         compose.onNodeWithTag("tab-map").assertDoesNotExist()
-        // Freundlicher Einstieg mit dem Namen aus dem Profil.
-        compose.onNodeWithText("Moin, Erna!").assertIsDisplayed()
+        compose.onNodeWithTag("bereich-profil").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("bereich-dorfbewohner").performScrollTo().assertIsDisplayed()
         // Kein Versprechen, aber die Einladung, Wünsche zu äußern: Die
-        // Ausblick-Kachel führt inzwischen ins Ideen-Formular. Sie steht ganz
-        // unten und liegt auf kleinen Bildschirmen unter dem sichtbaren
-        // Bereich — deshalb erst scrollen.
+        // Ausblick-Kachel führt inzwischen ins Ideen-Formular.
         compose.onNodeWithTag("bereich-ideen").performScrollTo().assertIsDisplayed()
     }
 
@@ -150,7 +152,7 @@ class StartNavigationTest {
     fun profil_istEinBereichUndZurueckFuehrtHeim() {
         zeigeApp(listOf(ort(1, "green")))
 
-        compose.onNodeWithTag("bereich-profil").performClick()
+        compose.onNodeWithTag("bereich-profil").performScrollTo().performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("sichtbarkeitshinweis").assertIsDisplayed()
 
@@ -163,12 +165,14 @@ class StartNavigationTest {
     fun dorfbewohner_istEinBereichUndZurueckFuehrtHeim() {
         zeigeApp(listOf(ort(1, "green")))
 
-        compose.onNodeWithTag("bereich-dorfbewohner").performClick()
+        compose.onNodeWithTag("bereich-dorfbewohner").performScrollTo().performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("dorfbewohner").assertIsDisplayed()
 
         zurueckDruecken()
 
-        compose.onNodeWithTag("bereich-dorfbewohner").assertIsDisplayed()
+        // Die Startseite steht danach wieder oben — ihre Blätterstellung
+        // überlebt den Ausflug in den Bereich nicht.
+        compose.onNodeWithTag("bereich-dorfbewohner").performScrollTo().assertIsDisplayed()
     }
 }
