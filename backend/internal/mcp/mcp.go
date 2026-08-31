@@ -225,6 +225,98 @@ func enum(desc string, values ...string) map[string]any {
 func (s *Server) registerTools() {
 	s.tools = []tool{
 		{
+			Name: "traeger_liste",
+			Description: "Listet alle Träger (Vereine und Gruppen) mit Zulassungsstand, " +
+				"Sichtbarkeit, Zitadel-Projekt und — falls es einer ist — dem Dach, " +
+				"unter dem sie arbeiten.",
+			Schema:  obj(nil, map[string]any{}),
+			Handler: s.toolListTraeger,
+		},
+		{
+			Name: "traeger_anlegen",
+			Description: "Legt einen Träger an (Verein oder Gruppe). Er ist zunächst " +
+				"'beantragt' und tritt noch nicht in Erscheinung — zulassen ist ein " +
+				"eigener Schritt (traeger_zulassung). Ein Arbeitskreis bekommt mit " +
+				"parentId seinen Verein als Dach.",
+			Schema: obj([]string{"name"}, map[string]any{
+				"name":         str("Name, z.B. 'Dorfpflege Rössing e.V.'"),
+				"beschreibung": str("Optionale Beschreibung"),
+				"projektId":    str("Numerische Zitadel-Projekt-ID. Ohne sie hat der Träger keine Mitglieder und keine Admins."),
+				"sichtbarkeit": enum("offen = steht im Verzeichnis, geschlossen = nur Mitglieder finden ihn (Standard: offen)", "offen", "geschlossen"),
+				"status":       enum("Zulassungsstand (Standard: beantragt)", "beantragt", "zugelassen", "gesperrt"),
+				"parentId":     integer("ID des Trägers, unter dem dieser arbeitet — für Arbeitskreise. Genau eine Ebene."),
+			}),
+			Handler: s.toolCreateTraeger,
+		},
+		{
+			Name:        "traeger_aendern",
+			Description: "Ändert Felder eines Trägers. Nur angegebene Felder werden geändert. Der Zulassungsstand nicht — dafür gibt es traeger_zulassung.",
+			Schema: obj([]string{"id"}, map[string]any{
+				"id":           integer("ID des Trägers"),
+				"name":         str("Neuer Name"),
+				"beschreibung": str("Beschreibung"),
+				"projektId":    str("Numerische Zitadel-Projekt-ID"),
+				"sichtbarkeit": enum("offen oder geschlossen", "offen", "geschlossen"),
+				"parentId":     integer("ID des Dachs; 0 löst den Träger aus seinem Dach"),
+			}),
+			Handler: s.toolUpdateTraeger,
+		},
+		{
+			Name: "traeger_zulassung",
+			Description: "Lässt einen Träger zu oder sperrt ihn. Nur ein zugelassener Träger " +
+				"tritt in Erscheinung; ein gesperrter behält seine Daten, zeigt aber nichts mehr.",
+			Schema: obj([]string{"id", "status"}, map[string]any{
+				"id":     integer("ID des Trägers"),
+				"status": enum("Neuer Zulassungsstand", "beantragt", "zugelassen", "gesperrt"),
+			}),
+			Handler: s.toolTraegerZulassung,
+		},
+		{
+			Name: "befaehigungen_liste",
+			Description: "Listet die Einweisungen der Träger („Motorsense“, „Einweisung Jäten“). " +
+				"Ihre IDs braucht aufgabe_anlegen für befaehigungId.",
+			Schema: obj(nil, map[string]any{
+				"traegerId": integer("Nur die Einweisungen dieses Trägers. Ohne Angabe alle."),
+			}),
+			Handler: s.toolListBefaehigungen,
+		},
+		{
+			Name: "befaehigung_anlegen",
+			Description: "Legt eine Einweisung eines Trägers an. Hängt sie an einer Aufgabe " +
+				"(befaehigungId), kann nur zusagen, wer sie hat. Sie gehört der Person, " +
+				"nicht der Aufgabe: einmal eingewiesen heißt überall eingewiesen.",
+			Schema: obj([]string{"traegerId", "name"}, map[string]any{
+				"traegerId":    integer("ID des Trägers, dem die Einweisung gehört"),
+				"name":         str("Name, z.B. 'Einweisung Jäten' oder 'Motorsense'"),
+				"beschreibung": str("Optionale Beschreibung: was sie umfasst, wer sie gibt"),
+			}),
+			Handler: s.toolCreateBefaehigung,
+		},
+		{
+			Name:        "befaehigung_aendern",
+			Description: "Ändert Name oder Beschreibung einer Einweisung.",
+			Schema: obj([]string{"id"}, map[string]any{
+				"id":           integer("ID der Einweisung"),
+				"name":         str("Neuer Name"),
+				"beschreibung": str("Beschreibung"),
+			}),
+			Handler: s.toolUpdateBefaehigung,
+		},
+		{
+			Name: "befaehigung_erteilen",
+			Description: "Trägt eine Einweisung für eine Person ein — oder lehnt sie ab. " +
+				"Eingewiesen wird an der Maschine, nicht in der App: Wer die Einweisung " +
+				"gegeben hat, trägt sie hinterher ein, auch ohne vorherigen Antrag. " +
+				"Die Kennung (userSub) steht in der Rangliste und in jeder Erledigung.",
+			Schema: obj([]string{"befaehigungId", "userSub"}, map[string]any{
+				"befaehigungId": integer("ID der Einweisung"),
+				"userSub":       str("Kennung der Person aus der Rössing-ID"),
+				"status":        enum("erteilt (Standard) oder abgelehnt", "erteilt", "abgelehnt"),
+				"notiz":         str("Notiz zur Entscheidung, z.B. wann und durch wen eingewiesen wurde"),
+			}),
+			Handler: s.toolErteileBefaehigung,
+		},
+		{
 			Name: "orte_liste",
 			Description: "Listet alle Pflege-Orte (Blumenkästen, Beete, …) mit ihren Aufgaben, " +
 				"letzter Erledigung und Ampel-Status (green/yellow/red).",
