@@ -225,6 +225,53 @@ func enum(desc string, values ...string) map[string]any {
 func (s *Server) registerTools() {
 	s.tools = []tool{
 		{
+			Name: "traeger_liste",
+			Description: "Listet alle Träger (Vereine und Gruppen) mit Zulassungsstand, " +
+				"Sichtbarkeit, Zitadel-Projekt und — falls es einer ist — dem Dach, " +
+				"unter dem sie arbeiten.",
+			Schema:  obj(nil, map[string]any{}),
+			Handler: s.toolListTraeger,
+		},
+		{
+			Name: "traeger_anlegen",
+			Description: "Legt einen Träger an (Verein oder Gruppe). Er ist zunächst " +
+				"'beantragt' und tritt noch nicht in Erscheinung — zulassen ist ein " +
+				"eigener Schritt (traeger_zulassung). Ein Arbeitskreis bekommt mit " +
+				"parentId seinen Verein als Dach.",
+			Schema: obj([]string{"name"}, map[string]any{
+				"name":         str("Name, z.B. 'Dorfpflege Rössing e.V.'"),
+				"beschreibung": str("Optionale Beschreibung"),
+				"projektId":    str("Numerische Zitadel-Projekt-ID. Ohne sie hat der Träger keine Mitglieder und keine Admins."),
+				"sichtbarkeit": enum("offen = steht im Verzeichnis, geschlossen = nur Mitglieder finden ihn (Standard: offen)", "offen", "geschlossen"),
+				"status":       enum("Zulassungsstand (Standard: beantragt)", "beantragt", "zugelassen", "gesperrt"),
+				"parentId":     integer("ID des Trägers, unter dem dieser arbeitet — für Arbeitskreise. Genau eine Ebene."),
+			}),
+			Handler: s.toolCreateTraeger,
+		},
+		{
+			Name:        "traeger_aendern",
+			Description: "Ändert Felder eines Trägers. Nur angegebene Felder werden geändert. Der Zulassungsstand nicht — dafür gibt es traeger_zulassung.",
+			Schema: obj([]string{"id"}, map[string]any{
+				"id":           integer("ID des Trägers"),
+				"name":         str("Neuer Name"),
+				"beschreibung": str("Beschreibung"),
+				"projektId":    str("Numerische Zitadel-Projekt-ID"),
+				"sichtbarkeit": enum("offen oder geschlossen", "offen", "geschlossen"),
+				"parentId":     integer("ID des Dachs; 0 löst den Träger aus seinem Dach"),
+			}),
+			Handler: s.toolUpdateTraeger,
+		},
+		{
+			Name: "traeger_zulassung",
+			Description: "Lässt einen Träger zu oder sperrt ihn. Nur ein zugelassener Träger " +
+				"tritt in Erscheinung; ein gesperrter behält seine Daten, zeigt aber nichts mehr.",
+			Schema: obj([]string{"id", "status"}, map[string]any{
+				"id":     integer("ID des Trägers"),
+				"status": enum("Neuer Zulassungsstand", "beantragt", "zugelassen", "gesperrt"),
+			}),
+			Handler: s.toolTraegerZulassung,
+		},
+		{
 			Name: "orte_liste",
 			Description: "Listet alle Pflege-Orte (Blumenkästen, Beete, …) mit ihren Aufgaben, " +
 				"letzter Erledigung und Ampel-Status (green/yellow/red).",
