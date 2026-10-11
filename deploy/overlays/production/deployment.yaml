@@ -18,6 +18,8 @@ spec:
       labels:
         app: dorf-app-backend
     spec:
+      # Eigener User-Namespace: root im Container ist auf dem Host kein root.
+      hostUsers: false
       securityContext:
         runAsNonRoot: true
         seccompProfile:
