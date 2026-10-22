@@ -10,7 +10,7 @@ serialization = "1.7.3"
 # ohnehin bei 1.4.0. Alles darüber (material3 1.5.0) gibt es nur als Alpha.
 composeBom = "2026.01.01"
 activityCompose = "1.9.3"
-navigationCompose = "2.8.5"
+navigationCompose = "2.10.2"
 lifecycle = "2.8.7"
 coreKtx = "1.15.0"
 appauth = "0.11.1"
