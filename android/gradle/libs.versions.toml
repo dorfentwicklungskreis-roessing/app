@@ -2,7 +2,7 @@
 agp = "8.7.3"
 kotlin = "2.0.21"
 coroutines = "1.9.0"
-serialization = "1.7.3"
+serialization = "1.12.0"
 # Compose-BOM 2026.01.01 = material3 1.4.0 (stabil, mit Material-3-Expressive:
 # MaterialExpressiveTheme, MotionScheme, ShortNavigationBar) und Compose 1.10.2.
 # Bewusst nicht neuer: ab BOM 2026.02 verlangt Compose Kotlin 2.1+, ab 2026.08
