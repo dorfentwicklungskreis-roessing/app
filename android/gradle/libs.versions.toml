@@ -22,7 +22,7 @@ datastore = "1.1.1"
 # Firebase Cloud Messaging für Push-Benachrichtigungen. Die BOM legt die
 # Versionen der einzelnen Firebase-Bibliotheken fest — nur sie wird gepflegt.
 firebaseBom = "33.7.0"
-googleServices = "4.4.2"
+googleServices = "4.5.0"
 browser = "1.8.0"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
