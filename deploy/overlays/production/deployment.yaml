@@ -15,6 +15,10 @@ spec:
       app: dorf-app-backend
   template:
     metadata:
+      annotations:
+        # Neustart erzwingen, wenn sich ein eingehaengtes Secret aendert: der
+        # Server liest den ZITADEL-Schluessel nur beim Start.
+        secrets.dorf-app/rotated: "2026-10-22"
       labels:
         app: dorf-app-backend
     spec:
@@ -181,7 +185,8 @@ spec:
             # Eingerichtet am 31.08.2026: Machine-User „dorf-app-backend"
             # (Zitadel-ID 388679249365565635), Access-Token-Typ JWT,
             # Manager-Rolle ORG_USER_PERMISSION_EDITOR. Der Key liegt als
-            # sealed-zitadel.yaml daneben.
+            # sealed-zitadel.yaml daneben. Der Key läuft nach 12 Monaten ab
+            # (seit 22.10.2026, nächster Ablauf 22.10.2027) — vorher rotieren.
             - name: ZITADEL_SERVICE_USER_KEY_FILE
               value: /secrets/zitadel/service-user.json
             # ZITADEL_ROLLEN_TTL (optional, Vorgabe 45s): So lange gilt eine
