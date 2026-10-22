@@ -26,7 +26,7 @@ jobs:
   bauen-und-testen:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Xcode festnageln: Die App verlangt Swift 6 mit MainActor-Vorbelegung
       # (project.yml), das kann erst Xcode 26. Auf die genaue Punktversion
@@ -52,7 +52,7 @@ jobs:
       # längste Teil eines frischen Laufs. Sie wird deshalb neben dem Projekt
       # abgelegt (-clonedSourcePackagesDirPath) und zwischengespeichert.
       - name: Zwischenspeicher der Swift-Pakete
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ios/.spm
           key: spm-${{ runner.os }}-${{ hashFiles('ios/project.yml') }}
@@ -140,7 +140,7 @@ jobs:
       # ist der Vergleichsmaßstab, an dem eine neue Warnung überhaupt auffällt.
       - name: Testergebnisse hochladen
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ios-testergebnisse-${{ github.run_attempt }}
           path: ios/ergebnisse/
