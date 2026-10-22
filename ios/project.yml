@@ -17,7 +17,7 @@ packages:
   # Freie Vektorkacheln, keine Google-Dienste, kein API-Schlüssel.
   MapLibre:
     url: https://github.com/maplibre/maplibre-gl-native-distribution
-    from: 6.5.0
+    from: 6.31.0
 
 settings:
   base:
