@@ -29,7 +29,7 @@ services:
       retries: 20
 
   zitadel:
-    image: ghcr.io/zitadel/zitadel:v2.65.1
+    image: ghcr.io/zitadel/zitadel:v2.71.19
     depends_on:
       db:
         condition: service_healthy
