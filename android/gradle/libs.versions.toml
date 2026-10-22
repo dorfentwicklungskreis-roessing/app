@@ -23,7 +23,7 @@ datastore = "1.1.1"
 # Versionen der einzelnen Firebase-Bibliotheken fest — nur sie wird gepflegt.
 firebaseBom = "33.7.0"
 googleServices = "4.4.2"
-browser = "1.8.0"
+browser = "1.10.0"
 junit = "4.13.2"
 androidxJunit = "1.2.1"
 espresso = "3.6.1"
