@@ -1,6 +1,6 @@
 [versions]
 agp = "8.7.3"
-kotlin = "2.0.21"
+kotlin = "2.4.21"
 coroutines = "1.9.0"
 serialization = "1.7.3"
 # Compose-BOM 2026.01.01 = material3 1.4.0 (stabil, mit Material-3-Expressive:
