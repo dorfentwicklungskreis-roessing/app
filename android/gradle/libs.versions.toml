@@ -21,7 +21,7 @@ okhttp = "4.12.0"
 datastore = "1.1.1"
 # Firebase Cloud Messaging für Push-Benachrichtigungen. Die BOM legt die
 # Versionen der einzelnen Firebase-Bibliotheken fest — nur sie wird gepflegt.
-firebaseBom = "33.7.0"
+firebaseBom = "33.16.0"
 googleServices = "4.4.2"
 browser = "1.8.0"
 junit = "4.13.2"
